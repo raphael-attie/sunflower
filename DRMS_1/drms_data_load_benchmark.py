@@ -27,23 +27,23 @@ c = drms.Client(email='attie.raphael@gmail.com', verbose=True)
 ## Measure time to load data from remote location (JSOC)
 
 # Direct download, manually constructing the URL
-urls = r_qurls(c, 'hmi.M_45s[2016.04.01_TAI/1d@900s]')
-
-start_time = time.time()
-ii = 0
-for url in urls:
-    ii += 1
-    urllib.request.urlretrieve(url, "/Users/rattie/SDO/HMI/magnetograms/"+ "magnetogram_" + '{:05d}'.format(ii) + ".fits")
-    #hdu = fits.open(url)
-
-elapsed_time = time.time() - start_time
-print('done')
-print('elapsed time (s):')
-print(elapsed_time)
+# urls = r_qurls(c, 'hmi.M_45s[2016.04.01_TAI/1d@900s]')
+#
+# start_time = time.time()
+# ii = 0
+# for url in urls:
+#     ii += 1
+#     urllib.request.urlretrieve(url, "/Users/rattie/SDO/HMI/magnetograms/"+ "magnetogram_" + '{:05d}'.format(ii) + ".fits")
+#     #hdu = fits.open(url)
+#
+# elapsed_time = time.time() - start_time
+# print('done')
+# print('elapsed time (s):')
+# print(elapsed_time)
 
 # With the export request as-is, it is the same as above, but we do not need to build the URL.
-r = c.export('hmi.M_45s[2016.04.01_TAI/1d@900s]{magnetogram}')
-r.urls.url
+#r = c.export('hmi.M_45s[2016.04.01_TAI/1d@900s]{magnetogram}')
+#r.urls.url
 """
 0     http://jsoc.stanford.edu/SUM68/D803708322/S000...
 1     http://jsoc.stanford.edu/SUM68/D803708322/S000...
@@ -62,9 +62,9 @@ r.urls.url
 """
 
 # Use url-tar export method
-out_dir = "/Users/rattie/SDO/HMI/magnetograms/"
+out_dir = "/Users/rattie/Data/SDO/HMI/magnetograms/"
 if not os.path.exists(out_dir):
-    os.mkdir(out_dir)
+    os.makedirs(out_dir)
 
 r_tar = c.export('hmi.M_45s[2016.04.01_TAI/1d@900s]{magnetogram}', method='url-tar', protocol='fits')
 r_tar.wait()
@@ -80,4 +80,5 @@ elapsed_time2 = time.time() - start_time2
 print('done')
 print('export method url-tar, elapsed time (s):')
 print(elapsed_time2)
+
 
