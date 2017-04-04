@@ -6,7 +6,6 @@ import time
 import urllib
 import drms
 from astropy.io import fits
-#import matplotlib.pyplot as plt
 import os
 
 def r_qurls(drms_client, query):
@@ -42,8 +41,10 @@ c = drms.Client(email='attie.raphael@gmail.com', verbose=True)
 # print(elapsed_time)
 
 # With the export request as-is, it is the same as above, but we do not need to build the URL.
-#r = c.export('hmi.M_45s[2016.04.01_TAI/1d@900s]{magnetogram}')
-#r.urls.url
+r = c.export('hmi.M_45s[2016.04.01_TAI/1d@900s]{magnetogram}')
+r.urls.url
+hdu = fits.open(r.urls.url[0])
+
 """
 0     http://jsoc.stanford.edu/SUM68/D803708322/S000...
 1     http://jsoc.stanford.edu/SUM68/D803708322/S000...
@@ -66,7 +67,7 @@ out_dir = "/Users/rattie/Data/SDO/HMI/magnetograms/"
 if not os.path.exists(out_dir):
     os.makedirs(out_dir)
 
-r_tar = c.export('hmi.M_45s[2016.04.01_TAI/1d@900s]{magnetogram}', method='url-tar', protocol='fits')
+r_tar = c.export('hmi.M_45s[2016.04.01_TAI/1h@900s]{magnetogram}', method='url-tar', protocol='fits')
 r_tar.wait()
 
 r_tar.request_url
