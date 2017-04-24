@@ -45,16 +45,19 @@ def hg_overlay(overlay, wrap180=True, spacing=10, color='white', **kwargs):
 data_dir = '/Users/rattie/Data/SDO/HMI/Nov_28_2010_3hr'
 
 # # Instantiate a drms client
-# c = drms.Client(email='raphael.attie@nasa.gov', verbose=True)
-#
-# # Query string for the data export request. Magnetograms from 2010/11/27 , during 3 days, every 3 hours.
-# qs      = 'hmi.M_45s[2010.11.27_TAI/3d@3h]{magnetogram}'
-#
-# # Export request - fits files with headers
-# r = c.export(qs, method='url', protocol='fits')
-#
-# # Download the data
-# r.download(data_dir)
+c = drms.Client(email='raphael.attie@nasa.gov', verbose=True)
+
+# Query string for the data export request. Magnetograms from 2010/11/27 , during 3 days, every 3 hours.
+qs      = 'hmi.M_45s[2010.11.27_TAI/3d@3h]{magnetogram}'
+
+# Export request - fits files with headers
+r = c.export(qs, method='url', protocol='fits')
+
+qs      = 'hmi.M_45s[2010.11.27_TAI/3d@3h]'
+p = c.query(qs, seg='magnetogram')
+
+# Download the data
+r.download(data_dir)
 
 # Get the data from the local data directory
 files   = glob.glob(os.path.join(data_dir, '*.fits'))
@@ -109,7 +112,7 @@ data = hdu[1].data
 header = hdu[1].header
 
 smap = sunpy.map.Map(data, header).rotate(angle=header['CROTA2'] * u.deg)
-smap.
+
 
 # Set the Carrington coordinates from above, but at the new time.
 center_HGC2 = SkyCoord(center_HGC.lon, center_HGC.lat, frame='heliographic_carrington', dateobs=header['DATE-OBS'])
