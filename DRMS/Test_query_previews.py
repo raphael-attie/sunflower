@@ -140,7 +140,16 @@ plt.savefig('/Users/rattie/Desktop/figure.png')
 
 #plt.text(-0.5, -0.25, 'Brackmard minimum')
 
-#'Carrington
+############ Bug submitted and fixed by Stuart Memford:
+
+
+
+
+
+
+
+
+###########################
 
 
 
