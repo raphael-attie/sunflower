@@ -36,3 +36,4 @@ def hg_overlay(axes, color='white'):
     overlay.grid(color=color, alpha=0.5)
 
     return overlay
+
