@@ -2,6 +2,7 @@
 Provides more advanced functions for queries with the DRMS and data displays
 """
 
+
 from astropy import units as u
 
 def hg_overlay(axes, color='white'):
@@ -36,4 +37,5 @@ def hg_overlay(axes, color='white'):
     overlay.grid(color=color, alpha=0.5)
 
     return overlay
+
 
