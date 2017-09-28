@@ -101,7 +101,7 @@ pos, vel, force = [np.array(v).squeeze() for v in zip(*[blt.integrate_motion(pos
 
 
 
-f1 = plt.figure()
+f1 = plt.figure(figsize=(10, 10))
 plt.imshow(surface, origin='lower', cmap='gray')
 plt.plot(xstart, ystart, 'r+', markersize=10)
 plt.plot(pos[:,0], pos[:,1], 'go', markerfacecolor='none')
