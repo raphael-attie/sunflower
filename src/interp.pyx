@@ -9,11 +9,11 @@ cimport numpy as np
 # We now need to fix a datatype for our arrays. I've used the variable
 # DTYPE for this, which is assigned to the usual NumPy runtime
 # type info object.
-DTYPE = np.double
+DTYPE = np.float32
 # "ctypedef" assigns a corresponding compile-time type to DTYPE_t. For
 # every type in the numpy module there's a corresponding compile-time
 # type with a _t-suffix.
-ctypedef np.double_t DTYPE_t
+ctypedef np.float32_t DTYPE_t
 
 cimport cython
 @cython.boundscheck(False) # turn off bounds-checking for entire function
@@ -69,11 +69,11 @@ def bilin_interp1(np.ndarray[DTYPE_t, ndim=2, mode="c"] im, np.ndarray[DTYPE_t, 
     return result
 
 # declare the interface to the C code
-cdef extern void cbilin_interp(double *image, double *xout, double *yout, double *values, int nx, int npts)
+cdef extern void cbilin_interp(float *image, float *xout, float *yout, float *values, int nx, int npts)
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-def bilin_interp2(np.ndarray[double, ndim=2, mode="c"] image, np.ndarray[double, ndim=1, mode="c"] x, np.ndarray[double, ndim=1, mode="c"] y, np.ndarray[double, ndim=1, mode="c"] z):
+def bilin_interp2(np.ndarray[DTYPE_t, ndim=2, mode="c"] image, np.ndarray[DTYPE_t, ndim=1, mode="c"] x, np.ndarray[DTYPE_t, ndim=1, mode="c"] y, np.ndarray[DTYPE_t, ndim=1, mode="c"] z):
 
     cdef int nx, npts
 
