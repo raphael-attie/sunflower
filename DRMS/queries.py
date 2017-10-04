@@ -68,4 +68,49 @@ def query_mtrack(seriesname, t_start, t_stop, projection, localpath):
 
     return filepath
 
+def query_spikes(seriesname, t_rec, localpath, wavelength=''):
+    """
+    Download mtracked cube from DRMS to local disk.
 
+    :param seriesname: e.g: su_attie.mtrack_M_45s_512px
+    :param t_rec: record time of the fits file. format: 2010.11.26_22:00:34
+    :param wavelength: string giving the wavelength for the record. Empty string for all
+    :param localpath: directory where to download the show_info data and fits file
+    :return: download to fits file on local disk.
+    """
+
+    # Build query string into url
+    JSOC = "http://jsoc.stanford.edu"
+    SHOWI = JSOC + "/cgi-bin/ajax/show_info?"
+    ds = "ds=" + seriesname + "[%s][%s]"%(t_rec, wavelength)
+    cmd = ds + "&P=1&k=1&v=1&n=-1&seg=spikes&key=t_rec,wavelnth"
+    url = SHOWI + cmd
+
+    # Get the show_info output on a file
+    show_info_file = os.path.join(localpath, 'show_info_out.txt')
+
+    print("Getting show_info data: %s" % url)
+    urllib.request.urlretrieve(url, show_info_file)
+    urllib.request.urlcleanup()
+
+    with open(show_info_file, "r") as file_to_read:
+        for line in file_to_read:
+            if "spikes=" in line:
+                spikes_path_lines= line.strip()
+            elif "t_rec=" in line:
+                t_rec_line= line.strip()
+
+
+    print(spikes_path_lines)
+    print(t_rec_line)
+    # parsing sums path
+    sums_path    = spikes_path_lines.replace('spikes=', '')
+    t_rec_actual = t_rec_line.replace('t_rec=', '')
+
+    # Build the url of the fits file using the SUMS path
+    fits_url = JSOC + sums_path
+    # Local file path
+    filename = 'spikes_' + t_rec_actual.replace('-','_').replace(':','_')+ '_%s'%wavelength + '.fits'
+    filepath = os.path.join(localpath, filename)
+
+    return fits_url, filepath
