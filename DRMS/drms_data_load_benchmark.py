@@ -21,7 +21,7 @@ def r_qurls(drms_client, query):
     return qurls
 
 
-c = drms.Client(email='attie.raphael@gmail.com', verbose=True)
+c = drms.Client(email='raphael.attie@nasa.gov', verbose=True)
 
 ## Measure time to load data from remote location (JSOC)
 
@@ -42,6 +42,7 @@ c = drms.Client(email='attie.raphael@gmail.com', verbose=True)
 
 # With the export request as-is, it is the same as above, but we do not need to build the URL.
 r = c.export('hmi.M_45s[2016.04.01_TAI/1d@900s]{magnetogram}')
+
 r.urls.url
 hdu = fits.open(r.urls.url[0])
 
@@ -69,17 +70,26 @@ if not os.path.exists(out_dir):
 
 c = drms.Client(email='raphael.attie@nasa.gov', verbose=True)
 
-ds='hmi.M_45s[2010.11.27_TAI/5d@3h]{magnetogram}&sizeratio=0.015625&process=n=0|im_patch,t_start=2010.11.27_00:00:00_TAI,' \
-   't_stop=2010.12.01_21:00:00_TAI,t=0,r=0,c=0,cadence=3h,locunits=carrlong,boxunits=pixels,t_ref=2010.11.27_00:00:00_TAI,' \
-   'car_rot=2104,x=328.5,y=12.6,width=512,height=512'
-r = c.export('hmi.M_45s[2016.04.01_TAI/1h@900s]{magnetogram}', method='url-tar', protocol='fits')
-r.wait()
+# ds='hmi.M_45s[2010.11.27_TAI/5d@3h]{magnetogram}&sizeratio=0.015625&process=n=0|im_patch,t_start=2010.11.27_00:00:00_TAI,' \
+#    't_stop=2010.12.01_21:00:00_TAI,t=0,r=0,c=0,cadence=3h,locunits=carrlong,boxunits=pixels,t_ref=2010.11.27_00:00:00_TAI,' \
+#    'car_rot=2104,x=328.5,y=12.6,width=512,height=512'
+#
+# r = c.export('hmi.M_45s[2016.04.01_TAI/1h@900s]{magnetogram}', method='url-tar', protocol='fits')
+# r.wait()
 
-r_tar.request_url
+# spikes
+r3 = c.export('aia.lev1_euv_12s[2010.05.13_00:00/1h]{spikes}', method='url-tar', protocol='fits')
+r3.wait()
+
+r4 = c.export('aia.lev1_euv_12s[2010.05.13_00:00/10m]{spikes}', method='url-tar', protocol='fits')
+r4.wait()
+
+
+r.request_url
 
 start_time2 = time.time()
 
-r_tar.download(out_dir)
+r.download(out_dir)
 
 elapsed_time2 = time.time() - start_time2
 
