@@ -8,14 +8,6 @@ import fitstools
 import fitsio
 import filters
 
-from timeit import timeit
-import src.interp as cinterp
-
-def wrapper(func, *args, **kwargs):
-    def wrapped():
-        return func(*args, **kwargs)
-    return wrapped
-
 
 # Path to fits file (fits cube)
 #file    = '/Users/rattie/Data/SDO/HMI/EARs/AR11130_2010_11_27/mtrack_20101126_170034_TAI_20101127_170034_TAI_LambertCylindrical_continuum.fits'
@@ -26,33 +18,6 @@ h       = fitstools.fitsheader(file)
 # Get the 1st image
 image   = fitsio.read(file)
 image   = image.astype(np.float32)
-
-x = np.array([10.3, 10.2])
-y = np.array([20.5, 15.4])
-z = np.zeros([2], dtype=np.double)
-cinterp.bilin_interp2(image, x, y, z)
-
-z = blt.bilin_interp(image, x, y)
-
-x = np.full([16129], 10.3, dtype=np.float32)
-y = np.full([16129], 10.1, dtype=np.float32)
-z = np.full([16129], 0, dtype=np.float32)
-
-#z = cinterp.bilin_interp1(image, x, y)
-
-mywrap1 = wrapper(blt.bilin_interp, image, x, y)
-timeit(mywrap1, number=1000)
-
-
-mywrap2 = wrapper(cinterp.bilin_interp1, image, x, y)
-timeit(mywrap2, number=1000)
-
-x = np.full([16129], 10.3, dtype=np.float32)
-y = np.full([16129], 10.1, dtype=np.float32)
-z = np.full([16129], 0, dtype=np.float32)
-mywrap3 = wrapper(cinterp.bilin_interp2, image, x, y, z)
-timeit(mywrap3, number=1000)
-
 
 # Filter image
 ffilter_hpf = filters.han2d_bandpass(image.shape[0], 0, 5)

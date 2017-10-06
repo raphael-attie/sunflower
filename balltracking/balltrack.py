@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from numpy import pi, cos, sin
+import cython_modules.interp as cinterp
 import filters
 
 
@@ -27,7 +28,7 @@ class BT:
         self.meshx, self.meshy = np.meshgrid(self.xcoords, self.ycoords)
         # Initialize horizontal positions
         self.xstart, self.ystart = initialize_mesh(self)
-        self.zstart = np.zeros(self.xstart.shape)
+        self.zstart = np.zeros(self.xstart.shape, dtype=np.float32)
         self.nballs = self.xstart.size
 
         # Acceleration factor (used to be 0.6 in Potts implementation)
@@ -51,10 +52,11 @@ class BT:
         self.vel = np.zeros([3, self.nt, self.nballs])
 
         # Ball grid and mesh. Add +1 at the np.arange stop for including right-hand side boundary
-        self.ballgrid = np.arange(-self.rs, self.rs + 1)
+        self.ballgrid = np.arange(-self.rs, self.rs + 1, dtype=np.float32)
         self.ball_cols, self.ball_rows = np.meshgrid(self.ballgrid, self.ballgrid)
         self.bcols = self.ball_cols.ravel()[:, np.newaxis]
         self.brows = self.ball_rows.ravel()[:, np.newaxis]
+        self.ds    = np.zeros([self.bcols.shape[0]], dtype=np.float32)
 
 
     def initialize_ballpos(self, surface):
@@ -68,8 +70,8 @@ class BT:
 def initialize_mesh(bt):
     # Initial horizontal (x,y) positions
     #x_start_points = np.linspace(2 * self.rs, self.nx - 2 * self.rs, self.nballs_row)
-    x_start_points = np.arange(2 * bt.rs, bt.nx - 2 * bt.rs + 1, 2 * bt.rs)
-    y_start_points = np.arange(2 * bt.rs, bt.ny - 2 * bt.rs + 1, 2 * bt.rs)
+    x_start_points = np.arange(2 * bt.rs, bt.nx - 2 * bt.rs + 1, 2 * bt.rs, dtype=np.float32)
+    y_start_points = np.arange(2 * bt.rs, bt.ny - 2 * bt.rs + 1, 2 * bt.rs, dtype=np.float32)
     xstart, ystart = np.meshgrid(x_start_points, y_start_points)
     return xstart, ystart
 
@@ -100,8 +102,8 @@ def integrate_motion(pos, vel, bt, surface):
 
     # Update the balls grids with current positions
     # bcols and brows have dimensions = [prod(ballgrid.shape), nballs]
-    bcols = np.clip(bt.bcols + xt, 0, bt.nx - 1)
-    brows = np.clip(bt.brows + yt, 0, bt.ny - 1)
+    bcols = np.clip(bt.bcols + xt, 0, bt.nx - 1).squeeze()
+    brows = np.clip(bt.brows + yt, 0, bt.ny - 1).squeeze()
 
     # "ds" stands for "data surface"
     ds = bilin_interp(surface, bcols, brows)
@@ -137,11 +139,15 @@ def integrate_motion2(pos, vel, bt, surface):
 
     # Update the balls grids with current positions
     # bcols and brows have dimensions = [prod(ballgrid.shape), nballs]
-    bcols = np.clip(bt.bcols + xt, 0, bt.nx - 1)
-    brows = np.clip(bt.brows + yt, 0, bt.ny - 1)
+    bcols = np.clip(bt.bcols + xt, 0, bt.nx - 1).squeeze()
+    brows = np.clip(bt.brows + yt, 0, bt.ny - 1).squeeze()
 
     # "ds" stands for "data surface"
-    ds = surface[np.round(brows).astype(np.int), np.round(bcols).astype(np.int)]
+    #ds = surface[np.round(brows).astype(np.int), np.round(bcols).astype(np.int)]
+    # TODO me: Need to write cython bilin_interp2 so it handles 2D output with [nballs, npoints]. This could be done by rearranging the dimensions?
+    #
+    ds = np.zeros([bcols.shape[0]], dtype=np.float32)
+    cinterp.bilin_interp2(surface, bcols, brows, ds)
 
     fxt, fyt, fzt = compute_force(bt, brows, bcols, xt, yt, zt, ds)
 
@@ -198,11 +204,11 @@ def integrate_balls(bt, surface):
 
 def initialize_ball_vector(xstart, ystart, zstart):
     # Initialize balls at user-supplied positions
-    pos = np.array([xstart, ystart, zstart], dtype=float)
+    pos = np.array([xstart, ystart, zstart], dtype=np.float32)
     if pos.ndim == 1:
         pos = pos[:, np.newaxis]
 
-    vel = np.zeros(pos.shape, dtype=float)
+    vel = np.zeros(pos.shape, dtype=np.float32)
 
     return pos, vel
 
@@ -221,17 +227,17 @@ def rescale_frame(data, norm_factor):
     rescaled_data = rescaled_data / norm_factor
     return rescaled_data
 
-def bilin_interp(im, x, y):
-
+def bilin_interp_d(image, x, y):
+    # Bilinear interpolation. About 7x to 10x slower than the Cython implementation.
     x0 = np.floor(x).astype(int)
     x1 = x0 + 1
     y0 = np.floor(y).astype(int)
     y1 = y0 + 1
 
-    q00 = im[ y0, x0 ]
-    q01 = im[ y1, x0 ]
-    q10 = im[ y0, x1 ]
-    q11 = im[ y1, x1 ]
+    q00 = image[ y0, x0 ]
+    q01 = image[ y1, x0 ]
+    q10 = image[ y0, x1 ]
+    q11 = image[ y1, x1 ]
 
     dx0 = x - x0
     dy0 = y - y0
@@ -245,22 +251,22 @@ def bilin_interp(im, x, y):
 
     return w11*q00 + w10*q01 + w01*q10 + w00*q11
 
-def bilin_interp2(im, x, y):
-
+def bilin_interp_f(image, x, y):
+    # Bilinear interpolation. About 7x to 10x slower than the Cython implementation.
     x0 = np.floor(x).astype(int)
     x1 = x0 + 1
     y0 = np.floor(y).astype(int)
     y1 = y0 + 1
 
-    q00 = im[ y0, x0 ]
-    q01 = im[ y1, x0 ]
-    q10 = im[ y0, x1 ]
-    q11 = im[ y1, x1 ]
+    q00 = image[ y0, x0 ]
+    q01 = image[ y1, x0 ]
+    q10 = image[ y0, x1 ]
+    q11 = image[ y1, x1 ]
 
-    dx0 = x - x0
-    dy0 = y - y0
-    dx1 = x1 - x
-    dy1 = y1 - y
+    dx0 = np.float32(x - x0)
+    dy0 = np.float32(y - y0)
+    dx1 = np.float32(x1 - x)
+    dy1 = np.float32(y1 - y)
 
     w11 = dx1 * dy1
     w10 = dx1 * dy0
@@ -268,6 +274,8 @@ def bilin_interp2(im, x, y):
     w00 = dx0 * dy0
 
     return w11*q00 + w10*q01 + w01*q10 + w00*q11
+
+
 
 def gauss2d(size,  sigma):
 
@@ -276,12 +284,6 @@ def gauss2d(size,  sigma):
     gauss = 1 - np.exp(- r**2 / (2*sigma**2))
 
     return gauss
-
-
-
-
-
-
 
 # Display functions
 def show_ballpos(image, ballpos):

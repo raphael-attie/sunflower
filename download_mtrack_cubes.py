@@ -22,3 +22,7 @@ seriesname_list = ['su_attie.mtrack_Ic_45s_512px',
 
 files = [queries.query_mtrack(seriesname, t_start, t_stop, projection, localpath) for seriesname in seriesname_list]
 
+# Sometimes we just need track a single cube. But we can still have a one-element list
+
+seriesname_list = ['su_attie.mtrack_V_45s_512px']
+files = [queries.query_mtrack(seriesname, t_start, t_stop, projection, localpath) for seriesname in seriesname_list]
