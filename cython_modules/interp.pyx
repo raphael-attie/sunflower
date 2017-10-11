@@ -259,27 +259,49 @@ cdef extern void cbilin_interp(float *image, float *xout, float *yout, float *va
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-def cbilin_interp1(np.ndarray[DTYPE_tf, ndim=2, mode="c"] image, np.ndarray[DTYPE_tf, ndim=1, mode="c"] x, np.ndarray[DTYPE_tf, ndim=1, mode="c"] y, np.ndarray[DTYPE_tf, ndim=1, mode="c"] z):
+def cbilin_interp1(np.ndarray[DTYPE_tf, ndim=2, mode="c"] image, np.ndarray[DTYPE_tf, ndim=1, mode="c"] x, np.ndarray[DTYPE_tf, ndim=1, mode="c"] y):
+    """
+    Bilinear interpolation for 1-dimensional arrays of coordinates.
+    Mostly used for interpolating the values at the ball center, e.g when dropping the ball at initialization
 
+    :param image: data surface (2D array)
+    :param x: x-coordinate to interpolate (1D array)
+    :param y: y-coordinate to interpolate (1D array)
+    :param z: interpolated value (1D array)
+    :return:
+    """
     cdef int nx, npts
 
     nx, npts = image.shape[1], x.shape[0]
 
+    cdef np.ndarray[DTYPE_tf, ndim=1, mode="c"] z = np.zeros([npts], dtype=DTYPEf)
+
     cbilin_interp(&image[0,0], &x[0], &y[0], &z[0], nx, npts)
 
-    return None
+    return z
 
 cdef extern void cbilin_interp2d(float *image, float *xout, float *yout, float *values, int nx, int npts, int nballs)
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-def cbilin_interp2(np.ndarray[DTYPE_tf, ndim=2, mode="c"] image, np.ndarray[DTYPE_tf, ndim=2, mode="c"] x, np.ndarray[DTYPE_tf, ndim=2, mode="c"] y, np.ndarray[DTYPE_tf, ndim=2, mode="c"] z):
+def cbilin_interp2(np.ndarray[DTYPE_tf, ndim=2, mode="c"] image, np.ndarray[DTYPE_tf, ndim=2, mode="c"] x, np.ndarray[DTYPE_tf, ndim=2, mode="c"] y):
+    """
+    Bilinear interpolation for 2-dimensional arrays of coordinates.
+    These arrays occur when interpolating at not only the coordinate of the balls center,
+    but also at all the surface points where the grid points of the sphere project onto.
 
+    :param image: data surface (2D array)
+    :param x: x-coordinate to interpolate (2D array)
+    :param y: y-coordinate to interpolate (2D array)
+    :return: z, interpolated values (2D array)
+    """
     cdef int nx, npts, nballs
 
     nx, npts, nballs = image.shape[1], x.shape[0], x.shape[1]
 
+    cdef np.ndarray[DTYPE_tf, ndim=2, mode="c"] z = np.zeros([npts, nballs], dtype=DTYPEf)
+
     cbilin_interp2d(&image[0,0], &x[0,0], &y[0,0], &z[0,0], nx, npts, nballs)
 
-    return None
+    return z
 

@@ -2307,8 +2307,8 @@ static PyObject *__pyx_pf_6interp_2bilin_interp2f(CYTHON_UNUSED PyObject *__pyx_
 static PyObject *__pyx_pf_6interp_4bilin_interp3f(CYTHON_UNUSED PyObject *__pyx_self, PyArrayObject *__pyx_v_im, PyArrayObject *__pyx_v_x, PyArrayObject *__pyx_v_y); /* proto */
 static PyObject *__pyx_pf_6interp_6bilin_interp1d(CYTHON_UNUSED PyObject *__pyx_self, __Pyx_memviewslice __pyx_v_im, __Pyx_memviewslice __pyx_v_x, __Pyx_memviewslice __pyx_v_y); /* proto */
 static PyObject *__pyx_pf_6interp_8bilin_interp2d(CYTHON_UNUSED PyObject *__pyx_self, PyArrayObject *__pyx_v_im, PyArrayObject *__pyx_v_x, PyArrayObject *__pyx_v_y); /* proto */
-static PyObject *__pyx_pf_6interp_10cbilin_interp1(CYTHON_UNUSED PyObject *__pyx_self, PyArrayObject *__pyx_v_image, PyArrayObject *__pyx_v_x, PyArrayObject *__pyx_v_y, PyArrayObject *__pyx_v_z); /* proto */
-static PyObject *__pyx_pf_6interp_12cbilin_interp2(CYTHON_UNUSED PyObject *__pyx_self, PyArrayObject *__pyx_v_image, PyArrayObject *__pyx_v_x, PyArrayObject *__pyx_v_y, PyArrayObject *__pyx_v_z); /* proto */
+static PyObject *__pyx_pf_6interp_10cbilin_interp1(CYTHON_UNUSED PyObject *__pyx_self, PyArrayObject *__pyx_v_image, PyArrayObject *__pyx_v_x, PyArrayObject *__pyx_v_y); /* proto */
+static PyObject *__pyx_pf_6interp_12cbilin_interp2(CYTHON_UNUSED PyObject *__pyx_self, PyArrayObject *__pyx_v_image, PyArrayObject *__pyx_v_x, PyArrayObject *__pyx_v_y); /* proto */
 static int __pyx_pf_5numpy_7ndarray___getbuffer__(PyArrayObject *__pyx_v_self, Py_buffer *__pyx_v_info, int __pyx_v_flags); /* proto */
 static void __pyx_pf_5numpy_7ndarray_2__releasebuffer__(PyArrayObject *__pyx_v_self, Py_buffer *__pyx_v_info); /* proto */
 static int __pyx_array___pyx_pf_15View_dot_MemoryView_5array___cinit__(struct __pyx_array_obj *__pyx_v_self, PyObject *__pyx_v_shape, Py_ssize_t __pyx_v_itemsize, PyObject *__pyx_v_format, PyObject *__pyx_v_mode, int __pyx_v_allocate_buffer); /* proto */
@@ -4958,7 +4958,7 @@ __pyx_t_3 = __pyx_memoryview_fromslice(__pyx_t_11, 1, (PyObject *(*)(char *)) __
  * 
  *     return result             # <<<<<<<<<<<<<<
  * 
- * 
+ * # declare the interface to the C code
  */
   __Pyx_XDECREF(__pyx_r);
   __Pyx_INCREF(((PyObject *)__pyx_v_result));
@@ -5009,34 +5009,32 @@ __pyx_t_3 = __pyx_memoryview_fromslice(__pyx_t_11, 1, (PyObject *(*)(char *)) __
   return __pyx_r;
 }
 
-/* "interp.pyx":313
+/* "interp.pyx":262
  * @cython.boundscheck(False)
  * @cython.wraparound(False)
- * def cbilin_interp1(np.ndarray[DTYPE_tf, ndim=2, mode="c"] image, np.ndarray[DTYPE_tf, ndim=1, mode="c"] x, np.ndarray[DTYPE_tf, ndim=1, mode="c"] y, np.ndarray[DTYPE_tf, ndim=1, mode="c"] z):             # <<<<<<<<<<<<<<
- * 
- *     cdef int nx, npts
+ * def cbilin_interp1(np.ndarray[DTYPE_tf, ndim=2, mode="c"] image, np.ndarray[DTYPE_tf, ndim=1, mode="c"] x, np.ndarray[DTYPE_tf, ndim=1, mode="c"] y):             # <<<<<<<<<<<<<<
+ *     """
+ *     Bilinear interpolation for 1-dimensional arrays of coordinates.
  */
 
 /* Python wrapper */
 static PyObject *__pyx_pw_6interp_11cbilin_interp1(PyObject *__pyx_self, PyObject *__pyx_args, PyObject *__pyx_kwds); /*proto*/
-static PyMethodDef __pyx_mdef_6interp_11cbilin_interp1 = {"cbilin_interp1", (PyCFunction)__pyx_pw_6interp_11cbilin_interp1, METH_VARARGS|METH_KEYWORDS, 0};
+static char __pyx_doc_6interp_10cbilin_interp1[] = "\n    Bilinear interpolation for 1-dimensional arrays of coordinates.\n    Mostly used for interpolating the values at the ball center, e.g when dropping the ball at initialization\n\n    :param image: data surface (2D array)\n    :param x: x-coordinate to interpolate (1D array)\n    :param y: y-coordinate to interpolate (1D array)\n    :param z: interpolated value (1D array)\n    :return:\n    ";
+static PyMethodDef __pyx_mdef_6interp_11cbilin_interp1 = {"cbilin_interp1", (PyCFunction)__pyx_pw_6interp_11cbilin_interp1, METH_VARARGS|METH_KEYWORDS, __pyx_doc_6interp_10cbilin_interp1};
 static PyObject *__pyx_pw_6interp_11cbilin_interp1(PyObject *__pyx_self, PyObject *__pyx_args, PyObject *__pyx_kwds) {
   PyArrayObject *__pyx_v_image = 0;
   PyArrayObject *__pyx_v_x = 0;
   PyArrayObject *__pyx_v_y = 0;
-  PyArrayObject *__pyx_v_z = 0;
   PyObject *__pyx_r = 0;
   __Pyx_RefNannyDeclarations
   __Pyx_RefNannySetupContext("cbilin_interp1 (wrapper)", 0);
   {
-    static PyObject **__pyx_pyargnames[] = {&__pyx_n_s_image,&__pyx_n_s_x,&__pyx_n_s_y,&__pyx_n_s_z,0};
-    PyObject* values[4] = {0,0,0,0};
+    static PyObject **__pyx_pyargnames[] = {&__pyx_n_s_image,&__pyx_n_s_x,&__pyx_n_s_y,0};
+    PyObject* values[3] = {0,0,0};
     if (unlikely(__pyx_kwds)) {
       Py_ssize_t kw_args;
       const Py_ssize_t pos_args = PyTuple_GET_SIZE(__pyx_args);
       switch (pos_args) {
-        case  4: values[3] = PyTuple_GET_ITEM(__pyx_args, 3);
-        CYTHON_FALLTHROUGH;
         case  3: values[2] = PyTuple_GET_ITEM(__pyx_args, 2);
         CYTHON_FALLTHROUGH;
         case  2: values[1] = PyTuple_GET_ITEM(__pyx_args, 1);
@@ -5055,50 +5053,41 @@ static PyObject *__pyx_pw_6interp_11cbilin_interp1(PyObject *__pyx_self, PyObjec
         case  1:
         if (likely((values[1] = PyDict_GetItem(__pyx_kwds, __pyx_n_s_x)) != 0)) kw_args--;
         else {
-          __Pyx_RaiseArgtupleInvalid("cbilin_interp1", 1, 4, 4, 1); __PYX_ERR(0, 313, __pyx_L3_error)
+          __Pyx_RaiseArgtupleInvalid("cbilin_interp1", 1, 3, 3, 1); __PYX_ERR(0, 262, __pyx_L3_error)
         }
         CYTHON_FALLTHROUGH;
         case  2:
         if (likely((values[2] = PyDict_GetItem(__pyx_kwds, __pyx_n_s_y)) != 0)) kw_args--;
         else {
-          __Pyx_RaiseArgtupleInvalid("cbilin_interp1", 1, 4, 4, 2); __PYX_ERR(0, 313, __pyx_L3_error)
-        }
-        CYTHON_FALLTHROUGH;
-        case  3:
-        if (likely((values[3] = PyDict_GetItem(__pyx_kwds, __pyx_n_s_z)) != 0)) kw_args--;
-        else {
-          __Pyx_RaiseArgtupleInvalid("cbilin_interp1", 1, 4, 4, 3); __PYX_ERR(0, 313, __pyx_L3_error)
+          __Pyx_RaiseArgtupleInvalid("cbilin_interp1", 1, 3, 3, 2); __PYX_ERR(0, 262, __pyx_L3_error)
         }
       }
       if (unlikely(kw_args > 0)) {
-        if (unlikely(__Pyx_ParseOptionalKeywords(__pyx_kwds, __pyx_pyargnames, 0, values, pos_args, "cbilin_interp1") < 0)) __PYX_ERR(0, 313, __pyx_L3_error)
+        if (unlikely(__Pyx_ParseOptionalKeywords(__pyx_kwds, __pyx_pyargnames, 0, values, pos_args, "cbilin_interp1") < 0)) __PYX_ERR(0, 262, __pyx_L3_error)
       }
-    } else if (PyTuple_GET_SIZE(__pyx_args) != 4) {
+    } else if (PyTuple_GET_SIZE(__pyx_args) != 3) {
       goto __pyx_L5_argtuple_error;
     } else {
       values[0] = PyTuple_GET_ITEM(__pyx_args, 0);
       values[1] = PyTuple_GET_ITEM(__pyx_args, 1);
       values[2] = PyTuple_GET_ITEM(__pyx_args, 2);
-      values[3] = PyTuple_GET_ITEM(__pyx_args, 3);
     }
     __pyx_v_image = ((PyArrayObject *)values[0]);
     __pyx_v_x = ((PyArrayObject *)values[1]);
     __pyx_v_y = ((PyArrayObject *)values[2]);
-    __pyx_v_z = ((PyArrayObject *)values[3]);
   }
   goto __pyx_L4_argument_unpacking_done;
   __pyx_L5_argtuple_error:;
-  __Pyx_RaiseArgtupleInvalid("cbilin_interp1", 1, 4, 4, PyTuple_GET_SIZE(__pyx_args)); __PYX_ERR(0, 313, __pyx_L3_error)
+  __Pyx_RaiseArgtupleInvalid("cbilin_interp1", 1, 3, 3, PyTuple_GET_SIZE(__pyx_args)); __PYX_ERR(0, 262, __pyx_L3_error)
   __pyx_L3_error:;
   __Pyx_AddTraceback("interp.cbilin_interp1", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __Pyx_RefNannyFinishContext();
   return NULL;
   __pyx_L4_argument_unpacking_done:;
-  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_image), __pyx_ptype_5numpy_ndarray, 1, "image", 0))) __PYX_ERR(0, 313, __pyx_L1_error)
-  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_x), __pyx_ptype_5numpy_ndarray, 1, "x", 0))) __PYX_ERR(0, 313, __pyx_L1_error)
-  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_y), __pyx_ptype_5numpy_ndarray, 1, "y", 0))) __PYX_ERR(0, 313, __pyx_L1_error)
-  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_z), __pyx_ptype_5numpy_ndarray, 1, "z", 0))) __PYX_ERR(0, 313, __pyx_L1_error)
-  __pyx_r = __pyx_pf_6interp_10cbilin_interp1(__pyx_self, __pyx_v_image, __pyx_v_x, __pyx_v_y, __pyx_v_z);
+  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_image), __pyx_ptype_5numpy_ndarray, 1, "image", 0))) __PYX_ERR(0, 262, __pyx_L1_error)
+  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_x), __pyx_ptype_5numpy_ndarray, 1, "x", 0))) __PYX_ERR(0, 262, __pyx_L1_error)
+  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_y), __pyx_ptype_5numpy_ndarray, 1, "y", 0))) __PYX_ERR(0, 262, __pyx_L1_error)
+  __pyx_r = __pyx_pf_6interp_10cbilin_interp1(__pyx_self, __pyx_v_image, __pyx_v_x, __pyx_v_y);
 
   /* function exit code */
   goto __pyx_L0;
@@ -5109,9 +5098,10 @@ static PyObject *__pyx_pw_6interp_11cbilin_interp1(PyObject *__pyx_self, PyObjec
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_6interp_10cbilin_interp1(CYTHON_UNUSED PyObject *__pyx_self, PyArrayObject *__pyx_v_image, PyArrayObject *__pyx_v_x, PyArrayObject *__pyx_v_y, PyArrayObject *__pyx_v_z) {
+static PyObject *__pyx_pf_6interp_10cbilin_interp1(CYTHON_UNUSED PyObject *__pyx_self, PyArrayObject *__pyx_v_image, PyArrayObject *__pyx_v_x, PyArrayObject *__pyx_v_y) {
   int __pyx_v_nx;
   int __pyx_v_npts;
+  PyArrayObject *__pyx_v_z = 0;
   __Pyx_LocalBuf_ND __pyx_pybuffernd_image;
   __Pyx_Buffer __pyx_pybuffer_image;
   __Pyx_LocalBuf_ND __pyx_pybuffernd_x;
@@ -5124,12 +5114,21 @@ static PyObject *__pyx_pf_6interp_10cbilin_interp1(CYTHON_UNUSED PyObject *__pyx
   __Pyx_RefNannyDeclarations
   npy_intp __pyx_t_1;
   npy_intp __pyx_t_2;
-  Py_ssize_t __pyx_t_3;
-  Py_ssize_t __pyx_t_4;
-  Py_ssize_t __pyx_t_5;
-  Py_ssize_t __pyx_t_6;
-  Py_ssize_t __pyx_t_7;
+  PyObject *__pyx_t_3 = NULL;
+  PyObject *__pyx_t_4 = NULL;
+  PyObject *__pyx_t_5 = NULL;
+  PyObject *__pyx_t_6 = NULL;
+  PyArrayObject *__pyx_t_7 = NULL;
+  Py_ssize_t __pyx_t_8;
+  Py_ssize_t __pyx_t_9;
+  Py_ssize_t __pyx_t_10;
+  Py_ssize_t __pyx_t_11;
+  Py_ssize_t __pyx_t_12;
   __Pyx_RefNannySetupContext("cbilin_interp1", 0);
+  __pyx_pybuffer_z.pybuffer.buf = NULL;
+  __pyx_pybuffer_z.refcount = 0;
+  __pyx_pybuffernd_z.data = NULL;
+  __pyx_pybuffernd_z.rcbuffer = &__pyx_pybuffer_z;
   __pyx_pybuffer_image.pybuffer.buf = NULL;
   __pyx_pybuffer_image.refcount = 0;
   __pyx_pybuffernd_image.data = NULL;
@@ -5142,79 +5141,123 @@ static PyObject *__pyx_pf_6interp_10cbilin_interp1(CYTHON_UNUSED PyObject *__pyx
   __pyx_pybuffer_y.refcount = 0;
   __pyx_pybuffernd_y.data = NULL;
   __pyx_pybuffernd_y.rcbuffer = &__pyx_pybuffer_y;
-  __pyx_pybuffer_z.pybuffer.buf = NULL;
-  __pyx_pybuffer_z.refcount = 0;
-  __pyx_pybuffernd_z.data = NULL;
-  __pyx_pybuffernd_z.rcbuffer = &__pyx_pybuffer_z;
   {
     __Pyx_BufFmt_StackElem __pyx_stack[1];
-    if (unlikely(__Pyx_GetBufferAndValidate(&__pyx_pybuffernd_image.rcbuffer->pybuffer, (PyObject*)__pyx_v_image, &__Pyx_TypeInfo_nn___pyx_t_6interp_DTYPE_tf, PyBUF_FORMAT| PyBUF_C_CONTIGUOUS, 2, 0, __pyx_stack) == -1)) __PYX_ERR(0, 313, __pyx_L1_error)
+    if (unlikely(__Pyx_GetBufferAndValidate(&__pyx_pybuffernd_image.rcbuffer->pybuffer, (PyObject*)__pyx_v_image, &__Pyx_TypeInfo_nn___pyx_t_6interp_DTYPE_tf, PyBUF_FORMAT| PyBUF_C_CONTIGUOUS, 2, 0, __pyx_stack) == -1)) __PYX_ERR(0, 262, __pyx_L1_error)
   }
   __pyx_pybuffernd_image.diminfo[0].strides = __pyx_pybuffernd_image.rcbuffer->pybuffer.strides[0]; __pyx_pybuffernd_image.diminfo[0].shape = __pyx_pybuffernd_image.rcbuffer->pybuffer.shape[0]; __pyx_pybuffernd_image.diminfo[1].strides = __pyx_pybuffernd_image.rcbuffer->pybuffer.strides[1]; __pyx_pybuffernd_image.diminfo[1].shape = __pyx_pybuffernd_image.rcbuffer->pybuffer.shape[1];
   {
     __Pyx_BufFmt_StackElem __pyx_stack[1];
-    if (unlikely(__Pyx_GetBufferAndValidate(&__pyx_pybuffernd_x.rcbuffer->pybuffer, (PyObject*)__pyx_v_x, &__Pyx_TypeInfo_nn___pyx_t_6interp_DTYPE_tf, PyBUF_FORMAT| PyBUF_C_CONTIGUOUS, 1, 0, __pyx_stack) == -1)) __PYX_ERR(0, 313, __pyx_L1_error)
+    if (unlikely(__Pyx_GetBufferAndValidate(&__pyx_pybuffernd_x.rcbuffer->pybuffer, (PyObject*)__pyx_v_x, &__Pyx_TypeInfo_nn___pyx_t_6interp_DTYPE_tf, PyBUF_FORMAT| PyBUF_C_CONTIGUOUS, 1, 0, __pyx_stack) == -1)) __PYX_ERR(0, 262, __pyx_L1_error)
   }
   __pyx_pybuffernd_x.diminfo[0].strides = __pyx_pybuffernd_x.rcbuffer->pybuffer.strides[0]; __pyx_pybuffernd_x.diminfo[0].shape = __pyx_pybuffernd_x.rcbuffer->pybuffer.shape[0];
   {
     __Pyx_BufFmt_StackElem __pyx_stack[1];
-    if (unlikely(__Pyx_GetBufferAndValidate(&__pyx_pybuffernd_y.rcbuffer->pybuffer, (PyObject*)__pyx_v_y, &__Pyx_TypeInfo_nn___pyx_t_6interp_DTYPE_tf, PyBUF_FORMAT| PyBUF_C_CONTIGUOUS, 1, 0, __pyx_stack) == -1)) __PYX_ERR(0, 313, __pyx_L1_error)
+    if (unlikely(__Pyx_GetBufferAndValidate(&__pyx_pybuffernd_y.rcbuffer->pybuffer, (PyObject*)__pyx_v_y, &__Pyx_TypeInfo_nn___pyx_t_6interp_DTYPE_tf, PyBUF_FORMAT| PyBUF_C_CONTIGUOUS, 1, 0, __pyx_stack) == -1)) __PYX_ERR(0, 262, __pyx_L1_error)
   }
   __pyx_pybuffernd_y.diminfo[0].strides = __pyx_pybuffernd_y.rcbuffer->pybuffer.strides[0]; __pyx_pybuffernd_y.diminfo[0].shape = __pyx_pybuffernd_y.rcbuffer->pybuffer.shape[0];
-  {
-    __Pyx_BufFmt_StackElem __pyx_stack[1];
-    if (unlikely(__Pyx_GetBufferAndValidate(&__pyx_pybuffernd_z.rcbuffer->pybuffer, (PyObject*)__pyx_v_z, &__Pyx_TypeInfo_nn___pyx_t_6interp_DTYPE_tf, PyBUF_FORMAT| PyBUF_C_CONTIGUOUS, 1, 0, __pyx_stack) == -1)) __PYX_ERR(0, 313, __pyx_L1_error)
-  }
-  __pyx_pybuffernd_z.diminfo[0].strides = __pyx_pybuffernd_z.rcbuffer->pybuffer.strides[0]; __pyx_pybuffernd_z.diminfo[0].shape = __pyx_pybuffernd_z.rcbuffer->pybuffer.shape[0];
 
-  /* "interp.pyx":317
+  /* "interp.pyx":275
  *     cdef int nx, npts
  * 
  *     nx, npts = image.shape[1], x.shape[0]             # <<<<<<<<<<<<<<
  * 
- *     cbilin_interp(&image[0,0], &x[0], &y[0], &z[0], nx, npts)
+ *     cdef np.ndarray[DTYPE_tf, ndim=1, mode="c"] z = np.zeros([npts], dtype=DTYPEf)
  */
   __pyx_t_1 = (__pyx_v_image->dimensions[1]);
   __pyx_t_2 = (__pyx_v_x->dimensions[0]);
   __pyx_v_nx = __pyx_t_1;
   __pyx_v_npts = __pyx_t_2;
 
-  /* "interp.pyx":319
+  /* "interp.pyx":277
  *     nx, npts = image.shape[1], x.shape[0]
+ * 
+ *     cdef np.ndarray[DTYPE_tf, ndim=1, mode="c"] z = np.zeros([npts], dtype=DTYPEf)             # <<<<<<<<<<<<<<
+ * 
+ *     cbilin_interp(&image[0,0], &x[0], &y[0], &z[0], nx, npts)
+ */
+  __pyx_t_3 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 277, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_3);
+  __pyx_t_4 = __Pyx_PyObject_GetAttrStr(__pyx_t_3, __pyx_n_s_zeros); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 277, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_4);
+  __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
+  __pyx_t_3 = __Pyx_PyInt_From_int(__pyx_v_npts); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 277, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_3);
+  __pyx_t_5 = PyList_New(1); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 277, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_5);
+  __Pyx_GIVEREF(__pyx_t_3);
+  PyList_SET_ITEM(__pyx_t_5, 0, __pyx_t_3);
+  __pyx_t_3 = 0;
+  __pyx_t_3 = PyTuple_New(1); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 277, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_3);
+  __Pyx_GIVEREF(__pyx_t_5);
+  PyTuple_SET_ITEM(__pyx_t_3, 0, __pyx_t_5);
+  __pyx_t_5 = 0;
+  __pyx_t_5 = PyDict_New(); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 277, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_5);
+  __pyx_t_6 = __Pyx_GetModuleGlobalName(__pyx_n_s_DTYPEf); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 277, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_6);
+  if (PyDict_SetItem(__pyx_t_5, __pyx_n_s_dtype, __pyx_t_6) < 0) __PYX_ERR(0, 277, __pyx_L1_error)
+  __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+  __pyx_t_6 = __Pyx_PyObject_Call(__pyx_t_4, __pyx_t_3, __pyx_t_5); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 277, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_6);
+  __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+  __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
+  __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
+  if (!(likely(((__pyx_t_6) == Py_None) || likely(__Pyx_TypeTest(__pyx_t_6, __pyx_ptype_5numpy_ndarray))))) __PYX_ERR(0, 277, __pyx_L1_error)
+  __pyx_t_7 = ((PyArrayObject *)__pyx_t_6);
+  {
+    __Pyx_BufFmt_StackElem __pyx_stack[1];
+    if (unlikely(__Pyx_GetBufferAndValidate(&__pyx_pybuffernd_z.rcbuffer->pybuffer, (PyObject*)__pyx_t_7, &__Pyx_TypeInfo_nn___pyx_t_6interp_DTYPE_tf, PyBUF_FORMAT| PyBUF_C_CONTIGUOUS, 1, 0, __pyx_stack) == -1)) {
+      __pyx_v_z = ((PyArrayObject *)Py_None); __Pyx_INCREF(Py_None); __pyx_pybuffernd_z.rcbuffer->pybuffer.buf = NULL;
+      __PYX_ERR(0, 277, __pyx_L1_error)
+    } else {__pyx_pybuffernd_z.diminfo[0].strides = __pyx_pybuffernd_z.rcbuffer->pybuffer.strides[0]; __pyx_pybuffernd_z.diminfo[0].shape = __pyx_pybuffernd_z.rcbuffer->pybuffer.shape[0];
+    }
+  }
+  __pyx_t_7 = 0;
+  __pyx_v_z = ((PyArrayObject *)__pyx_t_6);
+  __pyx_t_6 = 0;
+
+  /* "interp.pyx":279
+ *     cdef np.ndarray[DTYPE_tf, ndim=1, mode="c"] z = np.zeros([npts], dtype=DTYPEf)
  * 
  *     cbilin_interp(&image[0,0], &x[0], &y[0], &z[0], nx, npts)             # <<<<<<<<<<<<<<
  * 
- *     return None
+ *     return z
  */
-  __pyx_t_3 = 0;
-  __pyx_t_4 = 0;
-  __pyx_t_5 = 0;
-  __pyx_t_6 = 0;
-  __pyx_t_7 = 0;
-  cbilin_interp((&(*__Pyx_BufPtrCContig2d(__pyx_t_6interp_DTYPE_tf *, __pyx_pybuffernd_image.rcbuffer->pybuffer.buf, __pyx_t_3, __pyx_pybuffernd_image.diminfo[0].strides, __pyx_t_4, __pyx_pybuffernd_image.diminfo[1].strides))), (&(*__Pyx_BufPtrCContig1d(__pyx_t_6interp_DTYPE_tf *, __pyx_pybuffernd_x.rcbuffer->pybuffer.buf, __pyx_t_5, __pyx_pybuffernd_x.diminfo[0].strides))), (&(*__Pyx_BufPtrCContig1d(__pyx_t_6interp_DTYPE_tf *, __pyx_pybuffernd_y.rcbuffer->pybuffer.buf, __pyx_t_6, __pyx_pybuffernd_y.diminfo[0].strides))), (&(*__Pyx_BufPtrCContig1d(__pyx_t_6interp_DTYPE_tf *, __pyx_pybuffernd_z.rcbuffer->pybuffer.buf, __pyx_t_7, __pyx_pybuffernd_z.diminfo[0].strides))), __pyx_v_nx, __pyx_v_npts);
+  __pyx_t_8 = 0;
+  __pyx_t_9 = 0;
+  __pyx_t_10 = 0;
+  __pyx_t_11 = 0;
+  __pyx_t_12 = 0;
+  cbilin_interp((&(*__Pyx_BufPtrCContig2d(__pyx_t_6interp_DTYPE_tf *, __pyx_pybuffernd_image.rcbuffer->pybuffer.buf, __pyx_t_8, __pyx_pybuffernd_image.diminfo[0].strides, __pyx_t_9, __pyx_pybuffernd_image.diminfo[1].strides))), (&(*__Pyx_BufPtrCContig1d(__pyx_t_6interp_DTYPE_tf *, __pyx_pybuffernd_x.rcbuffer->pybuffer.buf, __pyx_t_10, __pyx_pybuffernd_x.diminfo[0].strides))), (&(*__Pyx_BufPtrCContig1d(__pyx_t_6interp_DTYPE_tf *, __pyx_pybuffernd_y.rcbuffer->pybuffer.buf, __pyx_t_11, __pyx_pybuffernd_y.diminfo[0].strides))), (&(*__Pyx_BufPtrCContig1d(__pyx_t_6interp_DTYPE_tf *, __pyx_pybuffernd_z.rcbuffer->pybuffer.buf, __pyx_t_12, __pyx_pybuffernd_z.diminfo[0].strides))), __pyx_v_nx, __pyx_v_npts);
 
-  /* "interp.pyx":321
+  /* "interp.pyx":281
  *     cbilin_interp(&image[0,0], &x[0], &y[0], &z[0], nx, npts)
  * 
- *     return None             # <<<<<<<<<<<<<<
+ *     return z             # <<<<<<<<<<<<<<
  * 
  * cdef extern void cbilin_interp2d(float *image, float *xout, float *yout, float *values, int nx, int npts, int nballs)
  */
   __Pyx_XDECREF(__pyx_r);
-  __Pyx_INCREF(Py_None);
-  __pyx_r = Py_None;
+  __Pyx_INCREF(((PyObject *)__pyx_v_z));
+  __pyx_r = ((PyObject *)__pyx_v_z);
   goto __pyx_L0;
 
-  /* "interp.pyx":313
+  /* "interp.pyx":262
  * @cython.boundscheck(False)
  * @cython.wraparound(False)
- * def cbilin_interp1(np.ndarray[DTYPE_tf, ndim=2, mode="c"] image, np.ndarray[DTYPE_tf, ndim=1, mode="c"] x, np.ndarray[DTYPE_tf, ndim=1, mode="c"] y, np.ndarray[DTYPE_tf, ndim=1, mode="c"] z):             # <<<<<<<<<<<<<<
- * 
- *     cdef int nx, npts
+ * def cbilin_interp1(np.ndarray[DTYPE_tf, ndim=2, mode="c"] image, np.ndarray[DTYPE_tf, ndim=1, mode="c"] x, np.ndarray[DTYPE_tf, ndim=1, mode="c"] y):             # <<<<<<<<<<<<<<
+ *     """
+ *     Bilinear interpolation for 1-dimensional arrays of coordinates.
  */
 
   /* function exit code */
   __pyx_L1_error:;
+  __Pyx_XDECREF(__pyx_t_3);
+  __Pyx_XDECREF(__pyx_t_4);
+  __Pyx_XDECREF(__pyx_t_5);
+  __Pyx_XDECREF(__pyx_t_6);
   { PyObject *__pyx_type, *__pyx_value, *__pyx_tb;
     __Pyx_PyThreadState_declare
     __Pyx_PyThreadState_assign
@@ -5233,39 +5276,38 @@ static PyObject *__pyx_pf_6interp_10cbilin_interp1(CYTHON_UNUSED PyObject *__pyx
   __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_y.rcbuffer->pybuffer);
   __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_z.rcbuffer->pybuffer);
   __pyx_L2:;
+  __Pyx_XDECREF((PyObject *)__pyx_v_z);
   __Pyx_XGIVEREF(__pyx_r);
   __Pyx_RefNannyFinishContext();
   return __pyx_r;
 }
 
-/* "interp.pyx":327
+/* "interp.pyx":287
  * @cython.boundscheck(False)
  * @cython.wraparound(False)
- * def cbilin_interp2(np.ndarray[DTYPE_tf, ndim=2, mode="c"] image, np.ndarray[DTYPE_tf, ndim=2, mode="c"] x, np.ndarray[DTYPE_tf, ndim=2, mode="c"] y, np.ndarray[DTYPE_tf, ndim=2, mode="c"] z):             # <<<<<<<<<<<<<<
- * 
- *     cdef int nx, npts, nballs
+ * def cbilin_interp2(np.ndarray[DTYPE_tf, ndim=2, mode="c"] image, np.ndarray[DTYPE_tf, ndim=2, mode="c"] x, np.ndarray[DTYPE_tf, ndim=2, mode="c"] y):             # <<<<<<<<<<<<<<
+ *     """
+ *     Bilinear interpolation for 2-dimensional arrays of coordinates.
  */
 
 /* Python wrapper */
 static PyObject *__pyx_pw_6interp_13cbilin_interp2(PyObject *__pyx_self, PyObject *__pyx_args, PyObject *__pyx_kwds); /*proto*/
-static PyMethodDef __pyx_mdef_6interp_13cbilin_interp2 = {"cbilin_interp2", (PyCFunction)__pyx_pw_6interp_13cbilin_interp2, METH_VARARGS|METH_KEYWORDS, 0};
+static char __pyx_doc_6interp_12cbilin_interp2[] = "\n    Bilinear interpolation for 2-dimensional arrays of coordinates.\n    These arrays occur when interpolating at not only the coordinate of the balls center,\n    but also at all the surface points where the grid points of the sphere project onto.\n\n    :param image: data surface (2D array)\n    :param x: x-coordinate to interpolate (2D array)\n    :param y: y-coordinate to interpolate (2D array)\n    :return: z, interpolated values (2D array)\n    ";
+static PyMethodDef __pyx_mdef_6interp_13cbilin_interp2 = {"cbilin_interp2", (PyCFunction)__pyx_pw_6interp_13cbilin_interp2, METH_VARARGS|METH_KEYWORDS, __pyx_doc_6interp_12cbilin_interp2};
 static PyObject *__pyx_pw_6interp_13cbilin_interp2(PyObject *__pyx_self, PyObject *__pyx_args, PyObject *__pyx_kwds) {
   PyArrayObject *__pyx_v_image = 0;
   PyArrayObject *__pyx_v_x = 0;
   PyArrayObject *__pyx_v_y = 0;
-  PyArrayObject *__pyx_v_z = 0;
   PyObject *__pyx_r = 0;
   __Pyx_RefNannyDeclarations
   __Pyx_RefNannySetupContext("cbilin_interp2 (wrapper)", 0);
   {
-    static PyObject **__pyx_pyargnames[] = {&__pyx_n_s_image,&__pyx_n_s_x,&__pyx_n_s_y,&__pyx_n_s_z,0};
-    PyObject* values[4] = {0,0,0,0};
+    static PyObject **__pyx_pyargnames[] = {&__pyx_n_s_image,&__pyx_n_s_x,&__pyx_n_s_y,0};
+    PyObject* values[3] = {0,0,0};
     if (unlikely(__pyx_kwds)) {
       Py_ssize_t kw_args;
       const Py_ssize_t pos_args = PyTuple_GET_SIZE(__pyx_args);
       switch (pos_args) {
-        case  4: values[3] = PyTuple_GET_ITEM(__pyx_args, 3);
-        CYTHON_FALLTHROUGH;
         case  3: values[2] = PyTuple_GET_ITEM(__pyx_args, 2);
         CYTHON_FALLTHROUGH;
         case  2: values[1] = PyTuple_GET_ITEM(__pyx_args, 1);
@@ -5284,50 +5326,41 @@ static PyObject *__pyx_pw_6interp_13cbilin_interp2(PyObject *__pyx_self, PyObjec
         case  1:
         if (likely((values[1] = PyDict_GetItem(__pyx_kwds, __pyx_n_s_x)) != 0)) kw_args--;
         else {
-          __Pyx_RaiseArgtupleInvalid("cbilin_interp2", 1, 4, 4, 1); __PYX_ERR(0, 327, __pyx_L3_error)
+          __Pyx_RaiseArgtupleInvalid("cbilin_interp2", 1, 3, 3, 1); __PYX_ERR(0, 287, __pyx_L3_error)
         }
         CYTHON_FALLTHROUGH;
         case  2:
         if (likely((values[2] = PyDict_GetItem(__pyx_kwds, __pyx_n_s_y)) != 0)) kw_args--;
         else {
-          __Pyx_RaiseArgtupleInvalid("cbilin_interp2", 1, 4, 4, 2); __PYX_ERR(0, 327, __pyx_L3_error)
-        }
-        CYTHON_FALLTHROUGH;
-        case  3:
-        if (likely((values[3] = PyDict_GetItem(__pyx_kwds, __pyx_n_s_z)) != 0)) kw_args--;
-        else {
-          __Pyx_RaiseArgtupleInvalid("cbilin_interp2", 1, 4, 4, 3); __PYX_ERR(0, 327, __pyx_L3_error)
+          __Pyx_RaiseArgtupleInvalid("cbilin_interp2", 1, 3, 3, 2); __PYX_ERR(0, 287, __pyx_L3_error)
         }
       }
       if (unlikely(kw_args > 0)) {
-        if (unlikely(__Pyx_ParseOptionalKeywords(__pyx_kwds, __pyx_pyargnames, 0, values, pos_args, "cbilin_interp2") < 0)) __PYX_ERR(0, 327, __pyx_L3_error)
+        if (unlikely(__Pyx_ParseOptionalKeywords(__pyx_kwds, __pyx_pyargnames, 0, values, pos_args, "cbilin_interp2") < 0)) __PYX_ERR(0, 287, __pyx_L3_error)
       }
-    } else if (PyTuple_GET_SIZE(__pyx_args) != 4) {
+    } else if (PyTuple_GET_SIZE(__pyx_args) != 3) {
       goto __pyx_L5_argtuple_error;
     } else {
       values[0] = PyTuple_GET_ITEM(__pyx_args, 0);
       values[1] = PyTuple_GET_ITEM(__pyx_args, 1);
       values[2] = PyTuple_GET_ITEM(__pyx_args, 2);
-      values[3] = PyTuple_GET_ITEM(__pyx_args, 3);
     }
     __pyx_v_image = ((PyArrayObject *)values[0]);
     __pyx_v_x = ((PyArrayObject *)values[1]);
     __pyx_v_y = ((PyArrayObject *)values[2]);
-    __pyx_v_z = ((PyArrayObject *)values[3]);
   }
   goto __pyx_L4_argument_unpacking_done;
   __pyx_L5_argtuple_error:;
-  __Pyx_RaiseArgtupleInvalid("cbilin_interp2", 1, 4, 4, PyTuple_GET_SIZE(__pyx_args)); __PYX_ERR(0, 327, __pyx_L3_error)
+  __Pyx_RaiseArgtupleInvalid("cbilin_interp2", 1, 3, 3, PyTuple_GET_SIZE(__pyx_args)); __PYX_ERR(0, 287, __pyx_L3_error)
   __pyx_L3_error:;
   __Pyx_AddTraceback("interp.cbilin_interp2", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __Pyx_RefNannyFinishContext();
   return NULL;
   __pyx_L4_argument_unpacking_done:;
-  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_image), __pyx_ptype_5numpy_ndarray, 1, "image", 0))) __PYX_ERR(0, 327, __pyx_L1_error)
-  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_x), __pyx_ptype_5numpy_ndarray, 1, "x", 0))) __PYX_ERR(0, 327, __pyx_L1_error)
-  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_y), __pyx_ptype_5numpy_ndarray, 1, "y", 0))) __PYX_ERR(0, 327, __pyx_L1_error)
-  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_z), __pyx_ptype_5numpy_ndarray, 1, "z", 0))) __PYX_ERR(0, 327, __pyx_L1_error)
-  __pyx_r = __pyx_pf_6interp_12cbilin_interp2(__pyx_self, __pyx_v_image, __pyx_v_x, __pyx_v_y, __pyx_v_z);
+  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_image), __pyx_ptype_5numpy_ndarray, 1, "image", 0))) __PYX_ERR(0, 287, __pyx_L1_error)
+  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_x), __pyx_ptype_5numpy_ndarray, 1, "x", 0))) __PYX_ERR(0, 287, __pyx_L1_error)
+  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_y), __pyx_ptype_5numpy_ndarray, 1, "y", 0))) __PYX_ERR(0, 287, __pyx_L1_error)
+  __pyx_r = __pyx_pf_6interp_12cbilin_interp2(__pyx_self, __pyx_v_image, __pyx_v_x, __pyx_v_y);
 
   /* function exit code */
   goto __pyx_L0;
@@ -5338,10 +5371,11 @@ static PyObject *__pyx_pw_6interp_13cbilin_interp2(PyObject *__pyx_self, PyObjec
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_6interp_12cbilin_interp2(CYTHON_UNUSED PyObject *__pyx_self, PyArrayObject *__pyx_v_image, PyArrayObject *__pyx_v_x, PyArrayObject *__pyx_v_y, PyArrayObject *__pyx_v_z) {
+static PyObject *__pyx_pf_6interp_12cbilin_interp2(CYTHON_UNUSED PyObject *__pyx_self, PyArrayObject *__pyx_v_image, PyArrayObject *__pyx_v_x, PyArrayObject *__pyx_v_y) {
   int __pyx_v_nx;
   int __pyx_v_npts;
   int __pyx_v_nballs;
+  PyArrayObject *__pyx_v_z = 0;
   __Pyx_LocalBuf_ND __pyx_pybuffernd_image;
   __Pyx_Buffer __pyx_pybuffer_image;
   __Pyx_LocalBuf_ND __pyx_pybuffernd_x;
@@ -5355,15 +5389,24 @@ static PyObject *__pyx_pf_6interp_12cbilin_interp2(CYTHON_UNUSED PyObject *__pyx
   npy_intp __pyx_t_1;
   npy_intp __pyx_t_2;
   npy_intp __pyx_t_3;
-  Py_ssize_t __pyx_t_4;
-  Py_ssize_t __pyx_t_5;
-  Py_ssize_t __pyx_t_6;
-  Py_ssize_t __pyx_t_7;
-  Py_ssize_t __pyx_t_8;
+  PyObject *__pyx_t_4 = NULL;
+  PyObject *__pyx_t_5 = NULL;
+  PyObject *__pyx_t_6 = NULL;
+  PyObject *__pyx_t_7 = NULL;
+  PyArrayObject *__pyx_t_8 = NULL;
   Py_ssize_t __pyx_t_9;
   Py_ssize_t __pyx_t_10;
   Py_ssize_t __pyx_t_11;
+  Py_ssize_t __pyx_t_12;
+  Py_ssize_t __pyx_t_13;
+  Py_ssize_t __pyx_t_14;
+  Py_ssize_t __pyx_t_15;
+  Py_ssize_t __pyx_t_16;
   __Pyx_RefNannySetupContext("cbilin_interp2", 0);
+  __pyx_pybuffer_z.pybuffer.buf = NULL;
+  __pyx_pybuffer_z.refcount = 0;
+  __pyx_pybuffernd_z.data = NULL;
+  __pyx_pybuffernd_z.rcbuffer = &__pyx_pybuffer_z;
   __pyx_pybuffer_image.pybuffer.buf = NULL;
   __pyx_pybuffer_image.refcount = 0;
   __pyx_pybuffernd_image.data = NULL;
@@ -5376,37 +5419,28 @@ static PyObject *__pyx_pf_6interp_12cbilin_interp2(CYTHON_UNUSED PyObject *__pyx
   __pyx_pybuffer_y.refcount = 0;
   __pyx_pybuffernd_y.data = NULL;
   __pyx_pybuffernd_y.rcbuffer = &__pyx_pybuffer_y;
-  __pyx_pybuffer_z.pybuffer.buf = NULL;
-  __pyx_pybuffer_z.refcount = 0;
-  __pyx_pybuffernd_z.data = NULL;
-  __pyx_pybuffernd_z.rcbuffer = &__pyx_pybuffer_z;
   {
     __Pyx_BufFmt_StackElem __pyx_stack[1];
-    if (unlikely(__Pyx_GetBufferAndValidate(&__pyx_pybuffernd_image.rcbuffer->pybuffer, (PyObject*)__pyx_v_image, &__Pyx_TypeInfo_nn___pyx_t_6interp_DTYPE_tf, PyBUF_FORMAT| PyBUF_C_CONTIGUOUS, 2, 0, __pyx_stack) == -1)) __PYX_ERR(0, 327, __pyx_L1_error)
+    if (unlikely(__Pyx_GetBufferAndValidate(&__pyx_pybuffernd_image.rcbuffer->pybuffer, (PyObject*)__pyx_v_image, &__Pyx_TypeInfo_nn___pyx_t_6interp_DTYPE_tf, PyBUF_FORMAT| PyBUF_C_CONTIGUOUS, 2, 0, __pyx_stack) == -1)) __PYX_ERR(0, 287, __pyx_L1_error)
   }
   __pyx_pybuffernd_image.diminfo[0].strides = __pyx_pybuffernd_image.rcbuffer->pybuffer.strides[0]; __pyx_pybuffernd_image.diminfo[0].shape = __pyx_pybuffernd_image.rcbuffer->pybuffer.shape[0]; __pyx_pybuffernd_image.diminfo[1].strides = __pyx_pybuffernd_image.rcbuffer->pybuffer.strides[1]; __pyx_pybuffernd_image.diminfo[1].shape = __pyx_pybuffernd_image.rcbuffer->pybuffer.shape[1];
   {
     __Pyx_BufFmt_StackElem __pyx_stack[1];
-    if (unlikely(__Pyx_GetBufferAndValidate(&__pyx_pybuffernd_x.rcbuffer->pybuffer, (PyObject*)__pyx_v_x, &__Pyx_TypeInfo_nn___pyx_t_6interp_DTYPE_tf, PyBUF_FORMAT| PyBUF_C_CONTIGUOUS, 2, 0, __pyx_stack) == -1)) __PYX_ERR(0, 327, __pyx_L1_error)
+    if (unlikely(__Pyx_GetBufferAndValidate(&__pyx_pybuffernd_x.rcbuffer->pybuffer, (PyObject*)__pyx_v_x, &__Pyx_TypeInfo_nn___pyx_t_6interp_DTYPE_tf, PyBUF_FORMAT| PyBUF_C_CONTIGUOUS, 2, 0, __pyx_stack) == -1)) __PYX_ERR(0, 287, __pyx_L1_error)
   }
   __pyx_pybuffernd_x.diminfo[0].strides = __pyx_pybuffernd_x.rcbuffer->pybuffer.strides[0]; __pyx_pybuffernd_x.diminfo[0].shape = __pyx_pybuffernd_x.rcbuffer->pybuffer.shape[0]; __pyx_pybuffernd_x.diminfo[1].strides = __pyx_pybuffernd_x.rcbuffer->pybuffer.strides[1]; __pyx_pybuffernd_x.diminfo[1].shape = __pyx_pybuffernd_x.rcbuffer->pybuffer.shape[1];
   {
     __Pyx_BufFmt_StackElem __pyx_stack[1];
-    if (unlikely(__Pyx_GetBufferAndValidate(&__pyx_pybuffernd_y.rcbuffer->pybuffer, (PyObject*)__pyx_v_y, &__Pyx_TypeInfo_nn___pyx_t_6interp_DTYPE_tf, PyBUF_FORMAT| PyBUF_C_CONTIGUOUS, 2, 0, __pyx_stack) == -1)) __PYX_ERR(0, 327, __pyx_L1_error)
+    if (unlikely(__Pyx_GetBufferAndValidate(&__pyx_pybuffernd_y.rcbuffer->pybuffer, (PyObject*)__pyx_v_y, &__Pyx_TypeInfo_nn___pyx_t_6interp_DTYPE_tf, PyBUF_FORMAT| PyBUF_C_CONTIGUOUS, 2, 0, __pyx_stack) == -1)) __PYX_ERR(0, 287, __pyx_L1_error)
   }
   __pyx_pybuffernd_y.diminfo[0].strides = __pyx_pybuffernd_y.rcbuffer->pybuffer.strides[0]; __pyx_pybuffernd_y.diminfo[0].shape = __pyx_pybuffernd_y.rcbuffer->pybuffer.shape[0]; __pyx_pybuffernd_y.diminfo[1].strides = __pyx_pybuffernd_y.rcbuffer->pybuffer.strides[1]; __pyx_pybuffernd_y.diminfo[1].shape = __pyx_pybuffernd_y.rcbuffer->pybuffer.shape[1];
-  {
-    __Pyx_BufFmt_StackElem __pyx_stack[1];
-    if (unlikely(__Pyx_GetBufferAndValidate(&__pyx_pybuffernd_z.rcbuffer->pybuffer, (PyObject*)__pyx_v_z, &__Pyx_TypeInfo_nn___pyx_t_6interp_DTYPE_tf, PyBUF_FORMAT| PyBUF_C_CONTIGUOUS, 2, 0, __pyx_stack) == -1)) __PYX_ERR(0, 327, __pyx_L1_error)
-  }
-  __pyx_pybuffernd_z.diminfo[0].strides = __pyx_pybuffernd_z.rcbuffer->pybuffer.strides[0]; __pyx_pybuffernd_z.diminfo[0].shape = __pyx_pybuffernd_z.rcbuffer->pybuffer.shape[0]; __pyx_pybuffernd_z.diminfo[1].strides = __pyx_pybuffernd_z.rcbuffer->pybuffer.strides[1]; __pyx_pybuffernd_z.diminfo[1].shape = __pyx_pybuffernd_z.rcbuffer->pybuffer.shape[1];
 
-  /* "interp.pyx":331
+  /* "interp.pyx":300
  *     cdef int nx, npts, nballs
  * 
  *     nx, npts, nballs = image.shape[1], x.shape[0], x.shape[1]             # <<<<<<<<<<<<<<
  * 
- *     cbilin_interp2d(&image[0,0], &x[0,0], &y[0,0], &z[0,0], nx, npts, nballs)
+ *     cdef np.ndarray[DTYPE_tf, ndim=2, mode="c"] z = np.zeros([npts, nballs], dtype=DTYPEf)
  */
   __pyx_t_1 = (__pyx_v_image->dimensions[1]);
   __pyx_t_2 = (__pyx_v_x->dimensions[0]);
@@ -5415,44 +5449,102 @@ static PyObject *__pyx_pf_6interp_12cbilin_interp2(CYTHON_UNUSED PyObject *__pyx
   __pyx_v_npts = __pyx_t_2;
   __pyx_v_nballs = __pyx_t_3;
 
-  /* "interp.pyx":333
+  /* "interp.pyx":302
  *     nx, npts, nballs = image.shape[1], x.shape[0], x.shape[1]
+ * 
+ *     cdef np.ndarray[DTYPE_tf, ndim=2, mode="c"] z = np.zeros([npts, nballs], dtype=DTYPEf)             # <<<<<<<<<<<<<<
+ * 
+ *     cbilin_interp2d(&image[0,0], &x[0,0], &y[0,0], &z[0,0], nx, npts, nballs)
+ */
+  __pyx_t_4 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 302, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_4);
+  __pyx_t_5 = __Pyx_PyObject_GetAttrStr(__pyx_t_4, __pyx_n_s_zeros); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 302, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_5);
+  __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+  __pyx_t_4 = __Pyx_PyInt_From_int(__pyx_v_npts); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 302, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_4);
+  __pyx_t_6 = __Pyx_PyInt_From_int(__pyx_v_nballs); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 302, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_6);
+  __pyx_t_7 = PyList_New(2); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 302, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_7);
+  __Pyx_GIVEREF(__pyx_t_4);
+  PyList_SET_ITEM(__pyx_t_7, 0, __pyx_t_4);
+  __Pyx_GIVEREF(__pyx_t_6);
+  PyList_SET_ITEM(__pyx_t_7, 1, __pyx_t_6);
+  __pyx_t_4 = 0;
+  __pyx_t_6 = 0;
+  __pyx_t_6 = PyTuple_New(1); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 302, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_6);
+  __Pyx_GIVEREF(__pyx_t_7);
+  PyTuple_SET_ITEM(__pyx_t_6, 0, __pyx_t_7);
+  __pyx_t_7 = 0;
+  __pyx_t_7 = PyDict_New(); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 302, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_7);
+  __pyx_t_4 = __Pyx_GetModuleGlobalName(__pyx_n_s_DTYPEf); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 302, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_4);
+  if (PyDict_SetItem(__pyx_t_7, __pyx_n_s_dtype, __pyx_t_4) < 0) __PYX_ERR(0, 302, __pyx_L1_error)
+  __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+  __pyx_t_4 = __Pyx_PyObject_Call(__pyx_t_5, __pyx_t_6, __pyx_t_7); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 302, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_4);
+  __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
+  __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+  __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
+  if (!(likely(((__pyx_t_4) == Py_None) || likely(__Pyx_TypeTest(__pyx_t_4, __pyx_ptype_5numpy_ndarray))))) __PYX_ERR(0, 302, __pyx_L1_error)
+  __pyx_t_8 = ((PyArrayObject *)__pyx_t_4);
+  {
+    __Pyx_BufFmt_StackElem __pyx_stack[1];
+    if (unlikely(__Pyx_GetBufferAndValidate(&__pyx_pybuffernd_z.rcbuffer->pybuffer, (PyObject*)__pyx_t_8, &__Pyx_TypeInfo_nn___pyx_t_6interp_DTYPE_tf, PyBUF_FORMAT| PyBUF_C_CONTIGUOUS, 2, 0, __pyx_stack) == -1)) {
+      __pyx_v_z = ((PyArrayObject *)Py_None); __Pyx_INCREF(Py_None); __pyx_pybuffernd_z.rcbuffer->pybuffer.buf = NULL;
+      __PYX_ERR(0, 302, __pyx_L1_error)
+    } else {__pyx_pybuffernd_z.diminfo[0].strides = __pyx_pybuffernd_z.rcbuffer->pybuffer.strides[0]; __pyx_pybuffernd_z.diminfo[0].shape = __pyx_pybuffernd_z.rcbuffer->pybuffer.shape[0]; __pyx_pybuffernd_z.diminfo[1].strides = __pyx_pybuffernd_z.rcbuffer->pybuffer.strides[1]; __pyx_pybuffernd_z.diminfo[1].shape = __pyx_pybuffernd_z.rcbuffer->pybuffer.shape[1];
+    }
+  }
+  __pyx_t_8 = 0;
+  __pyx_v_z = ((PyArrayObject *)__pyx_t_4);
+  __pyx_t_4 = 0;
+
+  /* "interp.pyx":304
+ *     cdef np.ndarray[DTYPE_tf, ndim=2, mode="c"] z = np.zeros([npts, nballs], dtype=DTYPEf)
  * 
  *     cbilin_interp2d(&image[0,0], &x[0,0], &y[0,0], &z[0,0], nx, npts, nballs)             # <<<<<<<<<<<<<<
  * 
- *     return None
+ *     return z
  */
-  __pyx_t_4 = 0;
-  __pyx_t_5 = 0;
-  __pyx_t_6 = 0;
-  __pyx_t_7 = 0;
-  __pyx_t_8 = 0;
   __pyx_t_9 = 0;
   __pyx_t_10 = 0;
   __pyx_t_11 = 0;
-  cbilin_interp2d((&(*__Pyx_BufPtrCContig2d(__pyx_t_6interp_DTYPE_tf *, __pyx_pybuffernd_image.rcbuffer->pybuffer.buf, __pyx_t_4, __pyx_pybuffernd_image.diminfo[0].strides, __pyx_t_5, __pyx_pybuffernd_image.diminfo[1].strides))), (&(*__Pyx_BufPtrCContig2d(__pyx_t_6interp_DTYPE_tf *, __pyx_pybuffernd_x.rcbuffer->pybuffer.buf, __pyx_t_6, __pyx_pybuffernd_x.diminfo[0].strides, __pyx_t_7, __pyx_pybuffernd_x.diminfo[1].strides))), (&(*__Pyx_BufPtrCContig2d(__pyx_t_6interp_DTYPE_tf *, __pyx_pybuffernd_y.rcbuffer->pybuffer.buf, __pyx_t_8, __pyx_pybuffernd_y.diminfo[0].strides, __pyx_t_9, __pyx_pybuffernd_y.diminfo[1].strides))), (&(*__Pyx_BufPtrCContig2d(__pyx_t_6interp_DTYPE_tf *, __pyx_pybuffernd_z.rcbuffer->pybuffer.buf, __pyx_t_10, __pyx_pybuffernd_z.diminfo[0].strides, __pyx_t_11, __pyx_pybuffernd_z.diminfo[1].strides))), __pyx_v_nx, __pyx_v_npts, __pyx_v_nballs);
+  __pyx_t_12 = 0;
+  __pyx_t_13 = 0;
+  __pyx_t_14 = 0;
+  __pyx_t_15 = 0;
+  __pyx_t_16 = 0;
+  cbilin_interp2d((&(*__Pyx_BufPtrCContig2d(__pyx_t_6interp_DTYPE_tf *, __pyx_pybuffernd_image.rcbuffer->pybuffer.buf, __pyx_t_9, __pyx_pybuffernd_image.diminfo[0].strides, __pyx_t_10, __pyx_pybuffernd_image.diminfo[1].strides))), (&(*__Pyx_BufPtrCContig2d(__pyx_t_6interp_DTYPE_tf *, __pyx_pybuffernd_x.rcbuffer->pybuffer.buf, __pyx_t_11, __pyx_pybuffernd_x.diminfo[0].strides, __pyx_t_12, __pyx_pybuffernd_x.diminfo[1].strides))), (&(*__Pyx_BufPtrCContig2d(__pyx_t_6interp_DTYPE_tf *, __pyx_pybuffernd_y.rcbuffer->pybuffer.buf, __pyx_t_13, __pyx_pybuffernd_y.diminfo[0].strides, __pyx_t_14, __pyx_pybuffernd_y.diminfo[1].strides))), (&(*__Pyx_BufPtrCContig2d(__pyx_t_6interp_DTYPE_tf *, __pyx_pybuffernd_z.rcbuffer->pybuffer.buf, __pyx_t_15, __pyx_pybuffernd_z.diminfo[0].strides, __pyx_t_16, __pyx_pybuffernd_z.diminfo[1].strides))), __pyx_v_nx, __pyx_v_npts, __pyx_v_nballs);
 
-  /* "interp.pyx":335
+  /* "interp.pyx":306
  *     cbilin_interp2d(&image[0,0], &x[0,0], &y[0,0], &z[0,0], nx, npts, nballs)
  * 
- *     return None             # <<<<<<<<<<<<<<
+ *     return z             # <<<<<<<<<<<<<<
  * 
  */
   __Pyx_XDECREF(__pyx_r);
-  __Pyx_INCREF(Py_None);
-  __pyx_r = Py_None;
+  __Pyx_INCREF(((PyObject *)__pyx_v_z));
+  __pyx_r = ((PyObject *)__pyx_v_z);
   goto __pyx_L0;
 
-  /* "interp.pyx":327
+  /* "interp.pyx":287
  * @cython.boundscheck(False)
  * @cython.wraparound(False)
- * def cbilin_interp2(np.ndarray[DTYPE_tf, ndim=2, mode="c"] image, np.ndarray[DTYPE_tf, ndim=2, mode="c"] x, np.ndarray[DTYPE_tf, ndim=2, mode="c"] y, np.ndarray[DTYPE_tf, ndim=2, mode="c"] z):             # <<<<<<<<<<<<<<
- * 
- *     cdef int nx, npts, nballs
+ * def cbilin_interp2(np.ndarray[DTYPE_tf, ndim=2, mode="c"] image, np.ndarray[DTYPE_tf, ndim=2, mode="c"] x, np.ndarray[DTYPE_tf, ndim=2, mode="c"] y):             # <<<<<<<<<<<<<<
+ *     """
+ *     Bilinear interpolation for 2-dimensional arrays of coordinates.
  */
 
   /* function exit code */
   __pyx_L1_error:;
+  __Pyx_XDECREF(__pyx_t_4);
+  __Pyx_XDECREF(__pyx_t_5);
+  __Pyx_XDECREF(__pyx_t_6);
+  __Pyx_XDECREF(__pyx_t_7);
   { PyObject *__pyx_type, *__pyx_value, *__pyx_tb;
     __Pyx_PyThreadState_declare
     __Pyx_PyThreadState_assign
@@ -5471,6 +5563,7 @@ static PyObject *__pyx_pf_6interp_12cbilin_interp2(CYTHON_UNUSED PyObject *__pyx
   __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_y.rcbuffer->pybuffer);
   __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_z.rcbuffer->pybuffer);
   __pyx_L2:;
+  __Pyx_XDECREF((PyObject *)__pyx_v_z);
   __Pyx_XGIVEREF(__pyx_r);
   __Pyx_RefNannyFinishContext();
   return __pyx_r;
@@ -22041,29 +22134,29 @@ static int __Pyx_InitCachedConstants(void) {
   __Pyx_GIVEREF(__pyx_tuple__39);
   __pyx_codeobj__40 = (PyObject*)__Pyx_PyCode_New(3, 0, 9, 0, 0, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__39, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_interp_pyx, __pyx_n_s_bilin_interp2d, 228, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__40)) __PYX_ERR(0, 228, __pyx_L1_error)
 
-  /* "interp.pyx":313
+  /* "interp.pyx":262
  * @cython.boundscheck(False)
  * @cython.wraparound(False)
- * def cbilin_interp1(np.ndarray[DTYPE_tf, ndim=2, mode="c"] image, np.ndarray[DTYPE_tf, ndim=1, mode="c"] x, np.ndarray[DTYPE_tf, ndim=1, mode="c"] y, np.ndarray[DTYPE_tf, ndim=1, mode="c"] z):             # <<<<<<<<<<<<<<
- * 
- *     cdef int nx, npts
+ * def cbilin_interp1(np.ndarray[DTYPE_tf, ndim=2, mode="c"] image, np.ndarray[DTYPE_tf, ndim=1, mode="c"] x, np.ndarray[DTYPE_tf, ndim=1, mode="c"] y):             # <<<<<<<<<<<<<<
+ *     """
+ *     Bilinear interpolation for 1-dimensional arrays of coordinates.
  */
-  __pyx_tuple__41 = PyTuple_Pack(6, __pyx_n_s_image, __pyx_n_s_x, __pyx_n_s_y, __pyx_n_s_z, __pyx_n_s_nx, __pyx_n_s_npts); if (unlikely(!__pyx_tuple__41)) __PYX_ERR(0, 313, __pyx_L1_error)
+  __pyx_tuple__41 = PyTuple_Pack(6, __pyx_n_s_image, __pyx_n_s_x, __pyx_n_s_y, __pyx_n_s_nx, __pyx_n_s_npts, __pyx_n_s_z); if (unlikely(!__pyx_tuple__41)) __PYX_ERR(0, 262, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__41);
   __Pyx_GIVEREF(__pyx_tuple__41);
-  __pyx_codeobj__42 = (PyObject*)__Pyx_PyCode_New(4, 0, 6, 0, 0, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__41, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_interp_pyx, __pyx_n_s_cbilin_interp1, 313, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__42)) __PYX_ERR(0, 313, __pyx_L1_error)
+  __pyx_codeobj__42 = (PyObject*)__Pyx_PyCode_New(3, 0, 6, 0, 0, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__41, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_interp_pyx, __pyx_n_s_cbilin_interp1, 262, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__42)) __PYX_ERR(0, 262, __pyx_L1_error)
 
-  /* "interp.pyx":327
+  /* "interp.pyx":287
  * @cython.boundscheck(False)
  * @cython.wraparound(False)
- * def cbilin_interp2(np.ndarray[DTYPE_tf, ndim=2, mode="c"] image, np.ndarray[DTYPE_tf, ndim=2, mode="c"] x, np.ndarray[DTYPE_tf, ndim=2, mode="c"] y, np.ndarray[DTYPE_tf, ndim=2, mode="c"] z):             # <<<<<<<<<<<<<<
- * 
- *     cdef int nx, npts, nballs
+ * def cbilin_interp2(np.ndarray[DTYPE_tf, ndim=2, mode="c"] image, np.ndarray[DTYPE_tf, ndim=2, mode="c"] x, np.ndarray[DTYPE_tf, ndim=2, mode="c"] y):             # <<<<<<<<<<<<<<
+ *     """
+ *     Bilinear interpolation for 2-dimensional arrays of coordinates.
  */
-  __pyx_tuple__43 = PyTuple_Pack(7, __pyx_n_s_image, __pyx_n_s_x, __pyx_n_s_y, __pyx_n_s_z, __pyx_n_s_nx, __pyx_n_s_npts, __pyx_n_s_nballs); if (unlikely(!__pyx_tuple__43)) __PYX_ERR(0, 327, __pyx_L1_error)
+  __pyx_tuple__43 = PyTuple_Pack(7, __pyx_n_s_image, __pyx_n_s_x, __pyx_n_s_y, __pyx_n_s_nx, __pyx_n_s_npts, __pyx_n_s_nballs, __pyx_n_s_z); if (unlikely(!__pyx_tuple__43)) __PYX_ERR(0, 287, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__43);
   __Pyx_GIVEREF(__pyx_tuple__43);
-  __pyx_codeobj__44 = (PyObject*)__Pyx_PyCode_New(4, 0, 7, 0, 0, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__43, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_interp_pyx, __pyx_n_s_cbilin_interp2, 327, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__44)) __PYX_ERR(0, 327, __pyx_L1_error)
+  __pyx_codeobj__44 = (PyObject*)__Pyx_PyCode_New(3, 0, 7, 0, 0, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__43, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_interp_pyx, __pyx_n_s_cbilin_interp2, 287, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__44)) __PYX_ERR(0, 287, __pyx_L1_error)
 
   /* "View.MemoryView":284
  *         return self.name
@@ -22393,28 +22486,28 @@ PyMODINIT_FUNC PyInit_interp(void)
   if (PyDict_SetItem(__pyx_d, __pyx_n_s_bilin_interp2d, __pyx_t_1) < 0) __PYX_ERR(0, 228, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
 
-  /* "interp.pyx":313
+  /* "interp.pyx":262
  * @cython.boundscheck(False)
  * @cython.wraparound(False)
- * def cbilin_interp1(np.ndarray[DTYPE_tf, ndim=2, mode="c"] image, np.ndarray[DTYPE_tf, ndim=1, mode="c"] x, np.ndarray[DTYPE_tf, ndim=1, mode="c"] y, np.ndarray[DTYPE_tf, ndim=1, mode="c"] z):             # <<<<<<<<<<<<<<
- * 
- *     cdef int nx, npts
+ * def cbilin_interp1(np.ndarray[DTYPE_tf, ndim=2, mode="c"] image, np.ndarray[DTYPE_tf, ndim=1, mode="c"] x, np.ndarray[DTYPE_tf, ndim=1, mode="c"] y):             # <<<<<<<<<<<<<<
+ *     """
+ *     Bilinear interpolation for 1-dimensional arrays of coordinates.
  */
-  __pyx_t_1 = PyCFunction_NewEx(&__pyx_mdef_6interp_11cbilin_interp1, NULL, __pyx_n_s_interp); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 313, __pyx_L1_error)
+  __pyx_t_1 = PyCFunction_NewEx(&__pyx_mdef_6interp_11cbilin_interp1, NULL, __pyx_n_s_interp); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 262, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
-  if (PyDict_SetItem(__pyx_d, __pyx_n_s_cbilin_interp1, __pyx_t_1) < 0) __PYX_ERR(0, 313, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_d, __pyx_n_s_cbilin_interp1, __pyx_t_1) < 0) __PYX_ERR(0, 262, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
 
-  /* "interp.pyx":327
+  /* "interp.pyx":287
  * @cython.boundscheck(False)
  * @cython.wraparound(False)
- * def cbilin_interp2(np.ndarray[DTYPE_tf, ndim=2, mode="c"] image, np.ndarray[DTYPE_tf, ndim=2, mode="c"] x, np.ndarray[DTYPE_tf, ndim=2, mode="c"] y, np.ndarray[DTYPE_tf, ndim=2, mode="c"] z):             # <<<<<<<<<<<<<<
- * 
- *     cdef int nx, npts, nballs
+ * def cbilin_interp2(np.ndarray[DTYPE_tf, ndim=2, mode="c"] image, np.ndarray[DTYPE_tf, ndim=2, mode="c"] x, np.ndarray[DTYPE_tf, ndim=2, mode="c"] y):             # <<<<<<<<<<<<<<
+ *     """
+ *     Bilinear interpolation for 2-dimensional arrays of coordinates.
  */
-  __pyx_t_1 = PyCFunction_NewEx(&__pyx_mdef_6interp_13cbilin_interp2, NULL, __pyx_n_s_interp); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 327, __pyx_L1_error)
+  __pyx_t_1 = PyCFunction_NewEx(&__pyx_mdef_6interp_13cbilin_interp2, NULL, __pyx_n_s_interp); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 287, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
-  if (PyDict_SetItem(__pyx_d, __pyx_n_s_cbilin_interp2, __pyx_t_1) < 0) __PYX_ERR(0, 327, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_d, __pyx_n_s_cbilin_interp2, __pyx_t_1) < 0) __PYX_ERR(0, 287, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
 
   /* "interp.pyx":1

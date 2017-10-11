@@ -1,3 +1,4 @@
+import sys
 import numpy as np
 import matplotlib.pyplot as plt
 from numpy import pi, cos, sin
@@ -76,7 +77,13 @@ def initialize_mesh(bt):
     return xstart, ystart
 
 def put_balls_on_surface(surface, x, y, rs, dp):
-    z = bilin_interp(surface, x, y) +  rs*(1-dp/2)
+    if x.ndim !=1 or y.ndim !=1:
+        sys.exit("Input coordinates have incorrect dimensions. x and y must be 1D numpy arrays")
+
+    z = np.zeros([x.shape[0]], dtype=np.float32)
+    #z = bilin_interp_f(surface, x, y) +  rs*(1-dp/2)
+    z = cinterp.cbilin_interp1(surface, x, y)
+    z += rs * (1 - dp / 2)
     return z
 
 def compute_force(bt, brows, bcols, xt, yt, zt, ds):
@@ -95,7 +102,17 @@ def compute_force(bt, brows, bcols, xt, yt, zt, ds):
 
 
 def integrate_motion(pos, vel, bt, surface):
+    """
+    Integrate the motion of a series of balls. This is one integration step.
+    Position and velocity are changed in place.
+    Either use a loop or a list comprehension to integrate over more than one time step
 
+    :param pos: input and output x, y, z coordinates (1D array)
+    :param vel: input and output velocity. (1D array)
+    :param bt: BT instance
+    :param surface: data surface (2D array)
+    :return:
+    """
     # Unpack vector components for better readability
     xt, yt, zt = pos
     vxt, vyt, vzt = vel
@@ -106,7 +123,8 @@ def integrate_motion(pos, vel, bt, surface):
     brows = np.clip(bt.brows + yt, 0, bt.ny - 1).squeeze()
 
     # "ds" stands for "data surface"
-    ds = bilin_interp(surface, bcols, brows)
+    ds = bilin_interp_f(surface, bcols, brows)
+
 
     fxt, fyt, fzt = compute_force(bt, brows, bcols, xt, yt, zt, ds)
 
@@ -139,15 +157,12 @@ def integrate_motion2(pos, vel, bt, surface):
 
     # Update the balls grids with current positions
     # bcols and brows have dimensions = [prod(ballgrid.shape), nballs]
-    bcols = np.clip(bt.bcols + xt, 0, bt.nx - 1).squeeze()
-    brows = np.clip(bt.brows + yt, 0, bt.ny - 1).squeeze()
+    bcols = np.clip(bt.bcols + xt, 0, bt.nx - 1)
+    brows = np.clip(bt.brows + yt, 0, bt.ny - 1)
 
     # "ds" stands for "data surface"
     #ds = surface[np.round(brows).astype(np.int), np.round(bcols).astype(np.int)]
-    # TODO me: Need to write cython bilin_interp2 so it handles 2D output with [nballs, npoints]. This could be done by rearranging the dimensions?
-    #
-    ds = np.zeros([bcols.shape[0]], dtype=np.float32)
-    cinterp.bilin_interp2(surface, bcols, brows, ds)
+    ds = cinterp.cbilin_interp2(surface, bcols, brows)
 
     fxt, fyt, fzt = compute_force(bt, brows, bcols, xt, yt, zt, ds)
 
@@ -201,6 +216,7 @@ def integrate_balls(bt, surface):
     bt.vzt[good_balls_mask] = vzt
 
     return
+
 
 def initialize_ball_vector(xstart, ystart, zstart):
     # Initialize balls at user-supplied positions

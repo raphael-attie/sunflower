@@ -45,13 +45,13 @@ dims = [npts, nballs]
 
 xf = np.full(dims, 10.3, dtype=np.float32)
 yf = np.full(dims, 10.1, dtype=np.float32)
-zf = np.full(dims, 0, dtype=np.float32)
+zf = np.zeros(dims, dtype=np.float32)
 # Python
 testf = blt.bilin_interp_f(imagef, xf, yf)
 # Cython
 testcf = cinterp.bilin_interp2f(imagef, xf, yf)
 # Cython C with 2 dimensions
-cinterp.cbilin_interp2(imagef, xf, yf, zf)
+zf = cinterp.cbilin_interp2(imagef, xf, yf)
 
 # Wrap and profile the above
 mywrap_f = wrapper(blt.bilin_interp_f, imagef, xf, yf)
