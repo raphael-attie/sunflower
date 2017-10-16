@@ -53,13 +53,13 @@ class BT:
 
 
         # Current position, force and velocity components, updated after each frame
-        self.pos_t = np.zeros([3, self.nballs], dtype=DTYPE)
-        self.vel_t = np.zeros([3, self.nballs], dtype=DTYPE)
-        self.force_t = np.zeros([3, self.nballs], dtype=DTYPE)
+        self.pos = np.zeros([3, self.nballs], dtype=DTYPE)
+        self.vel = np.zeros([3, self.nballs], dtype=DTYPE)
+        self.force = np.zeros([3, self.nballs], dtype=DTYPE)
         self.age = np.zeros([self.nballs], dtype=np.uint32)
         # Storage arrays of the above
-        self.pos = np.zeros([3, self.nt, self.nballs], dtype=DTYPE)
-        self.vel = np.zeros([3, self.nt, self.nballs], dtype=DTYPE)
+        self.ballpos = np.zeros([3, self.nt, self.nballs], dtype=DTYPE)
+        self.ballvel = np.zeros([3, self.nt, self.nballs], dtype=DTYPE)
 
         # Ball grid and mesh. Add +1 at the np.arange stop for including right-hand side boundary
         self.ballgrid = np.arange(-self.rs, self.rs + 1, dtype=DTYPE)
@@ -72,17 +72,17 @@ class BT:
 
     def initialize_ballpos(self, surface):
         # Initialize the height of the ball. Only possible if the data surface is given.
-        self.pos_t[0, :] = self.xstart.flatten()
-        self.pos_t[1, :] = self.ystart.flatten()
+        self.pos[0, :] = self.xstart.flatten()
+        self.pos[1, :] = self.ystart.flatten()
         self.zstart = put_balls_on_surface(surface, self.xstart.ravel(), self.ystart.ravel(), self.rs, self.dp)
-        self.pos_t[2, :] = self.zstart.copy()
+        self.pos[2, :] = self.zstart.copy()
         # Setup the coarse grid: populate edges to avoid "leaks" of balls ~ balls falling off.
         # Although can't remember if that was actually ever used in the Matlab implementation
         # TODO: check Matlab implementation about the use of the edge filling.
-        # self.coarse_grid[0,:]   = 1
-        # self.coarse_grid[:, 0]  = 1
-        # self.coarse_grid[-1,:]  = 1
-        # self.coarse_grid[:, -1] = 1
+        self.coarse_grid[0,:]   = 1
+        self.coarse_grid[:, 0]  = 1
+        self.coarse_grid[-1,:]  = 1
+        self.coarse_grid[:, -1] = 1
         # Beware of the std() if there's a bad region in the image (e.g sunspot)
         self.min_ds = -5*surface.std()
         return
@@ -104,7 +104,7 @@ def fill_coarse_grid(bt, x, y):
     :return: coarse grid filled like a chess board.
     """
     # Favor clarity and stay in 2D coordinates instead of linear indices.
-    xcoarse, ycoarse, _ = coarse_grid_pos(bt, x, y)
+    xcoarse, ycoarse, _ = coarse_grid_pos(bt, x.astype(np.int), y.astype(np.int))
     chess_board = bt.coarse_grid.copy()
     np.add.at(chess_board, (ycoarse, xcoarse), 1)
     return chess_board
@@ -190,11 +190,11 @@ def integrate_motion(pos, vel, bt, surface):
     # return xt.copy(), yt.copy(), zt.copy(), vxt.copy(), vyt.copy(), vzt.copy(), fxt.copy(), fyt.copy(), fzt.copy()
     return pos.copy(), vel.copy(), force
 
-def integrate_motion2(pos_t, vel_t, bt, surface):
+def integrate_motion2(pos, vel, bt, surface):
 
     # Unpack vector components for better readability
-    xt, yt, zt = pos_t
-    vxt, vyt, vzt = vel_t
+    xt, yt, zt = pos
+    vxt, vyt, vzt = vel
 
     # Update the balls grids with current positions
     # bcols and brows have dimensions = [prod(ballgrid.shape), nballs]
@@ -216,19 +216,19 @@ def integrate_motion2(pos_t, vel_t, bt, surface):
     # Integrate position including effect of a damped velocity
     # Damping is added arbitrarily for the stability of the code.
 
-    pos_t[0, :] += vxt * bt.td * (1 - bt.e_td)
-    pos_t[1, :] += vyt * bt.td * (1 - bt.e_td)
-    pos_t[2, :] += vzt * bt.zdamping * (1 - bt.e_tdz)
+    pos[0, :] += vxt * bt.td * (1 - bt.e_td)
+    pos[1, :] += vyt * bt.td * (1 - bt.e_td)
+    pos[2, :] += vzt * bt.zdamping * (1 - bt.e_tdz)
 
 
     # Update the velocity with the damping used above
-    vel_t[0, :] *= bt.e_td
-    vel_t[1, :] *= bt.e_td
-    vel_t[2, :] *= bt.e_tdz
+    vel[0, :] *= bt.e_td
+    vel[1, :] *= bt.e_td
+    vel[2, :] *= bt.e_tdz
 
     force = np.array([fxt, fyt, fzt])
 
-    return pos_t.copy(), vel_t.copy(), force
+    return pos.copy(), vel.copy(), force
 
 def integrate_balls(bt, surface):
 
@@ -293,7 +293,7 @@ def get_bad_balls(pos, bt):
     xpos, ypos, zpos = pos[:, valid_balls]
     balls_age = bt.balls_age[valid_balls]
 
-    # Get the position on the coarse grid, clipped to the edges of that grid.
+    # Get the 1D position on the coarse grid, clipped to the edges of that grid.
     _, _, coarse_pos = coarse_grid_pos(bt, xpos, ypos)
 
     # Get ball number and balls age sorted by position, sort positions too, and array of valid balls indices as well!!!
@@ -312,30 +312,57 @@ def get_bad_balls(pos, bt):
     # They are simply the ones not listed by unique_oldest_balls
     bad_full_balls = np.ones([bt.nballs], dtype=bool)
     bad_full_balls[unique_oldest_balls] = False
-    bad_balls = np.logical_or(bad_balls1, bad_full_balls)
+    # The bad balls are not just the ones in overpopulated cells, there's also the ones off edges & sunk balls
+    bad_balls_mask = np.logical_or(bad_balls1, bad_full_balls)
 
-    return bad_balls
+    return bad_balls_mask
 
 
 
 #def replace_bad_balls(pos, age, finegrid, newframe, bt):
-def replace_bad_balls(pos, bt):
-    # Get the position on the finegrid
-    # xfinegrid = max(1, min(BT.nc_fg, round(pos(:, 1) / BT.finegridspacing)));
-    # yfinegrid = max(1, min(BT.nr_fg, round(pos(:, 2) / BT.finegridspacing)));
-    # xyfinegrid1D = sub2ind(size(finegrid), yfinegrid, xfinegrid); % length = nballs
+def replace_bad_balls(pos, bad_balls_mask, surface, bt):
 
-    # Get the position on the coarse grid, clipped to the edges of that grid.
-    xcoarse = np.clip(np.round(pos[0, :] / bt.ballspacing), 0, bt.nxc).astype(np.uint32)
-    ycoarse = np.clip(np.round(pos[1, :] / bt.ballspacing), 0, bt.nyc).astype(np.uint32)
+    # Flag the positions of the bad balls as nan.
+    pos[:, bad_balls_mask] = np.nan
 
-    # We may not need to convert 2D indices to 1D indices. Let's see how numpy behaves with this.
+    # Number of bad balls in coarse grid cells.
+    # We'll compare this number to the number of empty coarse grid cells.
+    nbadballs = bad_balls_mask.sum()
+
+    # Get the mask of the valid balls that we are going to keep
+    valid_balls_mask = np.logical_not(bad_balls_mask)
+    # Work with with views on coordinate and velocity arrays of valid balls for clarity (instead of working with pos[:, :, valid_balls_mask] directly)
+    xpos, ypos, zpos = pos[:, valid_balls_mask]
+
+    # Get the 1D position on the coarse grid, clipped to the edges of that grid.
+    _, _, coarse_pos_idx = coarse_grid_pos(bt, xpos, ypos)
+
+    # Set these positions on the coarse grid as filled. Remember that to avoid putting new balls on the edge, the coarse_grid is pre-filled with ones at its edges
     # See discussion at https://stackoverflow.com/questions/44802033/efficiently-index-2d-numpy-array-using-two-1d-arrays
+    coarse_grid = bt.coarse_grid.copy()
+    coarse_grid.ravel()[coarse_pos_idx] = 1
+    y0, x0 = np.where(coarse_grid == 0)
+    nemptycells = x0.size
 
-    # Set positions on coarse grid as occupied where the balls are (=1)
-    bt.coarse_grid[ycoarse, xcoarse] = 1
+    if nemptycells <= nbadballs:
 
-    return xcoarse, ycoarse
+        bad_balls_idx = np.nonzero(bad_balls_mask)[0][0:nemptycells]
+
+        xnew = bt.ballspacing * x0.astype(np.float32)+ bt.rs
+        ynew = bt.ballspacing * y0.astype(np.float32)+ bt.rs
+        znew = put_balls_on_surface(surface, xnew, ynew, bt.rs, bt.dp)
+
+        pos[0, bad_balls_idx] = xnew
+        pos[1, bad_balls_idx] = ynew
+        pos[2, bad_balls_idx] = znew
+        bt.balls_age[bad_balls_idx] = 0
+
+    else:
+        # This case means the number of bad balls available for relocation is smaller than the number of empty cells where they can be relocated.
+        # This means the continuity principle is not satisfied and needs investigation.
+        sys.exit("The number of empy cells is greater than the number of bad balls")
+
+    return xnew, ynew
 
 def replace_bad_balls1(pos, bt):
     # Get the position on the finegrid
