@@ -45,7 +45,7 @@ bt = blt.BT(image.shape, nt, rs, dp)
 bt.initialize_ballpos(surface)
 
 # integrate motion over some time steps. Enough to have overpopulated cells (bad balls).
-pos, _, _ = [np.array(v).squeeze().swapaxes(0,1) for v in zip(*[blt.integrate_motion2(bt.pos, bt.vel, bt, surface) for i in range(nt)])]
+pos, _, _ = [np.array(v).squeeze().swapaxes(0,1) for v in zip(*[blt.integrate_motion(bt.pos, bt.vel, bt, surface, return_copies=True) for _ in range(nt)])]
 
 
 # Mask of the bad balls at a given time tstop

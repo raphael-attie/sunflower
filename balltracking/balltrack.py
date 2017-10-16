@@ -127,70 +127,12 @@ def put_balls_on_surface(surface, x, y, rs, dp):
     z += rs * (1 - dp / 2)
     return z
 
-def compute_force(bt, brows, bcols, xt, yt, zt, ds):
+def integrate_global_motion(bt, surface):
 
-    r = np.sqrt((bcols - xt) ** 2 + (brows - yt) ** 2 + (ds - zt) ** 2)
-    # Force that are beyond the radius must be set to zero
-    f = bt.k_force * (r - bt.rs)
-    f[r > bt.rs] = 0
-    # Calculate each force vector component
-    fxt = -np.sum(f * (xt - bcols) / r, 0)
-    fyt = -np.sum(f * (yt - brows) / r, 0)
-    # Buoyancy must stay oriented upward. Used to be signed, but that caused more lost balls without other advantage
-    fzt = -np.sum(f * np.abs(zt - ds) / r, 0) - bt.am
+    for _ in range(bt.intsteps):
+        integrate_motion(bt.pos, bt.vel, bt, surface)
 
-    return fxt, fyt, fzt
-
-
-def integrate_motion(pos, vel, bt, surface):
-    """
-    Integrate the motion of a series of balls. This is one integration step.
-    Position and velocity are changed in place.
-    Either use a loop or a list comprehension to integrate over more than one time step
-
-    :param pos: input and output x, y, z coordinates (1D array)
-    :param vel: input and output velocity. (1D array)
-    :param bt: BT instance
-    :param surface: data surface (2D array)
-    :return:
-    """
-    # Unpack vector components for better readability
-    xt, yt, zt = pos
-    vxt, vyt, vzt = vel
-
-    # Update the balls grids with current positions
-    # bcols and brows have dimensions = [prod(ballgrid.shape), nballs]
-    bcols = np.clip(bt.bcols + xt, 0, bt.nx - 1).squeeze()
-    brows = np.clip(bt.brows + yt, 0, bt.ny - 1).squeeze()
-
-    # "ds" stands for "data surface"
-    ds = bilin_interp_f(surface, bcols, brows)
-
-
-    fxt, fyt, fzt = compute_force(bt, brows, bcols, xt, yt, zt, ds)
-
-    # Integrate velocity
-    vxt += fxt
-    vyt += fyt
-    vzt += fzt
-
-    # Integrate position including effect of a damped velocity
-    # Damping is added arbitrarily for the stability of the code.
-    pos[0, :] += vxt * bt.td * (1 - bt.e_td)
-    pos[1, :] += vyt * bt.td * (1 - bt.e_td)
-    pos[2, :] += vzt * bt.zdamping * (1 - bt.e_tdz)
-    # Update the velocity with the damping used above
-    vel[0, :] *= bt.e_td
-    vel[1, :] *= bt.e_td
-    vel[2, :] *= bt.e_tdz
-
-    force = np.array([fxt, fyt, fzt])
-
-    #return xt, yt, zt, vxt, vyt, vzt, fxt, fyt, fzt
-    # return xt.copy(), yt.copy(), zt.copy(), vxt.copy(), vyt.copy(), vzt.copy(), fxt.copy(), fyt.copy(), fzt.copy()
-    return pos.copy(), vel.copy(), force
-
-def integrate_motion2(pos, vel, bt, surface):
+def integrate_motion(pos, vel, bt, surface, return_copies=False):
 
     # Unpack vector components for better readability
     xt, yt, zt = pos
@@ -228,35 +170,23 @@ def integrate_motion2(pos, vel, bt, surface):
 
     force = np.array([fxt, fyt, fzt])
 
-    return pos.copy(), vel.copy(), force
+    if return_copies:
+        return pos.copy(), vel.copy(), force
 
-def integrate_balls(bt, surface):
+def compute_force(bt, brows, bcols, xt, yt, zt, ds):
 
-    good_balls_mask = np.logical_and(bt.xt > 0, np.isfinite(bt.xt))
-    xt = bt.xt[good_balls_mask]
-    yt = bt.yt[good_balls_mask]
-    zt = bt.zt[good_balls_mask]
+    r = np.sqrt((bcols - xt) ** 2 + (brows - yt) ** 2 + (ds - zt) ** 2)
+    # Force that are beyond the radius must be set to zero
+    f = bt.k_force * (r - bt.rs)
+    f[r > bt.rs] = 0
+    # Calculate each force vector component
+    fxt = -np.sum(f * (xt - bcols) / r, 0)
+    fyt = -np.sum(f * (yt - brows) / r, 0)
+    # Buoyancy must stay oriented upward. Used to be signed, but that caused more lost balls without other advantage
+    fzt = -np.sum(f * np.abs(zt - ds) / r, 0) - bt.am
 
-    vxt = bt.vxt[good_balls_mask]
-    vyt = bt.vyt[good_balls_mask]
-    vzt = bt.vzt[good_balls_mask]
+    return fxt, fyt, fzt
 
-    # The intermediate integrations (over intsteps) should start here.
-
-    # Unless the input are scalars, inputs are numpy arrays, mutable and passed by reference,
-    # which makes it unnecessary to return them. However, in case of scalars, it is necessary.
-    #xt, yt, zt, vxt, vyt, vzt, fxt, fyt, fzt = integrate_motion(xt, yt, zt, vxt, vyt, vzt, bt, surface)
-    integrate_motion(xt, yt, zt, vxt, vyt, vzt, bt, surface)
-
-    bt.xt[good_balls_mask] = xt
-    bt.yt[good_balls_mask] = yt
-    bt.zt[good_balls_mask] = zt
-
-    bt.vxt[good_balls_mask] = vxt
-    bt.vyt[good_balls_mask] = vyt
-    bt.vzt[good_balls_mask] = vzt
-
-    return
 
 def get_bad_balls(pos, bt):
     # See discussion at https://stackoverflow.com/questions/44802033/efficiently-index-2d-numpy-array-using-two-1d-arrays
@@ -504,3 +434,52 @@ def mesh_ball(rs):
     z = rs * sin(th) * sin(ph)
     return x,y,z
 
+### Numpy-only function (no C, no Cython)
+
+def integrate_motion0(pos, vel, bt, surface):
+    """
+    Integrate the motion of a series of balls. This is one integration step.
+    Position and velocity are changed in place.
+    Either use a loop or a list comprehension to integrate over more than one time step
+
+    :param pos: input and output x, y, z coordinates (1D array)
+    :param vel: input and output velocity. (1D array)
+    :param bt: BT instance
+    :param surface: data surface (2D array)
+    :return:
+    """
+    # Unpack vector components for better readability
+    xt, yt, zt = pos
+    vxt, vyt, vzt = vel
+
+    # Update the balls grids with current positions
+    # bcols and brows have dimensions = [prod(ballgrid.shape), nballs]
+    bcols = np.clip(bt.bcols + xt, 0, bt.nx - 1).squeeze()
+    brows = np.clip(bt.brows + yt, 0, bt.ny - 1).squeeze()
+
+    # "ds" stands for "data surface"
+    ds = bilin_interp_f(surface, bcols, brows)
+
+
+    fxt, fyt, fzt = compute_force(bt, brows, bcols, xt, yt, zt, ds)
+
+    # Integrate velocity
+    vxt += fxt
+    vyt += fyt
+    vzt += fzt
+
+    # Integrate position including effect of a damped velocity
+    # Damping is added arbitrarily for the stability of the code.
+    pos[0, :] += vxt * bt.td * (1 - bt.e_td)
+    pos[1, :] += vyt * bt.td * (1 - bt.e_td)
+    pos[2, :] += vzt * bt.zdamping * (1 - bt.e_tdz)
+    # Update the velocity with the damping used above
+    vel[0, :] *= bt.e_td
+    vel[1, :] *= bt.e_td
+    vel[2, :] *= bt.e_tdz
+
+    force = np.array([fxt, fyt, fzt])
+
+    #return xt, yt, zt, vxt, vyt, vzt, fxt, fyt, fzt
+    # return xt.copy(), yt.copy(), zt.copy(), vxt.copy(), vyt.copy(), vzt.copy(), fxt.copy(), fyt.copy(), fzt.copy()
+    return pos.copy(), vel.copy(), force

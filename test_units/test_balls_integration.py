@@ -33,10 +33,10 @@ zstart = blt.put_balls_on_surface(surface, xstart, ystart, rs, dp)
 
 # Try with python/numpy interpolation
 pos, vel = blt.initialize_ball_vector(xstart, ystart, zstart)
-pos, vel, force = [np.array(v).squeeze() for v in zip(*[blt.integrate_motion(pos, vel, bt, surface) for i in range(nt)])]
+pos, vel, force = [np.array(v).squeeze() for v in zip(*[blt.integrate_motion0(pos, vel, bt, surface) for i in range(nt)])]
 # Try with cython
 pos2, vel2 = blt.initialize_ball_vector(xstart, ystart, zstart)
-pos2, vel2, force2 = [np.array(v).squeeze() for v in zip(*[blt.integrate_motion2(pos2, vel2, bt, surface) for i in range(nt)])]
+pos2, vel2, force2 = [np.array(v).squeeze() for v in zip(*[blt.integrate_motion(pos2, vel2, bt, surface) for i in range(nt)])]
 
 
 # Display and compare results
@@ -55,11 +55,11 @@ ystart = np.full([16129], 30, dtype=np.float32)
 zstart = blt.put_balls_on_surface(surface, xstart, ystart, rs, dp)
 
 pos, vel = blt.initialize_ball_vector(xstart, ystart, zstart)
-mywrap = wrapper(blt.integrate_motion, pos, vel, bt, surface)
+mywrap = wrapper(blt.integrate_motion0, pos, vel, bt, surface)
 print(timeit(mywrap, number = 100))
 
 pos2, vel2 = blt.initialize_ball_vector(xstart, ystart, zstart)
-mywrap2 = wrapper(blt.integrate_motion2, pos2, vel2, bt, surface)
+mywrap2 = wrapper(blt.integrate_motion, pos2, vel2, bt, surface)
 print(timeit(mywrap2, number = 100))
 
 
@@ -85,7 +85,7 @@ bt = blt.BT(image.shape, nt, rs, dp)
 bt.initialize_ballpos(surface)
 
 # integrate motion over some time steps. Enough to have overpopulated cells (bad balls).
-pos, _, _ = [np.array(v).squeeze().swapaxes(0,1) for v in zip(*[blt.integrate_motion2(bt.pos_t, bt.vel_t, bt, surface) for i in range(nt)])]
+pos, _, _ = [np.array(v).squeeze().swapaxes(0,1) for v in zip(*[blt.integrate_motion(bt.pos_t, bt.vel_t, bt, surface) for i in range(nt)])]
 
 
 
