@@ -50,7 +50,6 @@ xstart = np.full([16129], 20, dtype=np.float32)
 ystart = np.full([16129], 30, dtype=np.float32)
 zstart = blt.put_balls_on_surface(surface, xstart, ystart, rs, dp)
 
-
 pos, vel = blt.initialize_ball_vector(xstart, ystart, zstart)
 mywrap = wrapper(blt.integrate_motion, pos, vel, bt, surface)
 print(timeit(mywrap, number = 100))

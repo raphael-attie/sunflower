@@ -37,9 +37,6 @@ bt = blt.BT(surface0.shape, nt, rs, dp)
 bt.initialize_ballpos(surface_hpf)
 
 
-
-
-
 bsize = np.ones([bt.xstart.ravel().shape[0]], dtype=float)*4
 skip = 24
 

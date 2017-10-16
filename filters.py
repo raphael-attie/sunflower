@@ -73,7 +73,7 @@ def ffilter_image(image, fourier_filter):
     windowed_fimage = fimage * fourier_filter
     filtered_image = np.real(np.fft.ifftn(np.fft.ifftshift(windowed_fimage)))
 
-    return filtered_image
+    return filtered_image.copy(order='C')
 
 
 def matrix_ffilter_image(image, small_scales, large_scales):
