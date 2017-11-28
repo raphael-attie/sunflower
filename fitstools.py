@@ -1,18 +1,19 @@
+from importlib import reload
 import os
 import numpy as np
 import fitsio
 from astropy.io import fits
 
 
-def fitsread(file, n):
+def fitsread(file, s2=slice(None), s3=slice(None), s1=slice(None)):
 
     with fitsio.FITS(file) as fitsfile:
-        # NO. 0 is also valid for indexing into the slices.
         if fitsfile[0].has_data():
-            data = np.squeeze(fitsfile[0][n, :, :])
+            data = np.squeeze( np.swapaxes(fitsfile[0][s1, s2, s3], 0, 2) )
         else:
-            data = np.squeeze(fitsfile[1][n, :, :])
+            data = np.squeeze( np.swapaxes(fitsfile[1][s1, s2, s3], 0, 2))
     return data
+
 
 def fitsheader(file):
 

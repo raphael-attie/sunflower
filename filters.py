@@ -2,6 +2,39 @@ import numpy as np
 from skimage.measure import compare_ssim as ssim
 
 
+def han1d_hpf(n, T, rc):
+    # 1D hanning filter
+    # T: Sampling interval
+    # rc: Small scale limit (time or spatial domain)
+    # n: length of array
+
+
+    if rc == 0:
+        hwindow = np.ones([n, n])
+        return hwindow
+
+    # Sampling frequency
+    fs = 1/T
+    # Spacing between frequency points
+    df = fs / n
+    # Freqs vector
+    freqs = np.fft.fftfreq(n, T)
+    # Cut frequency
+    fc = 1/rc
+    # Frequency index
+    fc = np.round(n * fc)
+
+    x = np.arange(n)
+    # symetric grid of radial distances
+    f = np.sqrt((xgrid - (n / 2 - 0.5)) ** 2 + (ygrid - (n / 2 - 0.5)) ** 2)
+    # Hanning window that decreases as r decreases to zero.
+    hwindow = 0.5 - 0.5 * np.cos(np.pi * f / (2 * fc))
+    # Keep all high frequencies
+    mask_f = f > 2 * fc
+    hwindow[mask_f] = 1
+
+    return hwindow
+
 def han2d_hpf(n, rc):
     # 2D hanning filter, assumes a square image size
     # rc: Small spatial scale limit (px). Spatial periods > rc will be suppressed.

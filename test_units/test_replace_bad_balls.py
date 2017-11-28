@@ -24,13 +24,7 @@ file = '/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/series_continuum/mtra
 # Get the header
 h       = fitstools.fitsheader(file)
 # Get the 1st image
-image   = fitsio.read(file).astype(np.float32).copy(order='C')
-# Filter image
-ffilter_hpf = filters.han2d_bandpass(image.shape[0], 0, 5)
-fdata_hpf = filters.ffilter_image(image, ffilter_hpf)
-sigma = fdata_hpf[1:200, 1:200].std()
-# Rescale image to a data surface
-surface = blt.rescale_frame(fdata_hpf, 2*sigma).astype(np.float32)
+image   = fitsio.read(file).astype(np.float32)
 
 ### Ball parameters
 # Nb of intermediate steps
@@ -39,10 +33,15 @@ nt = 15
 rs = 2
 # depth factor
 dp = 0.2
+# Multiplier to the standard deviation.
+sigma_factor = 2
 # Get a BT instance with the above parameters
-bt = blt.BT(image.shape, nt, rs, dp)
+bt = blt.BT(image.shape, nt, rs, dp, sigma_factor=sigma_factor)
 # Initialize ball positions
-bt.initialize_ballpos(surface)
+bt.initialize(image)
+# Get the initial data surface, as calculated in bt.initialize
+surface, _, _ = blt.prep_data2(image, sigma_factor = sigma_factor)
+
 
 # integrate motion over some time steps. Enough to have overpopulated cells (bad balls).
 pos, _, _ = [np.array(v).squeeze().swapaxes(0,1) for v in zip(*[blt.integrate_motion(bt.pos, bt.vel, bt, surface, return_copies=True) for _ in range(nt)])]
@@ -51,35 +50,41 @@ pos, _, _ = [np.array(v).squeeze().swapaxes(0,1) for v in zip(*[blt.integrate_mo
 # Mask of the bad balls at a given time tstop
 tstop = 14
 bad_balls = blt.get_bad_balls(pos[:,tstop,:], bt)
-bad_pos = pos[:, tstop, bad_balls]
-
-x = bad_pos[0,:]
-y = bad_pos[1,:]
-
+# Get [x, y] coordinates of these bad balls at time = tstop
+xbad = pos[0, tstop, bad_balls]
+ybad = pos[1, tstop, bad_balls]
 # Fill the coarse grid at the cells that map to the bad positions
-chess_board = blt.fill_coarse_grid(bt, x, y)
+chess_board = blt.fill_coarse_grid(bt, xbad, ybad)
+# The above fills the chess_board with only bad balls
+# TODO: Populate the chessboard with also all the balls. Show it maybe before the latter.
 
+
+# Use a copy of the pos array, because relocating the bad balls overwrite that input.
+pos2 = pos.copy()
 # Replace bad balls and get the new positions that fills the empty coarse grid cells
-xnew, ynew = blt.replace_bad_balls(pos[:,tstop,:], bad_balls, surface, bt)
+xnew, ynew = blt.replace_bad_balls(pos2[:,tstop,:], surface, bt)
+
+# Check new state of the chessboard
+bad_balls_mask = blt.get_bad_balls(pos2[:,tstop,:], bt)
+# Get [x, y] coordinates of these bad balls at time = tstop
+xbad2 = pos2[0, tstop, bad_balls[np.logical_not(bad_balls_mask)]]
+ybad2 = pos2[1, tstop, bad_balls]
+# Fill the coarse grid at the cells that map to the bad positions
+chess_board2 = blt.fill_coarse_grid(bt, xbad2, ybad2)
+
+
+
 
 ### Display ###
+print_fig = True
 
-fig = plt.figure(2, figsize=(8,8))
+fig = plt.figure(2, figsize=(10, 10))
 ax = fig.add_subplot(1,1,1)
-# Show the chess board with and setup proper axis
-plt.imshow(chess_board, cmap='coolwarm', origin='lower', vmin=-1, vmax=1, extent=(0,bt.nx-1, 0, bt.ny-1))
-plt.plot(pos[0, :, :], pos[1, :, :], 'b.')
 
+# Overlay initial positions
+plt.plot(bt.xstart, bt.ystart, 'ro')
 plt.axis([0, 60, 0, 60])
-# Last position
-plt.plot(pos[0, tstop, :], pos[1, tstop, :], 'c.', markersize=4)
-
-# bad position
-plt.plot(x, y, 'yo', markersize=6, markerfacecolor='none')
-#plt.plot(np.floor(x/bt.ballspacing)*bt.ballspacing, np.floor(y/bt.ballspacing)*bt.ballspacing, 'ro', markersize=6, markerfacecolor='none')
-# Add the new positions
-plt.plot(xnew, ynew, 'go', markersize = 8, markerfacecolor='none')
-
+plt.imshow(bt.coarse_grid, cmap='gray_r', origin='lower', vmin=0, vmax=3, extent=(0,bt.nx-1, 0, bt.ny-1))
 
 # Overaly the coarse grid lines
 #Spacing between each line
@@ -89,7 +94,48 @@ ax.xaxis.set_major_locator(loc)
 ax.yaxis.set_major_locator(loc)
 ax.grid(which='major', axis='both', linestyle='-')
 
-plt.savefig('/Users/rattie/Dev/sdo_tracking_framework/figures/chessboard.png')
+plt.title('Initial positions & initial chess board')
+
+if print_fig:
+    plt.savefig('/Users/rattie/Dev/sdo_tracking_framework/figures/replace_bad_balls_0.png')
+
+# Overlay all other integrated positions
+plt.plot(pos[0, :, :], pos[1, :, :], 'b.')
+# Last position
+plt.plot(pos[0, tstop, :], pos[1, tstop, :], 'c.', markersize=4)
+plt.title('All positions untill tstop = %d'%tstop)
+
+if print_fig:
+    plt.savefig('/Users/rattie/Dev/sdo_tracking_framework/figures/replace_bad_balls_1.png')
+
+# Show the chess board with and setup proper axis
+plt.imshow(chess_board, cmap='gray_r', origin='lower', vmin=0, vmax=3, extent=(0,bt.nx-1, 0, bt.ny-1))
+plt.title('Chessboard of bad cells')
+
+# bad position
+plt.plot(xbad, ybad, 'yo', markersize=6, markerfacecolor='none', mew=2)
+#plt.plot(np.floor(x/bt.ballspacing)*bt.ballspacing, np.floor(y/bt.ballspacing)*bt.ballspacing, 'ro', markersize=6, markerfacecolor='none')
+plt.title('Bad positions & chess board')
+
+if print_fig:
+    plt.savefig('/Users/rattie/Dev/sdo_tracking_framework/figures/replace_bad_balls_2.png')
+
+# Add the new positions
+plt.plot(xnew, ynew, 'o', markeredgecolor='xkcd:green', markersize = 8, markerfacecolor='none', mew=2)
+plt.title('New positions')
+
+if print_fig:
+    plt.savefig('/Users/rattie/Dev/sdo_tracking_framework/figures/replace_bad_balls_3.png')
+
+## With new chessboard
+
+# Show the chess board with and setup proper axis
+plt.imshow(chess_board2, cmap='gray_r', origin='lower', vmin=0, vmax=3, extent=(0,bt.nx-1, 0, bt.ny-1))
+plt.title('New chessboard of bad cells')
+
+if print_fig:
+    plt.savefig('/Users/rattie/Dev/sdo_tracking_framework/figures/replace_bad_balls_4.png')
+
 
 
 # # ball labels

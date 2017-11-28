@@ -1,15 +1,17 @@
 import sys
 import numpy as np
+import numpy.ma as ma
 import matplotlib.pyplot as plt
 from numpy import pi, cos, sin
 import cython_modules.interp as cinterp
 import filters
+import fitstools
 
 DTYPE = np.float32
 class BT:
 
 
-    def __init__(self, dims, nt, rs, dp):
+    def __init__(self, dims, nt, rs, dp, sigma_factor=1):
         self.nx = int(dims[0])
         self.ny = int(dims[1])
         self.nt = nt
@@ -51,6 +53,10 @@ class BT:
         self.e_td = np.exp(-1/self.td)
         self.e_tdz = np.exp(-1/self.zdamping)
 
+        # Rescaling factor for the standard deviation
+        self.sigma_factor = sigma_factor
+        self.mean = 0
+        self.sigma = 0
 
         # Current position, force and velocity components, updated after each frame
         self.pos = np.zeros([3, self.nballs], dtype=DTYPE)
@@ -68,9 +74,20 @@ class BT:
         self.brows = self.ball_rows.ravel()[:, np.newaxis]
         self.ds    = np.zeros([self.bcols.shape[0]], dtype=DTYPE)
         # Initialize deepest height at a which ball can fall down. Typically it will be set to a multiple of -surface.std().
-        self.min_ds = 0.0
+        self.min_ds = -5
+        # Mask of bad balls
+        self.bad_balls_mask = np.zeros(self.nballs, dtype=bool)
 
-    def initialize_ballpos(self, surface):
+    def initialize(self, data):
+
+        ### Calculate offset (mean) and standard deviation from  a valid surface ####
+        # First, filter image to focus on the granulation
+        # Sigma-clip outlyers (e.g. sunspots)
+        # Get mean and standard deviation from the masked array, not affected by bad invalid values (sunspot, ...)
+        # Generate the data surface from the image with the masked mean and sigma
+        surface, mean, sigma = prep_data2(data, self.sigma_factor)
+        self.mean = mean
+        self.sigma = sigma
         # Initialize the height of the ball. Only possible if the data surface is given.
         self.pos[0, :] = self.xstart.flatten()
         self.pos[1, :] = self.ystart.flatten()
@@ -78,16 +95,102 @@ class BT:
         self.pos[2, :] = self.zstart.copy()
         # Setup the coarse grid: populate edges to avoid "leaks" of balls ~ balls falling off.
         # Although can't remember if that was actually ever used in the Matlab implementation
-        # TODO: check Matlab implementation about the use of the edge filling.
+        # TODO: check Matlab implementation about the use of the edge filling. (done)
         self.coarse_grid[0,:]   = 1
         self.coarse_grid[:, 0]  = 1
         self.coarse_grid[-1,:]  = 1
         self.coarse_grid[:, -1] = 1
-        # Beware of the std() if there's a bad region in the image (e.g sunspot)
-        self.min_ds = -5*surface.std()
         return
 
+def calculate_invalid_mask(data):
+    """
+    Create a mask where invalid values are where the data values are too small to be coming from granulation signal
+    The threshold is 5 times the standard deviation below the mean
+
+    :param data: input 2D array (image or filtered image)
+    :return: numpy mask to be used with numpy.masked_array
+    """
+    mean = data.mean()
+    sigma = data.std()
+    mind = mean - 5 * sigma
+
+    return ma.masked_less(data, mind)
+
+def filter_image(image):
+    """
+    Filter the image to enhance granulation signal
+
+    :param image: input image e.g continuum intensity from SDO/HMI (2D array)
+    :return: fdata: filtered data (2D array)
+    """
+
+    ffilter_hpf = filters.han2d_bandpass(image.shape[0], 0, 5)
+    fdata = filters.ffilter_image(image, ffilter_hpf)
+
+    return fdata
+
+def rescale_frame(data, offset, norm_factor):
+    """
+    Rescales the images for Balltracking. It subtract the mean of the data and divide by a scaling factor.
+    For balltracking, this scaling factor shall be the standard deviation of the whole data series.
+    See http://mathworld.wolfram.com/HanningFunction.html
+
+    :param data: 2D frame (e.g: continuum image or magnetogram)
+    :param offset: scalar that offsets the data. Typically the mean of the data or of masked data
+    :param norm_factor: scalar that divides the data. Typically a multiple of the standard deviation.
+    :return: rescaled_data: rescaled image.
+    """
+    rescaled_data = data - offset
+    rescaled_data = rescaled_data / norm_factor
+
+    return rescaled_data
+
+def prep_data(image, mean, sigma, sigma_factor=1):
+    """
+    The image is filtered to enhance the granulation pattern, and rescaled into a data surface
+    where the resulting standard deviation is equal to the sigma_factor, typically 1 or 2 depending
+    on the statistical properties of the image series. The data intensity is centered around the mean.
+
+    :param image: input image e.g continuum intensity from SDO/HMI (2D array)
+    :param mean: offset for rescaling the image as a data surface (i.e. 3D mesh).
+    :param sigma: standard deviation of the 1st filtered data of the series
+    :param sigma_factor: Multiplier to the standard deviation (scalar)
+    :return: data surface (2D array)
+    """
+
+    # Filter the image to isolate granulation
+    fdata = filter_image(image)
+    # Rescale image to a data surface
+    surface = rescale_frame(fdata, mean, sigma_factor * sigma).astype(np.float32)
+
+    return surface
+
+def prep_data2(image, sigma_factor=1):
+    """
+    Similar to prep_data (see prep_data). The difference is that sigma is calculated from the input data and not from
+    a user input. This is implemented as follows:
+        - First, filter image to focus on the granulation
+        - Sigma-clip outlyers (e.g. sunspots)
+        - Get mean and standard deviation from the masked array, not affected by bad invalid values (sunspot, ...)
+        - Generate the data surface from the image with the masked mean and sigma
+
+    :param image: input image e.g continuum intensity from SDO/HMI (2D array)
+    :param sigma_factor: Multiplier to the standard deviation (scalar)
+    :return: data surface (2D array)
+    """
+    # Filter the image to isolate granulation
+    fdata = filter_image(image)
+    masked_fdata = calculate_invalid_mask(fdata)
+    mean = masked_fdata.mean()
+    sigma = masked_fdata.std()
+    # Rescale image to a data surface
+    surface = rescale_frame(fdata, mean, sigma_factor * sigma).astype(np.float32)
+
+    return surface, mean, sigma
+
+
 def coarse_grid_pos(bt, x, y):
+
     # Get the position on the coarse grid, clipped to the edges of that grid.
     xcoarse = np.uint32(np.clip(np.floor(x / bt.ballspacing), 0, bt.nxc-1))
     ycoarse = np.uint32(np.clip(np.floor(y / bt.ballspacing), 0, bt.nyc-1))
@@ -97,14 +200,15 @@ def coarse_grid_pos(bt, x, y):
 
 def fill_coarse_grid(bt, x, y):
     """
-    Fill coarse_grid as a chess board.
+    Fill coarse_grid as a chess board: the positions in the original grid are mapped to the coarse grid points
+    And each of the mapped grid points are incremented by 1.
 
     :param x: x-coordinate in original grid
     :param y: y-coordinate in original grid
     :return: coarse grid filled like a chess board.
     """
     # Favor clarity and stay in 2D coordinates instead of linear indices.
-    xcoarse, ycoarse, _ = coarse_grid_pos(bt, x.astype(np.int), y.astype(np.int))
+    xcoarse, ycoarse, _ = coarse_grid_pos(bt, x, y)
     chess_board = bt.coarse_grid.copy()
     np.add.at(chess_board, (ycoarse, xcoarse), 1)
     return chess_board
@@ -127,10 +231,21 @@ def put_balls_on_surface(surface, x, y, rs, dp):
     z += rs * (1 - dp / 2)
     return z
 
-def integrate_global_motion(bt, surface):
+def integrate_global_motion(bt, dataseries):
 
-    for _ in range(bt.intsteps):
-        integrate_motion(bt.pos, bt.vel, bt, surface)
+    # Outer loop goes over the data frames.
+    # If data is a fits cube, we just access a slice of it
+
+    for n in range(bt.nt):
+
+        data = fitstools.fitsread(dataseries, n).astype(np.float32)
+        surface = prep_data(data, bt.mean, bt.sigma, sigma_factor = bt.sigma_factor)
+
+        # The current position "pos" and velocity "vel" are attributes of bt.
+        # They are integrated in place.
+        for _ in range(bt.intsteps):
+            integrate_motion(bt.pos, bt.vel, bt, surface)
+
 
 def integrate_motion(pos, vel, bt, surface, return_copies=False):
 
@@ -195,8 +310,7 @@ def get_bad_balls(pos, bt):
     # The input come from the integration function, which only treats valid, finite ball positions.
     # There is no need to worry about NaN, or Inf positions.
 
-    # Work with with views on coordinate and velocity arrays for clarity
-    xpos0, ypos0, zpos0 = pos
+    #xpos0, ypos0, zpos0 = pos
 
     # Matlab:
     # col_min = int16(floor(x0 - BT.rs));
@@ -207,6 +321,21 @@ def get_bad_balls(pos, bt):
     # badballs = (z0==fallnoted) | col_max>BT.nc | col_min<1 | row_max>BT.nr |...
     # row_min<1 | (z0<(minds-4*BT.rs)) | badfullballs;
 
+    # For efficiency and clarity, NaNs are set to 0 in a copy of the pos array.
+    # Doing this, these NaNs are picked up as bad data as 0 will fall in the off-edges mask.
+    # They are reassigned to NaNs anyway later if not replaced by new coordinates.
+    nanmask = np.isnan(pos[2, :])
+    pos[:, nanmask] = -1
+    xpos0, ypos0, zpos0 = pos
+
+    # valid_balls0 = np.isfinite(pos[2, :])
+    # valid_balls_idx0 = np.where(valid_balls0)[0]
+    # nan_balls_idx = np.where(np.logical_not(valid_balls0))[0]
+    # xpos0, ypos0, zpos0 = pos[:, valid_balls0]
+
+
+
+    # There can be nan values in pos. They shall be excluded from the comparisons below (otherwise, Runtime warnings occur)
     sunk = zpos0 < bt.min_ds
     off_edge_left = xpos0 - bt.rs < 0
     off_edge_right = xpos0 + bt.rs > bt.nx-1
@@ -214,11 +343,19 @@ def get_bad_balls(pos, bt):
     off_edge_top = ypos0 + bt.rs > bt.ny-1
 
     masks = np.array((sunk, off_edge_left, off_edge_right, off_edge_bottom, off_edge_top))
-    bad_balls1 = np.logical_or.reduce(masks)
+    bad_balls1_mask = np.logical_or.reduce(masks)
+    #bad_balls1_idx = valid_balls_idx0[np.where(np.logical_or.reduce(masks))[0]]
+
+    # bad_balls1_mask = np.zeros([bt.nballs], dtype=bool)
+    # bad_balls1_mask[bad_balls1_idx] = True
+    # bad_balls1_mask[nan_balls_idx] = True
 
     # Ignore these bad balls in the arrays and enforce continuity principle
-    valid_balls = np.logical_not(bad_balls1)
+    valid_balls = np.logical_not(bad_balls1_mask)
     valid_balls_idx = np.nonzero(valid_balls)[0]
+    #valid_balls = np.logical_not(bad_balls1_mask)
+    # Map back to original balls indices
+    #valid_balls_idx = np.nonzero(valid_balls)[0]
 
     xpos, ypos, zpos = pos[:, valid_balls]
     balls_age = bt.balls_age[valid_balls]
@@ -243,24 +380,23 @@ def get_bad_balls(pos, bt):
     bad_full_balls = np.ones([bt.nballs], dtype=bool)
     bad_full_balls[unique_oldest_balls] = False
     # The bad balls are not just the ones in overpopulated cells, there's also the ones off edges & sunk balls
-    bad_balls_mask = np.logical_or(bad_balls1, bad_full_balls)
+    #bad_balls_mask = np.logical_or(bad_balls1, bad_full_balls)
+    bt.bad_balls_mask = np.logical_or(bad_balls1_mask, bad_full_balls)
 
-    return bad_balls_mask
+    return bt.bad_balls_mask
 
 
 
 #def replace_bad_balls(pos, age, finegrid, newframe, bt):
-def replace_bad_balls(pos, bad_balls_mask, surface, bt):
+def replace_bad_balls(pos, surface, bt):
 
-    # Flag the positions of the bad balls as nan.
-    pos[:, bad_balls_mask] = np.nan
+    # Flag the positions of the bad balls with -1
+    pos[:, bt.bad_balls_mask] = -1
 
-    # Number of bad balls in coarse grid cells.
-    # We'll compare this number to the number of empty coarse grid cells.
-    nbadballs = bad_balls_mask.sum()
+    nbadballs = bt.bad_balls_mask.sum()
 
     # Get the mask of the valid balls that we are going to keep
-    valid_balls_mask = np.logical_not(bad_balls_mask)
+    valid_balls_mask = np.logical_not(bt.bad_balls_mask)
     # Work with with views on coordinate and velocity arrays of valid balls for clarity (instead of working with pos[:, :, valid_balls_mask] directly)
     xpos, ypos, zpos = pos[:, valid_balls_mask]
 
@@ -276,10 +412,11 @@ def replace_bad_balls(pos, bad_balls_mask, surface, bt):
 
     if nemptycells <= nbadballs:
 
-        bad_balls_idx = np.nonzero(bad_balls_mask)[0][0:nemptycells]
+        # Get the indices of bad balls in order to assign them with new positions
+        bad_balls_idx = np.nonzero(bt.bad_balls_mask)[0][0:nemptycells]
 
-        xnew = bt.ballspacing * x0.astype(np.float32)+ bt.rs
-        ynew = bt.ballspacing * y0.astype(np.float32)+ bt.rs
+        xnew = bt.ballspacing * x0.astype(np.float32)#+ bt.rs
+        ynew = bt.ballspacing * y0.astype(np.float32)#+ bt.rs
         znew = put_balls_on_surface(surface, xnew, ynew, bt.rs, bt.dp)
 
         pos[0, bad_balls_idx] = xnew
@@ -305,16 +442,6 @@ def replace_bad_balls1(pos, bt):
 
     return xcoarse, ycoarse
 
-def replace_bad_balls1(pos, bt):
-    # Get the position on the finegrid
-
-    # Get the position on the coarse grid, clipped to the edges of that grid.
-    xcoarse = np.round(pos[0, :] / bt.ballspacing).clip(0, bt.nxc).astype(np.uint32)
-    ycoarse = np.round(pos[1, :] / bt.ballspacing).clip(0, bt.nyc).astype(np.uint32)
-
-    bt.coarse_grid[ycoarse, xcoarse] = 1
-
-    return xcoarse, ycoarse
 
 def replace_bad_balls2(pos, bt):
     # Get the position on the coarse grid, clipped to the edges of that grid.
@@ -343,19 +470,6 @@ def initialize_ball_vector(xstart, ystart, zstart):
     return pos, vel
 
 
-def rescale_frame(data, norm_factor):
-    """
-    Rescales the images for Balltracking. It subtract the mean of the data and divide by a scaling factor.
-    For balltracking, this scaling factor shall be the standard deviation of the whole data series.
-    See http://mathworld.wolfram.com/HanningFunction.html
-
-    :param data: 2D frame (e.g: continuum image or magnetogram)
-    :param norm_factor: scalar that normalizes the data. Typically the standard deviation.
-    :return: rescaled_data: rescaled image.
-    """
-    rescaled_data = data - np.mean(data)
-    rescaled_data = rescaled_data / norm_factor
-    return rescaled_data
 
 def bilin_interp_d(image, x, y):
     # Bilinear interpolation. About 7x to 10x slower than the Cython implementation.
