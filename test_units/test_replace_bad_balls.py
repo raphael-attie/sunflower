@@ -3,7 +3,10 @@ import numpy as np
 import matplotlib
 #matplotlib.use('qt5agg')
 import matplotlib.pyplot as plt
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 import matplotlib.ticker as plticker
+from matplotlib import cm
+
 
 import balltracking.balltrack as blt
 import fitstools
@@ -53,27 +56,27 @@ bad_balls = blt.get_bad_balls(pos[:,tstop,:], bt)
 # Get [x, y] coordinates of these bad balls at time = tstop
 xbad = pos[0, tstop, bad_balls]
 ybad = pos[1, tstop, bad_balls]
+
+# Initial chess board
+chess_board_init = blt.fill_coarse_grid(bt, bt.xstart, bt.ystart)
 # Fill the coarse grid at the cells that map to the bad positions
-chess_board = blt.fill_coarse_grid(bt, xbad, ybad)
-# The above fills the chess_board with only bad balls
-# TODO: Populate the chessboard with also all the balls. Show it maybe before the latter.
-
-
+chess_board_all = blt.fill_coarse_grid(bt, pos[0, tstop, :], pos[1, tstop, :])
+chess_board_bad = blt.fill_coarse_grid(bt, xbad, ybad)
 # Use a copy of the pos array, because relocating the bad balls overwrite that input.
 pos2 = pos.copy()
 # Replace bad balls and get the new positions that fills the empty coarse grid cells
 xnew, ynew = blt.replace_bad_balls(pos2[:,tstop,:], surface, bt)
+# Check new chess board
+chess_board_relocation = blt.fill_coarse_grid(bt, xnew, ynew)
 
-# Check new state of the chessboard
-bad_balls_mask = blt.get_bad_balls(pos2[:,tstop,:], bt)
-# Get [x, y] coordinates of these bad balls at time = tstop
-xbad2 = pos2[0, tstop, bad_balls[np.logical_not(bad_balls_mask)]]
-ybad2 = pos2[1, tstop, bad_balls]
-# Fill the coarse grid at the cells that map to the bad positions
-chess_board2 = blt.fill_coarse_grid(bt, xbad2, ybad2)
-
+# Get rid of nan to see new chessboard
+validmask = pos2[2,tstop,:] != -1
+valid_pos = pos2[:, tstop, validmask]
+new_chess_board = blt.fill_coarse_grid(bt, valid_pos[0, :], valid_pos[1, :])
 
 
+
+gmap = cm.gray_r.from_list('whatever', ('white', 'black'), N=6)
 
 ### Display ###
 print_fig = True
@@ -82,9 +85,16 @@ fig = plt.figure(2, figsize=(10, 10))
 ax = fig.add_subplot(1,1,1)
 
 # Overlay initial positions
-plt.plot(bt.xstart, bt.ystart, 'ro')
-plt.axis([0, 60, 0, 60])
-plt.imshow(bt.coarse_grid, cmap='gray_r', origin='lower', vmin=0, vmax=3, extent=(0,bt.nx-1, 0, bt.ny-1))
+ax.plot(bt.xstart, bt.ystart, 'ro')
+ax.axis([0, 60, 0, 60])
+im = ax.imshow(chess_board_init, cmap=gmap, origin='lower', vmin=0, vmax=6, extent=(0,bt.nx-1, 0, bt.ny-1))
+
+ax.set_title('Initial positions & initial chess board')
+
+divider = make_axes_locatable(ax)
+cax = divider.append_axes("right", size="5%", pad=0.05)
+cb1 = plt.colorbar(im, cax=cax)
+
 
 # Overaly the coarse grid lines
 #Spacing between each line
@@ -94,48 +104,56 @@ ax.xaxis.set_major_locator(loc)
 ax.yaxis.set_major_locator(loc)
 ax.grid(which='major', axis='both', linestyle='-')
 
-plt.title('Initial positions & initial chess board')
-
 if print_fig:
     plt.savefig('/Users/rattie/Dev/sdo_tracking_framework/figures/replace_bad_balls_0.png')
 
+
 # Overlay all other integrated positions
-plt.plot(pos[0, :, :], pos[1, :, :], 'b.')
+ax.plot(pos[0, :, :], pos[1, :, :], 'b.')
 # Last position
-plt.plot(pos[0, tstop, :], pos[1, tstop, :], 'c.', markersize=4)
-plt.title('All positions untill tstop = %d'%tstop)
+ax.plot(pos[0, tstop, :], pos[1, tstop, :], 'c.', markersize=4)
+ax.set_title('All positions untill tstop = %d'%tstop)
 
 if print_fig:
     plt.savefig('/Users/rattie/Dev/sdo_tracking_framework/figures/replace_bad_balls_1.png')
 
-# Show the chess board with and setup proper axis
-plt.imshow(chess_board, cmap='gray_r', origin='lower', vmin=0, vmax=3, extent=(0,bt.nx-1, 0, bt.ny-1))
-plt.title('Chessboard of bad cells')
 
 # bad position
-plt.plot(xbad, ybad, 'yo', markersize=6, markerfacecolor='none', mew=2)
+ax.plot(xbad, ybad, 'yo', markersize=6, markerfacecolor='none', mew=2)
 #plt.plot(np.floor(x/bt.ballspacing)*bt.ballspacing, np.floor(y/bt.ballspacing)*bt.ballspacing, 'ro', markersize=6, markerfacecolor='none')
-plt.title('Bad positions & chess board')
+
+# Show the chess board with just the bad balls
+im = ax.imshow(chess_board_all, cmap=gmap, origin='lower', vmin=0, vmax=5, extent=(0,bt.nx-1, 0, bt.ny-1))
+ax.set_title('Chessboard & overpopulation')
+
 
 if print_fig:
     plt.savefig('/Users/rattie/Dev/sdo_tracking_framework/figures/replace_bad_balls_2.png')
 
 # Add the new positions
-plt.plot(xnew, ynew, 'o', markeredgecolor='xkcd:green', markersize = 8, markerfacecolor='none', mew=2)
-plt.title('New positions')
+ax.plot(xnew, ynew, 'o', markeredgecolor='xkcd:green', markersize = 8, markerfacecolor='none', mew=2)
+ax.set_title('New positions')
 
 if print_fig:
     plt.savefig('/Users/rattie/Dev/sdo_tracking_framework/figures/replace_bad_balls_3.png')
 
 ## With new chessboard
 
-# Show the chess board with and setup proper axis
-plt.imshow(chess_board2, cmap='gray_r', origin='lower', vmin=0, vmax=3, extent=(0,bt.nx-1, 0, bt.ny-1))
-plt.title('New chessboard of bad cells')
+# Show the chess board with just the bad balls
+im = ax.imshow(chess_board_relocation, cmap=gmap, origin='lower', vmin=0, vmax=5, extent=(0,bt.nx-1, 0, bt.ny-1))
+ax.set_title('New positions & associated chessboard')
+
 
 if print_fig:
     plt.savefig('/Users/rattie/Dev/sdo_tracking_framework/figures/replace_bad_balls_4.png')
 
+# Show the chess board with just the bad balls
+im = ax.imshow(new_chess_board, cmap=gmap, origin='lower', vmin=0, vmax=5, extent=(0,bt.nx-1, 0, bt.ny-1))
+ax.set_title('All positions, updated chessboard')
+
+
+if print_fig:
+    plt.savefig('/Users/rattie/Dev/sdo_tracking_framework/figures/replace_bad_balls_5.png')
 
 
 # # ball labels

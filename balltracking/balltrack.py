@@ -246,6 +246,8 @@ def integrate_global_motion(bt, dataseries):
         for _ in range(bt.intsteps):
             integrate_motion(bt.pos, bt.vel, bt, surface)
 
+        bt.balls_age += 1
+
 
 def integrate_motion(pos, vel, bt, surface, return_copies=False):
 
@@ -414,7 +416,7 @@ def replace_bad_balls(pos, surface, bt):
 
         # Get the indices of bad balls in order to assign them with new positions
         bad_balls_idx = np.nonzero(bt.bad_balls_mask)[0][0:nemptycells]
-
+        # Relocate the previously flagged balls in all the empty cells
         xnew = bt.ballspacing * x0.astype(np.float32)#+ bt.rs
         ynew = bt.ballspacing * y0.astype(np.float32)#+ bt.rs
         znew = put_balls_on_surface(surface, xnew, ynew, bt.rs, bt.dp)
