@@ -94,20 +94,46 @@ def han2d_bandpass(n, small_scale, large_scale):
     return hwindow
 
 
-def ffilter_image(image, fourier_filter):
+def ffilter_image(image, fourier_filter, dx=0, dy=0):
 
     # 2D hanning filter, assumes a square image size
     # filter: filter applied to the fourier transform
 
     # Get the fourier transform
     fimage = np.fft.fftshift(np.fft.fftn(image))
-
     # Apply 2D filter to fourier transform
     windowed_fimage = fimage * fourier_filter
+
+    if dx != 0 or dy != 0:
+
+        windowed_fimage = phase_shift(windowed_fimage)
+
     filtered_image = np.real(np.fft.ifftn(np.fft.ifftshift(windowed_fimage)))
 
     return filtered_image.copy(order='C')
 
+def phase_shift(fimage, dx, dy):
+
+    dims = fimage.shape
+    x, y = np.meshgrid(np.arange(-dims[1] / 2, dims[1] / 2), np.arange(-dims[0] / 2, dims[1] / 2))
+
+    kx = -1j * 2 * np.pi * x / dims[1]
+    ky = -1j * 2 * np.pi * y / dims[0]
+
+    shifted_fimage = fimage * np.exp(-(kx * dx + ky * dy))
+
+    return shifted_fimage
+
+def translate_by_phase_shift(image, dx, dy):
+
+    # Get the fourier transform
+    fimage = np.fft.fftshift(np.fft.fftn(image))
+    # Phase shift
+    shifted_fimage = phase_shift(fimage, dx, dy)
+    # Inverse transform -> translated image
+    shifted_image = np.real(np.fft.ifftn(np.fft.ifftshift(shifted_fimage)))
+
+    return shifted_image
 
 def matrix_ffilter_image(image, small_scales, large_scales):
 

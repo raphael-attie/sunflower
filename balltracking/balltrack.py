@@ -3,6 +3,7 @@ import numpy as np
 import numpy.ma as ma
 import matplotlib.pyplot as plt
 from numpy import pi, cos, sin
+from scipy.ndimage.filters import gaussian_filter
 import cython_modules.interp as cinterp
 import filters
 import fitstools
@@ -11,7 +12,10 @@ DTYPE = np.float32
 class BT:
 
 
-    def __init__(self, dims, nt, rs, dp, sigma_factor=1):
+    def __init__(self, dims, nt, rs, dp, sigma_factor=1, mode='top', direction='forward', datafiles=None, data=None):
+
+        self.datafiles = datafiles
+        self.data = data
         self.nx = int(dims[0])
         self.ny = int(dims[1])
         self.nt = nt
@@ -63,9 +67,9 @@ class BT:
         self.vel = np.zeros([3, self.nballs], dtype=DTYPE)
         self.force = np.zeros([3, self.nballs], dtype=DTYPE)
         self.age = np.zeros([self.nballs], dtype=np.uint32)
-        # Storage arrays of the above
-        self.ballpos = np.zeros([3, self.nt, self.nballs], dtype=DTYPE)
-        self.ballvel = np.zeros([3, self.nt, self.nballs], dtype=DTYPE)
+        # Storage arrays of the above, for all time steps
+        self.ballpos = np.zeros([3, self.nballs, self.nt], dtype=DTYPE)
+        self.ballvel = np.zeros([3, self.nballs, self.nt], dtype=DTYPE)
 
         # Ball grid and mesh. Add +1 at the np.arange stop for including right-hand side boundary
         self.ballgrid = np.arange(-self.rs, self.rs + 1, dtype=DTYPE)
@@ -77,14 +81,33 @@ class BT:
         self.min_ds = -5
         # Mask of bad balls
         self.bad_balls_mask = np.zeros(self.nballs, dtype=bool)
+        # Mask of valid balls
+        self.new_valid_balls_mask = np.ones(self.nballs, dtype=bool)
 
-    def initialize(self, data):
+        # Mode and direction
+        self.mode = mode
+        self.direction = direction
+
+    def initialize(self):
 
         ### Calculate offset (mean) and standard deviation from  a valid surface ####
         # First, filter image to focus on the granulation
         # Sigma-clip outlyers (e.g. sunspots)
         # Get mean and standard deviation from the masked array, not affected by bad invalid values (sunspot, ...)
         # Generate the data surface from the image with the masked mean and sigma
+
+        if self.data is None:
+            if self.direction == 'forward':
+                data = fitstools.fitsread(self.datafiles, tslice=0).astype(np.float32)
+            elif self.direction == 'backward':
+                data = fitstools.fitsread(self.datafiles, tslice=self.nt - 1).astype(np.float32)
+        else:
+            if self.direction == 'forward':
+                data = self.data[:,:,0]
+            elif self.direction == 'backward':
+                data = self.data[:,:,-1]
+
+
         surface, mean, sigma = prep_data2(data, self.sigma_factor)
         self.mean = mean
         self.sigma = sigma
@@ -231,67 +254,126 @@ def put_balls_on_surface(surface, x, y, rs, dp):
     z += rs * (1 - dp / 2)
     return z
 
-def integrate_global_motion(bt, dataseries):
+def track_all_frames(bt):
 
     # Outer loop goes over the data frames.
     # If data is a fits cube, we just access a slice of it
 
+    # Initialize
+
+    bt.initialize()
+
+
     for n in range(bt.nt):
 
-        data = fitstools.fitsread(dataseries, n).astype(np.float32)
-        surface = prep_data(data, bt.mean, bt.sigma, sigma_factor = bt.sigma_factor)
+        if bt.direction == 'forward':
+            if bt.data is None:
+                image = fitstools.fitsread(bt.datafiles, tslice= n).astype(np.float32)
+            else:
+                image = bt.data[:,:,n]
+        elif bt.direction == 'backward':
+            if bt.data is None:
+                image = fitstools.fitsread(bt.datafiles, tslice= bt.nt - 1 - n).astype(np.float32)
+            else:
+                image = bt.data[:,:,bt.nt - 1 - n]
+
+        surface = prep_data(image, bt.mean, bt.sigma, sigma_factor = bt.sigma_factor)
+
+        if bt.mode == 'bottom':
+            surface = -surface
+
 
         # The current position "pos" and velocity "vel" are attributes of bt.
         # They are integrated in place.
         for _ in range(bt.intsteps):
-            integrate_motion(bt.pos, bt.vel, bt, surface)
+            integrate_motion(bt, surface)
 
         bt.balls_age += 1
 
+        # Get the bad balls at the current frame
+        get_bad_balls(bt)
 
-def integrate_motion(pos, vel, bt, surface, return_copies=False):
+        # TODO: check the modifications below where I flag the bad balls before saving the array and relocating the bad balls
+        # Flag the bad balls with -1
+        bt.pos[:, bt.bad_balls_mask] = -1
+        bt.vel[:, bt.bad_balls_mask] = np.nan
 
-    # Unpack vector components for better readability
-    xt, yt, zt = pos
-    vxt, vyt, vzt = vel
+        # Add the current position array to the time series of position
+        bt.ballpos[..., n] = bt.pos.copy()
+        bt.ballvel[..., n] = bt.vel.copy()
+
+        # The bad balls are assigned new positions (relocated to empty cells)
+        # This is done in place in bt.pos. For flexibility with debugging, the array
+        # of position is given explicitly as input
+        try:
+            _, _ = replace_bad_balls(surface, bt)
+        except sys.SystemExit:
+            print('replace_bad_balls failed.')
+
+    if bt.direction == 'backward':
+        # Flip timeline for backward tracking
+        bt.ballpos = np.flip(bt.ballpos, 2)
+        bt.ballvel = np.flip(bt.ballvel, 2)
+
+        # Although bt is changed in place, it seems necessary to return it when using the multiprocessing module
+    return bt
+
+
+
+def integrate_motion(bt, surface, return_copies=False):
+
+    # Get the valid balls & unpack vector components for better readability
+    #print("Get the valid balls")
+    xt, yt, zt = bt.pos[:, bt.new_valid_balls_mask]
+    vxt, vyt, vzt = bt.vel[:, bt.new_valid_balls_mask]
+
 
     # Update the balls grids with current positions
     # bcols and brows have dimensions = [prod(ballgrid.shape), nballs]
-    bcols = np.clip(bt.bcols + xt, 0, bt.nx - 1)
-    brows = np.clip(bt.brows + yt, 0, bt.ny - 1)
+    # Clipping balls rows and cols. Stay away from borders by 1 px because of the interpolation scheme
+    #print("Clipping balls rows and cols.")
+    bcols = np.clip(bt.bcols + xt, 1, bt.nx - 2)
+    brows = np.clip(bt.brows + yt, 1, bt.ny - 2)
 
     # "ds" stands for "data surface"
     #ds = surface[np.round(brows).astype(np.int), np.round(bcols).astype(np.int)]
-    ds = cinterp.cbilin_interp2(surface, bcols, brows)
+    #print("Interpolating data surface")
+    #ds = cinterp.cbilin_interp2(surface, bcols, brows)
+    ds = cinterp.bilin_interp2f(surface, bcols, brows)
 
+    #print("Compute force vector")
     fxt, fyt, fzt = compute_force(bt, brows, bcols, xt, yt, zt, ds)
 
     # Integrate velocity
 
+    #print("Integrate velocity")
     vxt += fxt
     vyt += fyt
     vzt += fzt
 
     # Integrate position including effect of a damped velocity
     # Damping is added arbitrarily for the stability of the code.
+    #print("Integrate positions")
+    xt += vxt * bt.td * (1 - bt.e_td)
+    yt += vyt * bt.td * (1 - bt.e_td)
+    zt += vzt * bt.zdamping * (1 - bt.e_tdz)
 
-    pos[0, :] += vxt * bt.td * (1 - bt.e_td)
-    pos[1, :] += vyt * bt.td * (1 - bt.e_td)
-    pos[2, :] += vzt * bt.zdamping * (1 - bt.e_tdz)
+    bt.pos[0, bt.new_valid_balls_mask] = xt
+    bt.pos[1, bt.new_valid_balls_mask] = yt
+    bt.pos[2, bt.new_valid_balls_mask] = zt
 
-
+    #print("Update velocity vector")
     # Update the velocity with the damping used above
-    vel[0, :] *= bt.e_td
-    vel[1, :] *= bt.e_td
-    vel[2, :] *= bt.e_tdz
-
-    force = np.array([fxt, fyt, fzt])
+    bt.vel[0, bt.new_valid_balls_mask] = vxt * bt.e_td
+    bt.vel[1, bt.new_valid_balls_mask] = vyt * bt.e_td
+    bt.vel[2, bt.new_valid_balls_mask] = vzt * bt.e_tdz
 
     if return_copies:
-        return pos.copy(), vel.copy(), force
+        force = np.array([fxt, fyt, fzt])
+        return bt.pos.copy(), bt.vel.copy(), force
+
 
 def compute_force(bt, brows, bcols, xt, yt, zt, ds):
-
     r = np.sqrt((bcols - xt) ** 2 + (brows - yt) ** 2 + (ds - zt) ** 2)
     # Force that are beyond the radius must be set to zero
     f = bt.k_force * (r - bt.rs)
@@ -305,14 +387,20 @@ def compute_force(bt, brows, bcols, xt, yt, zt, ds):
     return fxt, fyt, fzt
 
 
-def get_bad_balls(pos, bt):
+
+
+def ravel_index(x, dims):
+    i = 0
+    for dim, j in zip(dims, x):
+        i *= dim
+        i += j
+    return i
+
+
+def get_bad_balls(bt):
     # See discussion at https://stackoverflow.com/questions/44802033/efficiently-index-2d-numpy-array-using-two-1d-arrays
     # and https://stackoverflow.com/questions/36863404/accumulate-constant-value-in-numpy-array
-
-    # The input come from the integration function, which only treats valid, finite ball positions.
-    # There is no need to worry about NaN, or Inf positions.
-
-    #xpos0, ypos0, zpos0 = pos
+    #xpos0, ypos0, zpos0 = bt.pos
 
     # Matlab:
     # col_min = int16(floor(x0 - BT.rs));
@@ -323,29 +411,9 @@ def get_bad_balls(pos, bt):
     # badballs = (z0==fallnoted) | col_max>BT.nc | col_min<1 | row_max>BT.nr |...
     # row_min<1 | (z0<(minds-4*BT.rs)) | badfullballs;
 
-    # For efficiency and clarity, NaNs are set to 0 in a copy of the pos array.
-    # Doing this, these NaNs are picked up as bad data as 0 will fall in the off-edges mask.
-    # They are reassigned to NaNs anyway later if not replaced by new coordinates.
-    nanmask = np.isnan(pos[2, :])
-    pos[:, nanmask] = -1
-    xpos0, ypos0, zpos0 = pos
+    # Bad balls are flagged with -1 in the pos array. They will be excluded from the comparisons below (with NaNs Runtime warnings occur)
+    bad_balls1_mask = get_outliers(bt)
 
-    # valid_balls0 = np.isfinite(pos[2, :])
-    # valid_balls_idx0 = np.where(valid_balls0)[0]
-    # nan_balls_idx = np.where(np.logical_not(valid_balls0))[0]
-    # xpos0, ypos0, zpos0 = pos[:, valid_balls0]
-
-
-
-    # There can be nan values in pos. They shall be excluded from the comparisons below (otherwise, Runtime warnings occur)
-    sunk = zpos0 < bt.min_ds
-    off_edge_left = xpos0 - bt.rs < 0
-    off_edge_right = xpos0 + bt.rs > bt.nx-1
-    off_edge_bottom = ypos0 - bt.rs < 0
-    off_edge_top = ypos0 + bt.rs > bt.ny-1
-
-    masks = np.array((sunk, off_edge_left, off_edge_right, off_edge_bottom, off_edge_top))
-    bad_balls1_mask = np.logical_or.reduce(masks)
     #bad_balls1_idx = valid_balls_idx0[np.where(np.logical_or.reduce(masks))[0]]
 
     # bad_balls1_mask = np.zeros([bt.nballs], dtype=bool)
@@ -359,7 +427,7 @@ def get_bad_balls(pos, bt):
     # Map back to original balls indices
     #valid_balls_idx = np.nonzero(valid_balls)[0]
 
-    xpos, ypos, zpos = pos[:, valid_balls]
+    xpos, ypos, zpos = bt.pos[:, valid_balls]
     balls_age = bt.balls_age[valid_balls]
 
     # Get the 1D position on the coarse grid, clipped to the edges of that grid.
@@ -385,22 +453,32 @@ def get_bad_balls(pos, bt):
     #bad_balls_mask = np.logical_or(bad_balls1, bad_full_balls)
     bt.bad_balls_mask = np.logical_or(bad_balls1_mask, bad_full_balls)
 
-    return bt.bad_balls_mask
+    return
+
+def get_outliers(bt):
+
+    x, y, z = bt.pos
+    sunk = z < bt.min_ds
+    off_edge_left = x - bt.rs < 0
+    off_edge_right = x + bt.rs > bt.nx - 1
+    off_edge_bottom = y - bt.rs < 0
+    off_edge_top = y + bt.rs > bt.ny - 1
+
+    masks = np.array((sunk, off_edge_left, off_edge_right, off_edge_bottom, off_edge_top))
+    outlier_mask = np.logical_or.reduce(masks)
+
+    return outlier_mask
 
 
 
-#def replace_bad_balls(pos, age, finegrid, newframe, bt):
-def replace_bad_balls(pos, surface, bt):
-
-    # Flag the positions of the bad balls with -1
-    pos[:, bt.bad_balls_mask] = -1
+def replace_bad_balls(surface, bt):
 
     nbadballs = bt.bad_balls_mask.sum()
 
     # Get the mask of the valid balls that we are going to keep
     valid_balls_mask = np.logical_not(bt.bad_balls_mask)
     # Work with with views on coordinate and velocity arrays of valid balls for clarity (instead of working with pos[:, :, valid_balls_mask] directly)
-    xpos, ypos, zpos = pos[:, valid_balls_mask]
+    xpos, ypos, zpos = bt.pos[:, valid_balls_mask]
 
     # Get the 1D position on the coarse grid, clipped to the edges of that grid.
     _, _, coarse_pos_idx = coarse_grid_pos(bt, xpos, ypos)
@@ -421,17 +499,29 @@ def replace_bad_balls(pos, surface, bt):
         ynew = bt.ballspacing * y0.astype(np.float32)#+ bt.rs
         znew = put_balls_on_surface(surface, xnew, ynew, bt.rs, bt.dp)
 
-        pos[0, bad_balls_idx] = xnew
-        pos[1, bad_balls_idx] = ynew
-        pos[2, bad_balls_idx] = znew
+        bt.pos[0, bad_balls_idx] = xnew
+        bt.pos[1, bad_balls_idx] = ynew
+        bt.pos[2, bad_balls_idx] = znew
+        # Reset the velocity and age at these new positions
+        bt.vel[:, bad_balls_idx] = 0
         bt.balls_age[bad_balls_idx] = 0
+
+        # Rest of bad balls
+        bad_balls_remaining_idx = np.nonzero(bt.bad_balls_mask)[0][nemptycells:nbadballs]
+
+        # Update the list valid balls in bt.new_valid_balls_mask
+        new_valid_balls_mask = np.ones([bt.nballs], dtype = bool)
+        new_valid_balls_mask[bad_balls_remaining_idx] = False
+        bt.new_valid_balls_mask = new_valid_balls_mask
 
     else:
         # This case means the number of bad balls available for relocation is smaller than the number of empty cells where they can be relocated.
         # This means the continuity principle is not satisfied and needs investigation.
-        sys.exit("The number of empy cells is greater than the number of bad balls")
+        raise SystemExit('The number of empy cells is greater than the number of bad balls.')
 
     return xnew, ynew
+
+
 
 def replace_bad_balls1(pos, bt):
     # Get the position on the finegrid
@@ -459,6 +549,79 @@ def replace_bad_balls2(pos, bt):
 
     return xcoarse, ycoarse
 
+
+def make_velocity_from_tracks(ballpos, dims, trange, fwhm):
+    """
+    Calculate the velocity field, i.e, differentiate the position to get the velocity in Lagrange and convert to Euler
+
+    :param bt:
+    :param trange:
+    :return:
+    """
+
+    ny, nx = dims
+
+    # Differentiate positions. Must take care of the of the flagged values? Yes. -1 - (-1) = 0, not NaN.
+    # 1) Get the coordinate of the velocity vector
+    bposx = ballpos[0, :, :].copy()
+    bposy = ballpos[1, :, :].copy()
+
+    nan_mask = bposx == -1
+    bposx[nan_mask] = np.nan
+    bposy[nan_mask] = np.nan
+
+    vx_lagrange = bposx[:, trange[1]:trange[-1]] - bposx[:, trange[0]:trange[-2]]
+    vy_lagrange = bposy[:, trange[1]:trange[-1]] - bposy[:, trange[0]:trange[-2]]
+
+    # px where bposx == -1 will give -1. Same for py
+    px_lagrange = np.round((bposx[:, trange[0]:trange[-2]] + bposx[:, trange[1]:trange[-1]])/2)
+    py_lagrange = np.round((bposy[:, trange[0]:trange[-2]] + bposy[:, trange[1]:trange[-1]])/2)
+    # Exclude the -1 flagged positions using a mask. Could there be NaNs left here?
+    valid_mask = np.isfinite(vx_lagrange)
+    # Taking the mask of the 2D arrays convert them to 1D arrays
+    px_lagrange = px_lagrange[valid_mask]
+    py_lagrange = py_lagrange[valid_mask]
+    vx_lagrange = vx_lagrange[valid_mask]
+    vy_lagrange = vy_lagrange[valid_mask]
+    # Convert 2D coordinates of position into 1D indices. These are the 1D position of each v*_lagrange data point
+    p1d = (px_lagrange + py_lagrange*nx).astype(np.uint32)
+    # Weight plane. Add 1 for each position
+    wplane = np.zeros([ny*nx])
+    np.add.at(wplane, p1d, 1)
+    # Build the Euler velocity map
+    # vxplane = np.zeros([ny, nx])
+    # vyplane = np.zeros([ny, nx])
+    vx_euler = np.zeros([nx*ny])
+    vy_euler = np.zeros([nx*ny])
+    # Implement Matlab version below
+    # % Matlab version
+    # for jj=1:numel(vpos1D)
+    #     vxplane(vpos1D(jj)) = vxplane(vpos1D(jj)) + vxii(jj);
+    #     vyplane(vpos1D(jj)) = vyplane(vpos1D(jj)) + vyii(jj);
+    # end
+
+    for j in range(p1d.size):
+        vx_euler[p1d[j]] += vx_lagrange[j]
+        vy_euler[p1d[j]] += vy_lagrange[j]
+
+    # as:
+    # np.add.at(vx_euler, p1d, vx_lagrange)
+    # np.add.at(vy_euler, p1d, vy_lagrange)
+    # Reshape to 2D
+    vx_euler = vx_euler.reshape([ny, nx])
+    vy_euler = vy_euler.reshape([ny, nx])
+    wplane   = wplane.reshape([ny, nx])
+
+    # Spatial average (convolve with gaussian)
+    sigma = fwhm/2.35
+    vx_euler = gaussian_filter(vx_euler, sigma=sigma, order=0)
+    vy_euler = gaussian_filter(vy_euler, sigma=sigma, order=0)
+    wplane   = gaussian_filter(wplane, sigma=sigma, order=0)
+
+    vx_euler /= wplane
+    vy_euler /= wplane
+
+    return vx_euler, vy_euler, wplane
 
 
 def initialize_ball_vector(xstart, ystart, zstart):
@@ -599,3 +762,15 @@ def integrate_motion0(pos, vel, bt, surface):
     #return xt, yt, zt, vxt, vyt, vzt, fxt, fyt, fzt
     # return xt.copy(), yt.copy(), zt.copy(), vxt.copy(), vyt.copy(), vzt.copy(), fxt.copy(), fyt.copy(), fzt.copy()
     return pos.copy(), vel.copy(), force
+
+
+def drift_series(images, drift_rate):
+
+    drift_images = np.zeros(images.shape)
+    for i in range(images.shape[2]):
+        dx = -drift_rate[0] * float(i)
+        dy = -drift_rate[1]*i
+        drift_images[:,:,i] = filters.translate_by_phase_shift(images[:,:,i], dx, dy)
+
+    return drift_images
+

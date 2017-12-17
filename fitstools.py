@@ -5,13 +5,13 @@ import fitsio
 from astropy.io import fits
 
 
-def fitsread(file, s2=slice(None), s3=slice(None), s1=slice(None)):
+def fitsread(file, xslice=slice(None), yslice=slice(None), tslice=slice(None)):
 
     with fitsio.FITS(file) as fitsfile:
         if fitsfile[0].has_data():
-            data = np.squeeze( np.swapaxes(fitsfile[0][s1, s2, s3], 0, 2) )
+            data = np.squeeze( np.swapaxes(fitsfile[0][tslice, xslice, yslice], 0, 2) )
         else:
-            data = np.squeeze( np.swapaxes(fitsfile[1][s1, s2, s3], 0, 2))
+            data = np.squeeze( np.swapaxes(fitsfile[1][tslice, xslice, yslice], 0, 2))
     return data
 
 

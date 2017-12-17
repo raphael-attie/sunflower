@@ -1,6 +1,7 @@
 from importlib import reload
 import numpy as np
 import matplotlib
+matplotlib.use('macosx')
 #matplotlib.use('qt5agg')
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -30,7 +31,7 @@ h       = fitstools.fitsheader(file)
 image   = fitsio.read(file).astype(np.float32)
 
 ### Ball parameters
-# Nb of intermediate steps
+# Nb of steps (intermediate steps are ignored, integration on a single frame instead)
 nt = 15
 # Ball radius
 rs = 2
@@ -39,7 +40,7 @@ dp = 0.2
 # Multiplier to the standard deviation.
 sigma_factor = 2
 # Get a BT instance with the above parameters
-bt = blt.BT(image.shape, nt, rs, dp, sigma_factor=sigma_factor)
+bt = blt.BT(file, image.shape, nt, rs, dp, sigma_factor=sigma_factor)
 # Initialize ball positions
 bt.initialize(image)
 # Get the initial data surface, as calculated in bt.initialize
@@ -47,41 +48,38 @@ surface, _, _ = blt.prep_data2(image, sigma_factor = sigma_factor)
 
 
 # integrate motion over some time steps. Enough to have overpopulated cells (bad balls).
-pos, _, _ = [np.array(v).squeeze().swapaxes(0,1) for v in zip(*[blt.integrate_motion(bt.pos, bt.vel, bt, surface, return_copies=True) for _ in range(nt)])]
+#pos, _, _ = [np.array(v).squeeze().swapaxes(0,1) for v in zip(*[blt.integrate_motion(bt.pos, bt.vel, bt, surface, return_copies=True) for _ in range(nt)])]
+pos, _, _ = [np.array(v).squeeze().swapaxes(0,1) for v in zip(*[blt.integrate_motion(bt, surface, return_copies=True) for _ in range(nt)])]
 
 
 # Mask of the bad balls at a given time tstop
 tstop = 14
-bad_balls = blt.get_bad_balls(pos[:,tstop,:], bt)
+blt.get_bad_balls(bt)
 # Get [x, y] coordinates of these bad balls at time = tstop
-xbad = pos[0, tstop, bad_balls]
-ybad = pos[1, tstop, bad_balls]
+xbad = pos[0, tstop, bt.bad_balls_mask]
+ybad = pos[1, tstop, bt.bad_balls_mask]
 
 # Initial chess board
 chess_board_init = blt.fill_coarse_grid(bt, bt.xstart, bt.ystart)
 # Fill the coarse grid at the cells that map to the bad positions
 chess_board_all = blt.fill_coarse_grid(bt, pos[0, tstop, :], pos[1, tstop, :])
 chess_board_bad = blt.fill_coarse_grid(bt, xbad, ybad)
-# Use a copy of the pos array, because relocating the bad balls overwrite that input.
-pos2 = pos.copy()
 # Replace bad balls and get the new positions that fills the empty coarse grid cells
-xnew, ynew = blt.replace_bad_balls(pos2[:,tstop,:], surface, bt)
+xnew, ynew = blt.replace_bad_balls(surface, bt)
 # Check new chess board
 chess_board_relocation = blt.fill_coarse_grid(bt, xnew, ynew)
 
-# Get rid of nan to see new chessboard
-validmask = pos2[2,tstop,:] != -1
-valid_pos = pos2[:, tstop, validmask]
+# Ignore flagged balls to see new chessboard
+validmask = bt.pos[0,:] != -1
+valid_pos = bt.pos[:, validmask]
 new_chess_board = blt.fill_coarse_grid(bt, valid_pos[0, :], valid_pos[1, :])
-
-
 
 gmap = cm.gray_r.from_list('whatever', ('white', 'black'), N=6)
 
 ### Display ###
 print_fig = True
 
-fig = plt.figure(2, figsize=(10, 10))
+fig = plt.figure(2, figsize=(12, 12))
 ax = fig.add_subplot(1,1,1)
 
 # Overlay initial positions

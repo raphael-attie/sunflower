@@ -33,7 +33,7 @@ testf  = blt.bilin_interp_f(imagef, xf, yf)
 # Cython
 testcf = cinterp.bilin_interp1f(imagef, xf, yf)
 # Cython C
-cinterp.cbilin_interp1(imagef, xf, yf, zf)
+zf = cinterp.cbilin_interp1(imagef, xf, yf)
 
 
 ##### multi-balls test #########
@@ -48,7 +48,7 @@ yf = np.full(dims, 10.1, dtype=np.float32)
 zf = np.zeros(dims, dtype=np.float32)
 # Python
 testf = blt.bilin_interp_f(imagef, xf, yf)
-# Cython
+# Cython with 2 dimensions
 testcf = cinterp.bilin_interp2f(imagef, xf, yf)
 # Cython C with 2 dimensions
 zf = cinterp.cbilin_interp2(imagef, xf, yf)
@@ -59,11 +59,11 @@ mywrap_cf = wrapper(cinterp.bilin_interp2f, imagef, xf, yf)
 mywrap_cf3 = wrapper(cinterp.bilin_interp3f, imagef, xf, yf)
 
 zf = np.full(dims, 0, dtype=np.float32)
-mywrap_cf4 = wrapper(cinterp.cbilin_interp2, imagef, xf, yf, zf)
+mywrap_cf4 = wrapper(cinterp.cbilin_interp2, imagef, xf, yf)
 
-timeit(mywrap_f, number=100)
-timeit(mywrap_cf, number=100)
-timeit(mywrap_cf3, number=100)
-timeit(mywrap_cf4, number=100)
+timeit(mywrap_f, number=100) # 3s
+timeit(mywrap_cf, number=100) # 0.25s
+timeit(mywrap_cf3, number=100) # 0.37s
+timeit(mywrap_cf4, number=100) # 0.24s
 
 
