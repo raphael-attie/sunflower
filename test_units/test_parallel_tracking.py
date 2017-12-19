@@ -6,8 +6,6 @@ from datetime import datetime
 from multiprocessing import Pool
 
 
-
-
 datafile = '/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/mtrack_20170901_000000_TAI20170905_235959_LambertCylindrical_continuum.fits'
 
 # Load 1st image

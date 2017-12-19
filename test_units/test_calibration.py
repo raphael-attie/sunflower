@@ -2,51 +2,113 @@
 
 from importlib import reload
 import matplotlib
-#matplotlib.use('macosx')
+matplotlib.use('macosx')
 import numpy as np
 import balltracking.balltrack as blt
 import fitstools
 from datetime import datetime
-
 import matplotlib.pyplot as plt
-from matplotlib import cm
+import multiprocessing
+from functools import partial
+
 
 plt.ioff()
+
+def process_calibration_series(rotation_rate, samples):
+
+    # number of frames to process
+    nt = samples.shape[2]
+    # Ball radius
+    rs = 2
+    # depth factor
+    dp = 0.2
+    # Multiplier to the standard deviation.
+    sigma_factor = 2
+
+    # Make the series of drifting image for 1 rotation rate
+    drift_images = blt.drift_series(samples, rotation_rate)
+    # Balltrack forward and backward
+    ballpos_top, _, _ = blt.balltrack_all(nt, rs, dp, sigma_factor=sigma_factor, mode='top', data=drift_images)
+    ballpos_bottom, _, _ = blt.balltrack_all(nt, rs, dp, sigma_factor=sigma_factor, mode='bottom', data=drift_images)
+
+    return ballpos_top, ballpos_bottom
+
+# def parallel_runs(rotation_rate_list, samples):
+#
+#     pool = multiprocessing.Pool(processes=4)
+#
+#     # Use partial to give process_calibration_series() the constant input "samples"
+#     process_calibration_partial = partial(process_calibration_series, samples=samples)
+#     result_list = pool.map(process_calibration_partial, rotation_rate_list)
+#
+#     return result_list
+
+def fit_calibration(ballpos_list, trange, fwhm):
+
+    vxs, vys, wplanes = zip(*[blt.make_velocity_from_tracks(ballpos, images.shape[0:2], trange, fwhm) for ballpos in ballpos_list])
+    # Select an ROI that contains valid data. At least one should exclude edges as wide as the ball radius.
+    # This one also excludes the sunspot in the middle. Beware of bias due to differential rotation!
+
+    vxmeans1 = np.array([vx[10:200, 30:-30].mean() for vx in vxs])
+    vxmeans2 = np.array([vx[350:500, 30:-30].mean() for vx in vxs])
+    vxmeans = 0.5*(vxmeans1 + vxmeans2)
+
+    p = np.polyfit(vx_rates, vxmeans, 1)
+    a = 1 / p[0]
+    vxfit = a * (vxmeans - p[1])
+    return a, vxfit, vxmeans
+
+
 
 
 
 datafile = '/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/mtrack_20170901_000000_TAI20170905_235959_LambertCylindrical_continuum.fits'
 
-# Load a series of nt images
-nt = 80
-images = fitstools.fitsread(datafile, tslice=slice(0,nt)).astype(np.float32)
-header = fitstools.fitsheader(datafile)
-dims = [header['ZNAXIS1'], header['ZNAXIS2']]
-# Set npts drift rates
-npts = 10
-rotation_rates = np.linspace(-0.2, 0.2, npts)
-# Make the series of drifting image for 1 rotation rate
-drift_images = blt.drift_series(images, (rotation_rates[0], 0))
-
 ### Ball parameters
 # Use 80 frames (1 hr)
-nt = 80
-# Ball radius
-rs = 2
-# depth factor
-dp = 0.2
-# Multiplier to the standard deviation.
-sigma_factor = 2
-# Setup BT objects for forward and backward tracking.
-bt_tf = blt.BT(dims, nt, rs, dp, sigma_factor=sigma_factor, mode='top', direction='forward', data=drift_images)
-bt_tb = blt.BT(dims, nt, rs, dp, sigma_factor=sigma_factor, mode='top', direction='backward', data=drift_images)
-# Track
-_=blt.track_all_frames(bt_tf)
-_=blt.track_all_frames(bt_tb)
+nframes = 80
 
-ballpos = np.concatenate((bt_tf.ballpos, bt_tb.ballpos), axis=1)
+# Load the nt images
+images = fitstools.fitsread(datafile, tslice=slice(0,nframes)).astype(np.float32)
 
-# Get flow maps from tracked positions
-trange = np.arange(0, nt)
-fwhm = 15
-vx, vy, wplane = blt.make_velocity_from_tracks(ballpos, dims, trange, fwhm)
+## Calibration parameters
+# Set npts drift rates
+npts = 10
+vx_rates = np.linspace(-0.2, 0.2, npts)
+rotation_rates = np.stack((vx_rates, np.zeros(npts)),axis=1).tolist()
+
+
+if __name__ == '__main__':
+
+    startTime = datetime.now()
+
+    pool = multiprocessing.Pool(processes=4)
+    # Use partial to give process_calibration_series() the constant input "samples"
+    process_calibration_partial = partial(process_calibration_series, samples=images)
+    ballpos_top_list, ballpos_bottom_list = zip(*pool.map(process_calibration_partial, rotation_rates))
+
+    print("\nProcessing time: %s seconds\n" % (datetime.now() - startTime))
+
+    # # Get flow maps from tracked positions
+
+    trange = np.arange(0, nframes)
+    fwhm = 15
+
+    a_top, vxfit_top, vxmeans_top = fit_calibration(ballpos_top_list, trange, fwhm)
+    a_bottom, vxfit_bottom, vxmeans_bottom = fit_calibration(ballpos_bottom_list, trange, fwhm)
+
+    plt.figure(0)
+    plt.plot(vxmeans_top, vx_rates, 'r.', label='data top', zorder=3)
+    plt.plot(vxmeans_bottom, vx_rates, 'g+', label='data bottom', zorder=3)
+    plt.plot(vxmeans_top, vxfit_top, 'b-', label=r'$\alpha$ =%0.2f' %a_top, zorder=2)
+    plt.plot(vxmeans_bottom, vxfit_bottom, 'k-', label=r'$\alpha$ =%0.2f' % a_bottom, zorder=2)
+
+    plt.xlabel('Balltracked <Vx> (px/frame)')
+    plt.ylabel('Drift <Vx> (px/frame)')
+    plt.grid('on')
+    plt.legend()
+    plt.show()
+
+
+
+

@@ -254,6 +254,22 @@ def put_balls_on_surface(surface, x, y, rs, dp):
     z += rs * (1 - dp / 2)
     return z
 
+def balltrack_all(nt, rs, dp, sigma_factor=1, mode='top', data=None):
+
+    dims = data.shape[0:2]
+    # Setup BT objects for forward and backward tracking.
+    bt_forward = BT(dims, nt, rs, dp, sigma_factor=sigma_factor, mode=mode, direction='forward', data=data)
+    bt_backward = BT(dims, nt, rs, dp, sigma_factor=sigma_factor, mode=mode, direction='backward', data=data)
+    # Track
+    _ = track_all_frames(bt_forward)
+    _ = track_all_frames(bt_backward)
+
+    ballpos = np.concatenate((bt_forward.ballpos, bt_backward.ballpos), axis=1)
+
+    return ballpos, bt_forward, bt_backward
+
+
+
 def track_all_frames(bt):
 
     # Outer loop goes over the data frames.
