@@ -790,3 +790,77 @@ def drift_series(images, drift_rate):
 
     return drift_images
 
+def make_lanes(vx, vy, nsteps, maxstep):
+
+    dims = vx.shape
+
+    # Gamma scale the data
+    vmag = np.sqrt(vx**2 + vy**2)
+    vmax = vmag.max()
+    vn = vmag/vmax
+    gamma = 0.5
+    g = vn**(gamma-1)
+    vxn = vx/vmax
+    vyn = vy/vmax
+    vxng = vxn*g
+    vyng = vyn*g
+
+    vblank = np.zeros([dims[0]+2*maxstep, dims[1]+2*maxstep], dtype=np.float32)
+    vx2 = vblank.copy()
+    vy2 = vblank.copy()
+    vx2[maxstep : dims[0] + maxstep, maxstep :dims[1] + maxstep] = vxng.astype(np.float32)
+    vy2[maxstep : dims[0] + maxstep, maxstep :dims[1] + maxstep] = vyng.astype(np.float32)
+
+    vx2 *= -1
+    vy2 *= -1
+
+    x0, y0 = np.meshgrid( maxstep + np.arange(dims[1]) , maxstep + np.arange(dims[0]))
+    xold = x0.flatten().astype(np.float32)
+    yold = y0.flatten().astype(np.float32)
+
+    maxv = np.sqrt(vx2.max() ** 2 + vy2.max() ** 2)
+
+    # Create a storage array for the intermediate integration steps
+    # xtracks = np.zeros([nsteps+1, x0.size])
+    # ytracks = np.zeros([nsteps+1, y0.size])
+    # xtracks[nsteps, :] = np.nan
+    # ytracks[nsteps, :] = np.nan
+
+    for n in range(nsteps):
+
+        dx1 = maxstep * cinterp.cbilin_interp1(vx2, xold, yold)/maxv
+        dy1 = maxstep * cinterp.cbilin_interp1(vy2, xold, yold)/maxv
+
+        dx2 = maxstep * cinterp.cbilin_interp1(vx2, xold+dx1, yold+dy1) / maxv
+        dy2 = maxstep * cinterp.cbilin_interp1(vy2, xold+dx1, yold+dy1) / maxv
+
+        x = xold + (dx1 + dx2)/2
+        y = yold + (dy1 + dy2)/2
+
+        xold = x
+        yold = y
+
+    xforwards = x.reshape(dims)
+    yforwards = y.reshape(dims)
+
+    xforwards -= maxstep
+    yforwards -= maxstep
+
+    np.clip(xforwards, 0, dims[1]-1)
+    np.clip(yforwards, 0, dims[0]-1)
+
+    gxx = np.gradient(xforwards, axis=1)
+    gyy = np.gradient(yforwards, axis=0)
+
+    lanes = np.sqrt(gxx**2 + gyy**2)
+
+    return lanes
+
+
+
+
+
+
+
+
+

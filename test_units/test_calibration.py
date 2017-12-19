@@ -60,8 +60,6 @@ def fit_calibration(ballpos_list, trange, fwhm):
 
 
 
-
-
 datafile = '/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/mtrack_20170901_000000_TAI20170905_235959_LambertCylindrical_continuum.fits'
 
 ### Ball parameters
@@ -89,7 +87,7 @@ if __name__ == '__main__':
 
     print("\nProcessing time: %s seconds\n" % (datetime.now() - startTime))
 
-    # # Get flow maps from tracked positions
+    ## Get flow maps from tracked positions
 
     trange = np.arange(0, nframes)
     fwhm = 15
@@ -108,6 +106,8 @@ if __name__ == '__main__':
     plt.grid('on')
     plt.legend()
     plt.show()
+
+
 
 
 
