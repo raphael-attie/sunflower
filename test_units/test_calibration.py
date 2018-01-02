@@ -58,7 +58,12 @@ def fit_calibration(ballpos_list, trange, fwhm):
     vxfit = a * (vxmeans - p[1])
     return a, vxfit, vxmeans
 
-
+def calibrate_parallel(images, rotation_rates, nthreads=2):
+    pool = multiprocessing.Pool(processes=nthreads)
+    # Use partial to give process_calibration_series() the constant input "samples"
+    process_calibration_partial = partial(process_calibration_series, samples=images)
+    ballpos_top_list, ballpos_bottom_list = zip(*pool.map(process_calibration_partial, rotation_rates))
+    return ballpos_top_list, ballpos_bottom_list
 
 datafile = '/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/mtrack_20170901_000000_TAI20170905_235959_LambertCylindrical_continuum.fits'
 
@@ -80,10 +85,13 @@ if __name__ == '__main__':
 
     startTime = datetime.now()
 
-    pool = multiprocessing.Pool(processes=4)
-    # Use partial to give process_calibration_series() the constant input "samples"
-    process_calibration_partial = partial(process_calibration_series, samples=images)
-    ballpos_top_list, ballpos_bottom_list = zip(*pool.map(process_calibration_partial, rotation_rates))
+    # pool = multiprocessing.Pool(processes=4)
+    # # Use partial to give process_calibration_series() the constant input "samples"
+    # process_calibration_partial = partial(process_calibration_series, samples=images)
+    # ballpos_top_list, ballpos_bottom_list = zip(*pool.map(process_calibration_partial, rotation_rates))
+
+
+    ballpos_top_list, ballpos_bottom_list = calibrate_parallel(images, rotation_rates, nthreads=4)
 
     print("\nProcessing time: %s seconds\n" % (datetime.now() - startTime))
 
@@ -98,8 +106,8 @@ if __name__ == '__main__':
     plt.figure(0)
     plt.plot(vxmeans_top, vx_rates, 'r.', label='data top', zorder=3)
     plt.plot(vxmeans_bottom, vx_rates, 'g+', label='data bottom', zorder=3)
-    plt.plot(vxmeans_top, vxfit_top, 'b-', label=r'$\alpha$ =%0.2f' %a_top, zorder=2)
-    plt.plot(vxmeans_bottom, vxfit_bottom, 'k-', label=r'$\alpha$ =%0.2f' % a_bottom, zorder=2)
+    plt.plot(vxmeans_top, vxfit_top, 'b-', label=r'$\alpha_t$ =%0.2f' %a_top, zorder=2)
+    plt.plot(vxmeans_bottom, vxfit_bottom, 'k-', label=r'$\alpha_b$ =%0.2f' % a_bottom, zorder=2)
 
     plt.xlabel('Balltracked <Vx> (px/frame)')
     plt.ylabel('Drift <Vx> (px/frame)')
@@ -107,7 +115,7 @@ if __name__ == '__main__':
     plt.legend()
     plt.show()
 
-
+    plt.savefig('/Users/rattie/Dev/sdo_tracking_framework/figures/calibration/calibration.png')
 
 
 
