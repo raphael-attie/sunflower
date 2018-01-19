@@ -11,7 +11,6 @@ import fitstools
 DTYPE = np.float32
 class BT:
 
-
     def __init__(self, dims, nt, rs, dp, sigma_factor=1, mode='top', direction='forward', datafiles=None, data=None):
 
         self.datafiles = datafiles
@@ -21,8 +20,8 @@ class BT:
         self.nt = nt
         self.intsteps = 3
         self.rs = rs
-        self.ballspacing = int(2*rs)
         self.dp = dp
+        self.ballspacing = int(2 * rs)
         # Number of balls in a row
         self.nballs_row = int((self.nx - 4 * self.rs) / self.ballspacing + 1)
         # Number of balls in a column
@@ -66,7 +65,7 @@ class BT:
         self.pos = np.zeros([3, self.nballs], dtype=DTYPE)
         self.vel = np.zeros([3, self.nballs], dtype=DTYPE)
         self.force = np.zeros([3, self.nballs], dtype=DTYPE)
-        self.age = np.zeros([self.nballs], dtype=np.uint32)
+        self.balls_age_t = np.zeros([self.nballs, self.nt], dtype=np.uint32)
         # Storage arrays of the above, for all time steps
         self.ballpos = np.zeros([3, self.nballs, self.nt], dtype=DTYPE)
         self.ballvel = np.zeros([3, self.nballs, self.nt], dtype=DTYPE)
@@ -87,6 +86,7 @@ class BT:
         # Mode and direction
         self.mode = mode
         self.direction = direction
+
 
     def initialize(self):
 
@@ -248,7 +248,7 @@ def put_balls_on_surface(surface, x, y, rs, dp):
     if x.ndim !=1 or y.ndim !=1:
         sys.exit("Input coordinates have incorrect dimensions. x and y must be 1D numpy arrays")
 
-    z = np.zeros([x.shape[0]], dtype=np.float32)
+    #z = np.zeros([x.shape[0]], dtype=np.float32)
     #z = bilin_interp_f(surface, x, y) +  rs*(1-dp/2)
     z = cinterp.cbilin_interp1(surface, x, y)
     z += rs * (1 - dp / 2)
@@ -325,6 +325,8 @@ def track_all_frames(bt):
             _, _ = replace_bad_balls(surface, bt)
         except sys.SystemExit:
             print('replace_bad_balls failed.')
+
+        bt.balls_age_t[:,n] = bt.balls_age.copy()
 
     if bt.direction == 'backward':
         # Flip timeline for backward tracking
@@ -418,23 +420,8 @@ def get_bad_balls(bt):
     # and https://stackoverflow.com/questions/36863404/accumulate-constant-value-in-numpy-array
     #xpos0, ypos0, zpos0 = bt.pos
 
-    # Matlab:
-    # col_min = int16(floor(x0 - BT.rs));
-    # col_max = int16(ceil(x0 + BT.rs));
-    # row_min = int16(floor(y0 - BT.rs));
-    # row_max = int16(ceil(y0 + BT.rs));
-
-    # badballs = (z0==fallnoted) | col_max>BT.nc | col_min<1 | row_max>BT.nr |...
-    # row_min<1 | (z0<(minds-4*BT.rs)) | badfullballs;
-
-    # Bad balls are flagged with -1 in the pos array. They will be excluded from the comparisons below (with NaNs Runtime warnings occur)
+    # Bad balls are flagged with -1 in the pos array. They will be excluded from the comparisons below
     bad_balls1_mask = get_outliers(bt)
-
-    #bad_balls1_idx = valid_balls_idx0[np.where(np.logical_or.reduce(masks))[0]]
-
-    # bad_balls1_mask = np.zeros([bt.nballs], dtype=bool)
-    # bad_balls1_mask[bad_balls1_idx] = True
-    # bad_balls1_mask[nan_balls_idx] = True
 
     # Ignore these bad balls in the arrays and enforce continuity principle
     valid_balls = np.logical_not(bad_balls1_mask)
@@ -475,15 +462,20 @@ def get_outliers(bt):
 
     x, y, z = bt.pos
     sunk = z < bt.min_ds
+    off_edges_mask = get_off_edges(bt, x, y)
+    outlier_mask = np.logical_or(sunk, off_edges_mask)
+
+    return outlier_mask
+
+def get_off_edges(bt, x,y):
+
     off_edge_left = x - bt.rs < 0
     off_edge_right = x + bt.rs > bt.nx - 1
     off_edge_bottom = y - bt.rs < 0
     off_edge_top = y + bt.rs > bt.ny - 1
+    off_edges_mask = np.logical_or.reduce(np.array((off_edge_left, off_edge_right, off_edge_bottom, off_edge_top)))
 
-    masks = np.array((sunk, off_edge_left, off_edge_right, off_edge_bottom, off_edge_top))
-    outlier_mask = np.logical_or.reduce(masks)
-
-    return outlier_mask
+    return off_edges_mask
 
 
 

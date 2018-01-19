@@ -1,8 +1,3 @@
-# TODO: Test calibration procedure on a single tracking
-
-from importlib import reload
-import matplotlib
-matplotlib.use('macosx')
 import numpy as np
 import balltracking.balltrack as blt
 import fitstools
@@ -10,9 +5,6 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 import multiprocessing
 from functools import partial
-
-
-plt.ioff()
 
 def process_calibration_series(rotation_rate, samples):
 
