@@ -9,9 +9,9 @@ def fitsread(file, xslice=slice(None), yslice=slice(None), tslice=slice(None)):
 
     with fitsio.FITS(file) as fitsfile:
         if fitsfile[0].has_data():
-            data = np.squeeze( np.swapaxes(fitsfile[0][tslice, xslice, yslice], 0, 2) )
+            data = np.squeeze( np.moveaxis(fitsfile[0][tslice, yslice, xslice], 0, 2) )
         else:
-            data = np.squeeze( np.swapaxes(fitsfile[1][tslice, xslice, yslice], 0, 2))
+            data = np.squeeze( np.moveaxis(fitsfile[1][tslice, yslice, xslice], 0, 2))
     return data
 
 

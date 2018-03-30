@@ -5,7 +5,6 @@ import numpy as np
 import balltracking.balltrack as blt
 import fitstools
 from datetime import datetime
-
 import matplotlib.pyplot as plt
 from matplotlib import cm
 import matplotlib.ticker as plticker

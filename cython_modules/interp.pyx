@@ -267,8 +267,7 @@ def cbilin_interp1(np.ndarray[DTYPE_tf, ndim=2, mode="c"] image, np.ndarray[DTYP
     :param image: data surface (2D array)
     :param x: x-coordinate to interpolate (1D array)
     :param y: y-coordinate to interpolate (1D array)
-    :param z: interpolated value (1D array)
-    :return:
+    :return: z: interpolated value (1D array)
     """
     cdef int nx, npts
 

@@ -25,13 +25,18 @@ rs = 2
 dp = 0.2
 # Multiplier to the standard deviation.
 sigma_factor = 2
-# time range for the euler map
-trange = np.arange(0, nframes)
 # Smoothing for Euler maps
 fwhm = 15
 # Calibration factors
 a_top = 1.41
 a_bottom = 1.30
+
+### time ranges for the euler map
+trange = np.arange(0, nframes)
+
+### Lanes parameters
+nsteps = 30
+maxstep = 4
 
 # Get a BT instance with the above parameters
 bt_tf = blt.BT(images.shape[0:2], nframes, rs, dp, sigma_factor=sigma_factor, mode='top', direction='forward', data=images)
@@ -64,23 +69,24 @@ if __name__ == '__main__':
 
     print(" --- %s seconds" % (datetime.now() - startTime))
 
-    lanes_top = blt.make_lanes(vx_top, vy_top, 30, 4)
-    lanes_bottom = blt.make_lanes(vx_bottom, vy_bottom, 30, 4)
-    lanes = blt.make_lanes(vx, vy, 30, 4)
+    #lanes_top = blt.make_lanes(vx_top, vy_top, nsteps, maxstep)
+    #lanes_bottom = blt.make_lanes(vx_bottom, vy_bottom, nsteps, maxstep)
+    lanes = blt.make_lanes(vx, vy, nsteps, maxstep)
 
-    plt.figure(0)
-    plt.imshow(lanes_top, cmap='gray_r', origin='lower')
-    plt.title('Lanes from top')
-    plt.tight_layout()
-    plt.savefig('/Users/rattie/Dev/sdo_tracking_framework/figures/lanes/lanes_top.png')
 
-    plt.imshow(lanes_bottom, cmap='gray_r', origin='lower')
-    plt.title('Lanes from bottom')
-    plt.savefig('/Users/rattie/Dev/sdo_tracking_framework/figures/lanes/lanes_bottom.png')
-
-    plt.imshow(lanes, cmap='gray_r', origin='lower')
-    plt.title('Lanes from top-bottom average')
-    plt.savefig('/Users/rattie/Dev/sdo_tracking_framework/figures/lanes/lanes_top_bottom.png')
+    # plt.figure(0)
+    # plt.imshow(lanes_top, cmap='gray_r', origin='lower')
+    # plt.title('Lanes from top')
+    # plt.tight_layout()
+    # plt.savefig('/Users/rattie/Dev/sdo_tracking_framework/figures/lanes/lanes_top.png')
+    #
+    # plt.imshow(lanes_bottom, cmap='gray_r', origin='lower')
+    # plt.title('Lanes from bottom')
+    # plt.savefig('/Users/rattie/Dev/sdo_tracking_framework/figures/lanes/lanes_bottom.png')
+    #
+    # plt.imshow(lanes, cmap='gray_r', origin='lower')
+    # plt.title('Lanes from top-bottom average')
+    # plt.savefig('/Users/rattie/Dev/sdo_tracking_framework/figures/lanes/lanes_top_bottom.png')
 
 
 

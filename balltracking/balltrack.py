@@ -250,7 +250,13 @@ def put_balls_on_surface(surface, x, y, rs, dp):
 
     #z = np.zeros([x.shape[0]], dtype=np.float32)
     #z = bilin_interp_f(surface, x, y) +  rs*(1-dp/2)
-    z = cinterp.cbilin_interp1(surface, x, y)
+
+    # THERE IS NO NEED TO INTERPOLATE!!! Here x and y will always be integer coordinates mapping perfectly to pixel
+    # coordinates.
+    #z = cinterp.cbilin_interp1(surface, x, y)
+
+
+    z = surface[y.astype(np.int32), x.astype(np.int32)]
     z += rs * (1 - dp / 2)
     return z
 
@@ -353,9 +359,11 @@ def integrate_motion(bt, surface, return_copies=False):
     bcols = np.clip(bt.bcols + xt, 1, bt.nx - 2)
     brows = np.clip(bt.brows + yt, 1, bt.ny - 2)
 
+
     # "ds" stands for "data surface"
     #ds = surface[np.round(brows).astype(np.int), np.round(bcols).astype(np.int)]
     #print("Interpolating data surface")
+    # These interpolations gives identical results in Matlab
     #ds = cinterp.cbilin_interp2(surface, bcols, brows)
     ds = cinterp.bilin_interp2f(surface, bcols, brows)
 
@@ -363,8 +371,6 @@ def integrate_motion(bt, surface, return_copies=False):
     fxt, fyt, fzt = compute_force(bt, brows, bcols, xt, yt, zt, ds)
 
     # Integrate velocity
-
-    #print("Integrate velocity")
     vxt += fxt
     vyt += fyt
     vzt += fzt
@@ -392,19 +398,35 @@ def integrate_motion(bt, surface, return_copies=False):
 
 
 def compute_force(bt, brows, bcols, xt, yt, zt, ds):
-    r = np.sqrt((bcols - xt) ** 2 + (brows - yt) ** 2 + (ds - zt) ** 2)
-    # Force that are beyond the radius must be set to zero
+    # TODO: must get rid of them also in bcols, brows, zt, ...
+    # So we need to work out the correct indices. r is 2D but xt, yt are 1D
+    # So we define an intermediate variable to calculate the delta, since
+    # the minus operation is propagated to either dimensions.
+    delta_x = xt - bcols
+    delta_y = yt - brows
+    delta_z = ds - zt
+
+    r = np.sqrt(delta_x** 2 + delta_y**2 + delta_z**2)
+    # Singularity at r = 0. Need to get rid of them.
+    # & Force that are beyond the radius must be set to zero
+    rmask = np.logical_or(r == 0, r > bt.rs)
+    rm = np.ma.masked_array(r, mask=rmask)
+
     f = bt.k_force * (r - bt.rs)
-    f[r > bt.rs] = 0
     # Calculate each force vector component
-    fxt = -np.sum(f * (xt - bcols) / r, 0)
-    fyt = -np.sum(f * (yt - brows) / r, 0)
+    fxtm = -np.sum(f * delta_x / rm, 0)
+    fytm = -np.sum(f * delta_y / rm, 0)
     # Buoyancy must stay oriented upward. Used to be signed, but that caused more lost balls without other advantage
-    fzt = -np.sum(f * np.abs(zt - ds) / r, 0) - bt.am
+    fztm = -np.sum(f * np.abs(delta_z) / rm, 0) - bt.am
+
+    # Return the plain numpy array instead of the masked array. The fill value will ensure that in case of
+    # a sum performed on an entirely masked array (all elements ignored), we don't end up with the default filled value
+    # for the "empty" component.
+    fxt = np.ma.filled(fxtm, fill_value=0)
+    fyt = np.ma.filled(fytm, fill_value=0)
+    fzt = np.ma.filled(fztm, fill_value=0)
 
     return fxt, fyt, fzt
-
-
 
 
 def ravel_index(x, dims):
@@ -412,7 +434,7 @@ def ravel_index(x, dims):
     for dim, j in zip(dims, x):
         i *= dim
         i += j
-    return i
+    return int(i)
 
 
 def get_bad_balls(bt):
@@ -503,6 +525,9 @@ def replace_bad_balls(surface, bt):
         # Get the indices of bad balls in order to assign them with new positions
         bad_balls_idx = np.nonzero(bt.bad_balls_mask)[0][0:nemptycells]
         # Relocate the previously flagged balls in all the empty cells
+        # IMPROVEMENT with respect to Matlab version:
+        # y0, x0 above are from np.where => integer values! All values in xnew, ynew are integers.
+        # => There is no need to interpolate in put_ball_on_surface!
         xnew = bt.ballspacing * x0.astype(np.float32)#+ bt.rs
         ynew = bt.ballspacing * y0.astype(np.float32)#+ bt.rs
         znew = put_balls_on_surface(surface, xnew, ynew, bt.rs, bt.dp)
@@ -562,14 +587,18 @@ def make_velocity_from_tracks(ballpos, dims, trange, fwhm):
     """
     Calculate the velocity field, i.e, differentiate the position to get the velocity in Lagrange and convert to Euler
 
-    :param bt:
+    :param ballpos:
+    :param dims:
     :param trange:
+    :param fwhm:
     :return:
     """
 
+    # Slices for differentiating the ball positions, in ascending start & end frame number
+    tslices = (slice(trange[0], trange[1]-1), slice(trange[0]+1, trange[1]))
     ny, nx = dims
 
-    # Differentiate positions. Must take care of the of the flagged values? Yes. -1 - (-1) = 0, not NaN.
+    # Differentiate positions. Must take care of the flagged values? Yes. -1 - (-1) = 0, not NaN.
     # 1) Get the coordinate of the velocity vector
     bposx = ballpos[0, :, :].copy()
     bposy = ballpos[1, :, :].copy()
@@ -578,12 +607,12 @@ def make_velocity_from_tracks(ballpos, dims, trange, fwhm):
     bposx[nan_mask] = np.nan
     bposy[nan_mask] = np.nan
 
-    vx_lagrange = bposx[:, trange[1]:trange[-1]] - bposx[:, trange[0]:trange[-2]]
-    vy_lagrange = bposy[:, trange[1]:trange[-1]] - bposy[:, trange[0]:trange[-2]]
+    vx_lagrange = bposx[:, tslices[1]] - bposx[:, tslices[0]]
+    vy_lagrange = bposy[:, tslices[1]] - bposy[:, tslices[0]]
 
     # px where bposx == -1 will give -1. Same for py
-    px_lagrange = np.round((bposx[:, trange[0]:trange[-2]] + bposx[:, trange[1]:trange[-1]])/2)
-    py_lagrange = np.round((bposy[:, trange[0]:trange[-2]] + bposy[:, trange[1]:trange[-1]])/2)
+    px_lagrange = np.round((bposx[:, tslices[0]] + bposx[:, tslices[1]])/2)
+    py_lagrange = np.round((bposy[:, tslices[0]] + bposy[:, tslices[1]])/2)
     # Exclude the -1 flagged positions using a mask. Could there be NaNs left here?
     valid_mask = np.isfinite(vx_lagrange)
     # Taking the mask of the 2D arrays convert them to 1D arrays

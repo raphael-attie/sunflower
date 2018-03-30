@@ -1,55 +1,48 @@
 import sys
+# import matplotlib
+# matplotlib.use('qt5agg')
 import numpy as np
 from numpy import pi, cos, sin
 import cython_modules.interp as cinterp
 import fitstools
 import balltracking.balltrack as blt
+import matplotlib.pyplot as plt
+from skimage.feature import peak_local_max
+from skimage.morphology import watershed, disk
+from skimage.segmentation import find_boundaries
+from scipy.ndimage import gaussian_filter
+from image_processing import segmentation
 
 DTYPE = np.float32
 class MBT:
-
-    def __init__(self, dims, nt=1, rs =2, dp=0.3, td=5, zdamping=1,
-                 ballspacing=10, intsteps=15, sigma_factor=1, mag_thresh=20, nlevel=5, polarity=1,
+    def __init__(self, nt=1, rs =2, am=1, dp=0.3, td=5, zdamping=1,
+                 ballspacing=10, intsteps=15, mag_thresh=30, mag_thresh_sunspots=400, noise_level=20, polarity=1,
                  track_emergence=False, emergence_box=10, datafiles=None, data=None):
 
         self.datafiles = datafiles
         self.data = data
-        self.nx = int(dims[0])
-        self.ny = int(dims[1])
         self.nt = nt
         self.intsteps = intsteps
         self.rs = rs
         self.dp = dp
+        # Ballspacing is the minimum initial distance between the balls.
         self.ballspacing = ballspacing
         self.polarity=polarity
-        # Number of balls in a row
-        self.nballs_row = int((self.nx - 4 * self.rs) / self.ballspacing + 1)
-        # Number of balls in a column
-        self.nballs_col = int((self.ny - 4 * self.rs) / self.ballspacing + 1)
-        # Total number of balls
-        self.nballs = 0
-        # Image coordinates
-        self.xcoords = np.arange(self.nx)
-        self.ycoords = np.arange(self.ny)
-        # Image mesh
-        self.meshx, self.meshy = np.meshgrid(self.xcoords, self.ycoords)
-        # Initialize horizontal positions
-        #self.xstart, self.ystart = initialize_mesh(self)
-        #self.zstart = np.zeros(self.xstart.shape, dtype=np.float32)
-        # Maximum number of balls
-        self.nballs_max = 2*self.nx*self.ny
-        # Initialize the array of the lifetime (age) of the balls
-        self.balls_age = np.ones([self.nballs_max], dtype=np.uint32)
-        self.balls_age_t = np.ones([self.nballs_max, self.nt], dtype=np.uint32)
 
-        # Coarse grid
-        # Matlab: finegrid=zeros(ceil(BT.nr/BT.finegridspacing),ceil(BT.nc/BT.finegridspacing));
-        self.coarse_grid = np.zeros([np.ceil(self.ny/self.ballspacing).astype(int), np.ceil(self.nx/self.ballspacing).astype(int)], dtype=np.uint32)
-        # Dimensions of the coarse grid
-        self.nyc, self.nxc = self.coarse_grid.shape
+        # Load 1st image
+        self.image = load_data(self, 0)
+        self.nx = self.image.shape[1]
+        self.ny = self.image.shape[0]
+        # Contrary to the Matlab implementation, and given the new way of initialization with locating the local extrema,
+        # it seems more sensible to use a coarse grid with a grid size  < ballspacing.
+        # A grid size of one ball diameter appears reasonable. That defines the "removal_distance"
+        self.removal_distance = 2 * self.rs
+        # Dimensions of the coarse grid. Used only to remove balls when they are too close to each other
+        self.nxc, self.nyc = np.ceil(self.nx/self.removal_distance).astype(int), np.ceil(self.nx/self.removal_distance).astype(int) #self.coarse_grid.shape
+        #self.coarse_grid = np.zeros([self.nyc, self.nxc], dtype=np.uint32)
 
         # Acceleration factor (used to be 0.6 in Potts implementation)
-        self.am = 1.0
+        self.am = am
         # Force scaling factor
         self.k_force = self.am / (self.dp**2 * pi * self.rs**2)
         # Damping
@@ -57,131 +50,82 @@ class MBT:
         self.zdamping = zdamping
         self.e_td = np.exp(-1/self.td)
         self.e_tdz = np.exp(-1/self.zdamping)
+        # Deepest height below surface level at which ball can fall down.
+        self.min_ds = 4 * self.rs
 
-        # Rescaling factor for the standard deviation
-        self.sigma_factor = sigma_factor
-        self.mean = 0
-        self.sigma = 0
-
+        # Maximum number of balls that can possibly used
+        self.nballs_max = self.nxc*self.nyc
         # Current position, force and velocity components, updated after each frame
         self.pos = np.full([3, self.nballs_max], -1, dtype=DTYPE)
         self.vel = np.zeros([3, self.nballs_max], dtype=DTYPE)
         self.force = np.zeros([3, self.nballs_max], dtype=DTYPE)
-        self.age = np.zeros([self.nballs_max], dtype=np.uint32)
+        # Array of the lifetime (age) of the balls
+        self.balls_age = np.ones([self.nballs_max], dtype=np.uint32)
         # Storage arrays of the above, for all time steps
         self.ballpos = np.zeros([3, self.nballs_max, self.nt], dtype=DTYPE)
+        self.balls_age_t = np.ones([self.nballs_max, self.nt], dtype=np.uint32)
 
         # Ball grid and mesh. Add +1 at the np.arange stop for including right-hand side boundary
-        self.ballgrid = np.arange(-self.rs, self.rs + 1, dtype=DTYPE)
+        self.ballgrid = np.arange(-self.rs-1, self.rs + 2, dtype=DTYPE)
         self.ball_cols, self.ball_rows = np.meshgrid(self.ballgrid, self.ballgrid)
         self.bcols = self.ball_cols.ravel()[:, np.newaxis]
         self.brows = self.ball_rows.ravel()[:, np.newaxis]
         self.ds    = np.zeros([self.bcols.shape[0]], dtype=DTYPE)
-        # Initialize deepest height at a which ball can fall down. Typically it will be set to a multiple of -surface.std().
-        self.min_ds = -5
+
         # Mask of bad balls
         self.bad_balls_mask = np.zeros(self.nballs_max, dtype=bool)
         # Mask of valid balls
         self.new_valid_balls_mask = np.ones(self.nballs_max, dtype=bool)
+        self.valid_balls_mask_t = np.ones([self.nballs_max, self.nt], dtype=bool)
 
         # Data dependent parameters
-        self.noise_level = nlevel
+        self.noise_level = noise_level
         self.mag_thresh = mag_thresh
+        self.mag_thresh_sunspots = mag_thresh_sunspots
         self.track_emergence = track_emergence
         self.emergence_box = emergence_box
 
-        self.xstart = 0
-        self.ystart = 0
-        self.zstart = 0
-        # Initialize data & surface. Will update each time a new one is loaded.
-        self.image = 0
-        self.surface = 0
-
-        self.unique_valid_balls = 0
-
-    def initialize(self):
-
-        if self.data is None:
-            self.image = fitstools.fitsread(self.datafiles, tslice=0).astype(DTYPE)
-        else:
-            self.image = self.data[:,:,0]
-
-        # Initialize for positive flux (we'll see how it goes to parallelize + // -)
-        ypos, xpos = np.where(self.image > self.mag_thresh)
-        pos = np.array([xpos, ypos], dtype=DTYPE)
-
+        # Initialization of ball positions
+        self.image = load_data(self, 0)
         self.surface = prep_data(self.image)
-
-        set_bad_balls(self, pos, check_polarity=False, check_noise=False, check_sinking=False)
-        self.nballs = self.unique_valid_balls.size
-
-        self.xstart = pos[0, self.unique_valid_balls]
-        self.ystart = pos[1, self.unique_valid_balls]
+        self.xstart, self.ystart = get_local_extrema_ar(self.image, self.surface, self.polarity, self.ballspacing, self.mag_thresh, self.mag_thresh_sunspots)
+        self.nballs = self.xstart.size
         self.zstart = blt.put_balls_on_surface(self.surface, self.xstart, self.ystart, self.rs, self.dp)
 
-        # Insert the init positions contiguously
-        self.pos[0:2, 0:self.nballs] = pos[0:2, self.unique_valid_balls]
+        self.pos[0, 0:self.nballs] = self.xstart.copy()
+        self.pos[1, 0:self.nballs] = self.ystart.copy()
         self.pos[2, 0:self.nballs] = self.zstart.copy()
 
         self.new_valid_balls_mask = np.zeros([self.nballs_max], dtype=bool)
         self.new_valid_balls_mask[0:self.nballs] = True
         self.unique_valid_balls = np.arange(self.nballs)
 
-        return
-
-    def initialize2(self):
-
-        if self.data is None:
-            self.image = fitstools.fitsread(self.datafiles, tslice=0).astype(DTYPE)
-        else:
-            self.image = self.data[:,:,0]
-
-        # Initialize for positive flux (we'll see how it goes to parallelize + // -
-        posy, posx = np.where(self.image > self.mag_thresh)
-        nballs = posx.size
-        coarse_grid = self.coarse_grid.copy()
-
-        keep_balls = np.ones([nballs], dtype=bool)
-
-        for n in range(nballs):
-
-            xf = np.uint32(np.ceil(posx[n])/self.ballspacing)
-            yf = np.uint32(np.ceil(posy[n])/self.ballspacing)
-
-            coarse_grid[yf, xf] +=1
-
-            if coarse_grid[yf, xf] >1:
-                keep_balls[n] = False
-                coarse_grid[yf, xf] -= 1
-
-        posx = posx[keep_balls]
-        posy = posy[keep_balls]
-
-        return posx, posy
-
-
 
     def track_all_frames(self):
 
-        self.initialize()
-
-
         for n in range(self.nt):
 
-            #print('Frame n=%d'%n)
+            print('Frame n=%d'%n)
 
-            if self.data is None:
-                self.image = fitstools.fitsread(self.datafiles, tslice=0).astype(np.float32)
-            else:
-                self.image = self.data[:, :, 0]
-
+            self.image = load_data(self, n)
             self.surface = prep_data(self.image)
+
+            if self.track_emergence and n > 0:
+                self.populate_emergence()
             # The current position "pos" and velocity "vel" are attributes of bt.
             # They are integrated in place.
-            for i in range(self.intsteps):
-                #print('intermediate step i=%d'%i)
-                blt.integrate_motion(self, self.surface)
 
+            for i in range(self.intsteps):
+
+                #print('intermediate step i=%d'%i)
+                #fig_title = '/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/mballtrack/frame_%d_%d.png'%(n,i)
+                #plot_balls_over_frame(self.image, self.pos[0, :], self.pos[1, :], fig_title)
+                # Interpolate surface
+                #surface = (old_surface*(self.intsteps - i) + self.surface)/self.intsteps
+                blt.integrate_motion(self, self.surface)
+            #old_surface = self.surface.copy()
+            # fig_title = '/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/mballtrack/frame_%d_%d.png'%(n,self.intsteps)
+            # plot_balls_over_frame(self.image, self.pos[0, :], self.pos[1, :], fig_title)
             set_bad_balls(self, self.pos)
 
             # Flag the bad balls with -1
@@ -189,19 +133,45 @@ class MBT:
             self.vel[:, self.bad_balls_mask] = np.nan
             self.balls_age[self.new_valid_balls_mask] += 1
 
-            self.balls_age_t[:, n] = self.balls_age.copy()
             self.ballpos[..., n] = self.pos.copy()
+            self.balls_age_t[:, n] = self.balls_age.copy()
+            self.valid_balls_mask_t[:,n] = self.new_valid_balls_mask
+
+        # Trim the array down to the actual number of balls used so far.
+        # That number has been incremented each time new balls were added, in self.populate_emergence
+        self.ballpos = self.ballpos[0:self.nballs, ...]
+        self.balls_age_t = self.balls_age_t[0:self.nballs, :]
+        self.valid_balls_mask_t = self.valid_balls_mask_t[0:self.nballs, :]
+
+
+
+    def track_all_frames_debug(self):
+
+        for n in range(self.nt):
+
+            print('Frame n=%d'%n)
+
+            self.image = load_data(self, n)
+            self.surface = prep_data(self.image)
+
+            if self.track_emergence and n > 0:
+                self.populate_emergence()
+
+            for i in range(self.intsteps):
+                blt.integrate_motion(self, self.surface)
+
+            self.ballpos[..., n] = self.pos.copy()
+
 
     def populate_emergence(self):
 
-        # Get the flux according to which polarity the tracking is set to.
-        if self.polarity >= 0:
-            flux_posy, flux_posx = np.where(self.image > self.mag_thresh)
-        else:
-            flux_posy, flux_posx = np.where(self.image < -self.mag_thresh)
+        flux_posx, flux_posy = get_local_extrema_ar(self.image, self.surface, self.polarity, self.ballspacing, self.mag_thresh, self.mag_thresh_sunspots)
 
+        # TODO: Consider profiling this for optimization
         # Consider getting a view by using tuples of indices...
         # For now we are getting a copy
+        # TODO: Consider being consistent with a coarser grid for stronger pixels, in set_bad_balls
+
         ball_posx, ball_posy = self.pos[0:2, self.new_valid_balls_mask]
 
         distance_matrix = np.sqrt((flux_posx[:,np.newaxis] - ball_posx[np.newaxis,:])**2 + (flux_posy[:,np.newaxis] - ball_posy[np.newaxis,:])**2)
@@ -211,18 +181,127 @@ class MBT:
         # Populate only if there's something
         if populate_flux_mask.sum() > 0 :
 
-            newposx = flux_posx[populate_flux_mask]
-            newposy = flux_posx[populate_flux_mask]
+            newposx = flux_posx[populate_flux_mask].view('int32').copy(order='C')
+            newposy = flux_posy[populate_flux_mask].view('int32').copy(order='C')
+
+            within_edges_mask = np.logical_not(blt.get_off_edges(self, newposx, newposy))
+            newposx = newposx[within_edges_mask]
+            newposy = newposy[within_edges_mask]
+
+            # Emergence detection is pixel-wise. Using interpolation in Matlab was an oversight.
+            # only integer coordinates that come out of this. Interpolation is totally useless
+            # I can index directly in the array.
+            #newposz = self.surface[newposy, newposx]
             newposz = blt.put_balls_on_surface(self.surface, newposx, newposy, self.rs, self.dp)
 
             # Insert the new positions contiguously in the self.pos array
             # We need to use the number of balls at initialization (self.nballs) and increment it with the number
-            # of new balls to populate the emerging flux.
-            self.pos[0, self.nballs:self.nballs+newposx.size] = newposx
+            # of new balls that will populate and track the emerging flux.
+            self.pos[0, self.nballs:self.nballs + newposx.size] = newposx
             self.pos[1, self.nballs:self.nballs + newposx.size] = newposy
             self.pos[2, self.nballs:self.nballs + newposx.size] = newposz
+            # Initialize the velocity, otherwise they could be NaN
+            self.vel[:, self.nballs:self.nballs + newposx.size] = 0
 
+            # Must add these new balls to self.new_valid_balls_mask and bad_balls_mask
+            self.bad_balls_mask[self.nballs:self.nballs + newposx.size] = False
+            self.new_valid_balls_mask = np.logical_not(self.bad_balls_mask)
             self.nballs += newposx.size
+
+
+
+
+
+def mballtrack_main(**kwargs):
+
+    mbt_p = MBT(polarity=1, **kwargs)
+    mbt_p.track_all_frames()
+    mbt_n = MBT(polarity=-1, **kwargs)
+    mbt_n.track_all_frames()
+
+    return mbt_p, mbt_n
+
+
+def load_data(mbt, n):
+    if mbt.data is None:
+        image = fitstools.fitsread(mbt.datafiles, tslice=n).astype(DTYPE)
+    else:
+        image = mbt.data[:,:,n]
+    return image
+
+def get_local_extrema(image, surface, polarity, min_distance, threshold):
+
+    # Get a mask of where to look for local maxima.
+    if polarity >= 0:
+        mask_maxi = image >= threshold
+    else:
+        mask_maxi = image <= -threshold
+
+    # Look for local maxima, get a list of coordinates. Use a geater grid size for sunspot.
+    # Outside sunspot
+    #surface_sm = -gaussian_filter(surface, sigma=3)
+    #surface_sm2 = surface_sm + np.abs(surface_sm.min())
+
+    se = disk(round(min_distance/2))
+    #se = np.ones([min_distance, min_distance])
+    ystart, xstart = np.array( peak_local_max(np.abs(image), indices=True, footprint=se,labels=mask_maxi)).T
+
+    # Because transpose only creates a view, and this is eventually given to a C function, it needs to be copied as C-ordered
+    return xstart.copy(order='C'), ystart.copy(order='C')
+
+
+def get_local_extrema_ar(image, surface, polarity, min_distance, threshold, threshold2):
+    """
+    Find the coordinates of local extrema with special treatment of Active Regions.
+    Similar to get_local_extrema() but uses a grid size (min_distance) 3x greater
+    in regions that exceeds a higher threshold.
+
+    :param image: typically a magnetogram. Can be anything whose larger region have a pixels of higher intensity.
+    :param polarity: 0,+1 for positive flux or intensity. -1 for negative flux or intensity
+    :param min_distance: minimum distance to consider between local extrema.
+    :param threshold: pixels below this value are ignored
+    :param threshold2: values that define the regions of higher intensity.
+    :return: arrays of coordinates of local extrema
+    """
+
+    xstart, ystart = get_local_extrema(image, surface, polarity, min_distance, threshold)
+    # Get the intensity at these locations
+    data_int = image[ystart, xstart]
+    # Build a distance-based matrix for coordinates of pixel whose intensity is above 400G, and keep the maximum
+    if polarity >= 0:
+        select_mask = np.logical_and(data_int >=0, data_int < threshold2)
+        mask_maxi_sunspots = image >= threshold2
+    else:
+        select_mask = np.logical_and(data_int < 0, data_int > -threshold2)
+        mask_maxi_sunspots = image < - threshold2
+
+    xstart1, ystart1 = xstart[select_mask], ystart[select_mask]
+
+    se = disk(round(min_distance/2))
+    #se = np.ones([3*min_distance, 3*min_distance])
+
+    ystart2, xstart2 = np.array(peak_local_max(np.abs(image), indices=True,
+                                               footprint= se,
+                                               labels=mask_maxi_sunspots), dtype=DTYPE).T
+
+    xstart = np.concatenate((xstart1, xstart2))
+    ystart = np.concatenate((ystart1, ystart2))
+
+    return xstart, ystart
+
+# def get_local_extrema_ar2(image, polarity, threshold):
+#
+#
+#     data = image.astype(np.float64)
+#     #TODO: Check if this is not overkill; since each value is compared against the threshold, this might not be needed
+#     if polarity >= 0:
+#         signed_data = np.ma.masked_less(data, 0).filled(0)
+#     else:
+#         signed_data = np.ma.masked_less(-data, 0).filled(0)
+#
+#     labels = segmentation.detect_polarity(signed_data, float(threshold))
+#
+#     return labels
 
 
 def prep_data(image):
@@ -270,8 +349,8 @@ def set_bad_balls(bt, pos, check_polarity=True, check_noise=True, check_sinking=
         # This assumes the vertical position have already been set
         # That is not the case when decimating the balls at the initialization state
         # Thus this check should be set to false during initialization
-        sunk_mask = pos2[2,:] > bt.surface[pos2[1, :], pos2[0, :]] - 4*bt.rs
-        valid_balls_mask2 = np.logical_and(valid_balls_mask2, sunk_mask)
+        unsunk_mask = pos2[2,:] > bt.surface[pos2[1, :], pos2[0, :]] - bt.min_ds
+        valid_balls_mask2 = np.logical_and(valid_balls_mask2, unsunk_mask)
 
     # Get indices in the original array. Remember that valid_balls_mask2 has the same size as pos2
     valid_balls_idx = valid_balls_idx[valid_balls_mask2]
@@ -282,7 +361,7 @@ def set_bad_balls(bt, pos, check_polarity=True, check_noise=True, check_sinking=
 
     ## Decimation based on the coarse grid.
     # Get the 1D position on the coarse grid, clipped to the edges of that grid.
-    _, _, coarse_pos = blt.coarse_grid_pos(bt, xpos, ypos)
+    _, _, coarse_pos = coarse_grid_pos(bt, xpos, ypos)
 
     # Get ball number and balls age sorted by position, sort positions too, and array of valid balls indices as well!!!
     sorted_balls = np.argsort(coarse_pos)
@@ -300,13 +379,108 @@ def set_bad_balls(bt, pos, check_polarity=True, check_noise=True, check_sinking=
     # They are simply the ones not listed by unique_oldest_balls
     bt.bad_balls_mask = np.ones([pos.shape[1]], dtype=bool)
     bt.bad_balls_mask[bt.unique_valid_balls] = False
-
     # Update mask of valid balls and increment the age of valid balls only
     bt.new_valid_balls_mask = np.logical_not(bt.bad_balls_mask)
     return
 
+def coarse_grid_pos(mbt, x, y):
+
+    # Get the position on the coarse grid, clipped to the edges of that grid.
+    xcoarse = np.uint32(np.clip(np.floor(x / mbt.removal_distance), 0, mbt.nxc-1))
+    ycoarse = np.uint32(np.clip(np.floor(y / mbt.removal_distance), 0, mbt.nyc-1))
+    # Convert to linear (1D) indices. One index per ball
+    #coarse_idx = np.ravel_multi_index((ycoarse, xcoarse), mbt.coarse_grid.shape)
+    coarse_idx = np.ravel_multi_index((ycoarse, xcoarse), (mbt.nyc, mbt.nxc))
+    return xcoarse, ycoarse, coarse_idx
+
+
+def merge_positive_negative_tracking(mbt_p, mbt_n):
+
+    # Get a view that gets rid of the z-coordinate
+    pos_p = mbt_p.ballpos[slice(0,1), ...]
+    pos_n = mbt_n.ballpos[slice(0,1), ...]
+    # Merge
+    pos = np.concatenate((pos_p, pos_n), axis=1)
+    return pos
+
+
+def get_balls_at(x, y, xpos, ypos, tolerance=0.2):
+
+    return np.where((np.abs(xpos - x) < tolerance) & (np.abs(ypos - y) < tolerance))[0]
+
+
+def label_from_pos(x, y, dims):
+
+    label_map = np.zeros(dims, dtype=np.int64)
+    labels = np.arange(x.size, dtype = np.int64)+1
+    # This assumes bad balls are flagged with coordinate value of -1 in x (and y)
+    valid_mask = x > 0
+    label_map[y[valid_mask], x[valid_mask]] = labels[valid_mask]
+
+    return label_map
+
+def marker_watershed(data, x, y, threshold, polarity):
+
+    markers = label_from_pos(x, y, data.shape)
+    if polarity >=0:
+        mask_ws = data > threshold
+    else:
+        mask_ws = data < -threshold
+    labels = watershed(-np.abs(data), markers, mask=mask_ws)
+    borders = find_boundaries(labels)
+    # Subtract 1 to align with the ball number series. E.g: watershed label 0 corresponds to ball #0
+    labels -=1
+    return labels, markers, borders
+
+def watershed_series(datafile, nframes, threshold, polarity, ballpos):
+
+    # Declare an empty list for storing the watershed labels map at each frame
+    ws_series = []
+    markers_series = []
+    borders_series = []
+    # For parallelization, need to see how to share a proper container, whatever is more efficient
+    for i in range(nframes):
+        print('Frame #%i'%i)
+        data = fitstools.fitsread(datafile, tslice=i)
+        # Get a view of (x,y) coords at frame #i (use slice instead of fancy insteading). Either with slice(0,1) or 0:2
+        # I'll use slice for clarity
+        # positions = ballpos[slice(0,1),:,i]
+        labels_ws, markers, borders = marker_watershed(data, ballpos[0,:,i], ballpos[1,:,i], threshold, polarity)
+        ws_series.append(labels_ws)
+        markers_series.append(markers)
+        borders_series.append(borders)
+
+
+    return ws_series, markers_series, borders_series
+
+def merge_watershed(labels_p, borders_p, nballs_p, labels_n, borders_n):
+    """
+    Merge the results from markers-watershed the positive and negative flux.
+    The output borders array for positive flux stay at +1, but borders of negative values are set at -1.
+
+    :param labels_p: Array of watershed labels for positive flux
+    :param borders_p: Array of watershed borders for positive flux
+    :param labels_n: Array of watershed labels for negative flux
+    :param borders_n: Array of watershed borders for negative flux
+    :return: Array of same shape as input. +1 on borders of positive flux, -1 for negative flux
+    """
+
+    ws_labels = labels_p.copy()
+    ws_labels[labels_n >= 0] = nballs_p + labels_n[labels_n >= 0] + 1
+    borders = borders_p.copy().astype(np.int8)
+    borders[borders_n == 1] = -1
+
+    return ws_labels, borders
 
 
 
-
+def plot_balls_over_frame(frame, x, y, fig_title):
+    plt.figure(0, figsize=(11.5, 9))
+    plt.imshow(frame, vmin=-100, vmax=100, cmap='gray')
+    plt.plot(x, y, ls='none', marker='+', color='green', markerfacecolor='none', ms=2)
+    plt.axis([0, frame.shape[1], 0, frame.shape[0]])
+    plt.colorbar()
+    plt.tight_layout()
+    plt.savefig(fig_title)
+    plt.close()
 

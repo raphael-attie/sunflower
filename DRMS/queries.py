@@ -47,6 +47,7 @@ def query_mtrack(seriesname, t_start, t_stop, projection, localpath):
 
     urllib.request.urlcleanup()
 
+    sudir_line=''
     look_for = "SUDIR="
     with open(show_info_file, "r") as file_to_read:
         for line in file_to_read:
