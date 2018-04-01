@@ -174,8 +174,8 @@ flow.seed.update_pipeline()
 #flow.update_pipeline()
 
 
-#mlab.savefig('/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/figures/maya_fig.png', magnification=4)
-mlab.savefig('/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/figures/maya_fig.png')
+mlab.savefig('/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/figures/maya_fig_recent.png', magnification=4)
+#mlab.savefig('/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/figures/maya_fig_recent.png')
 
 
 mlab.draw()
