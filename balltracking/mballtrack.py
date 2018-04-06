@@ -68,8 +68,8 @@ class MBT:
         # Ball grid and mesh. Add +1 at the np.arange stop for including right-hand side boundary
         self.ballgrid = np.arange(-self.rs-1, self.rs + 2, dtype=DTYPE)
         self.ball_cols, self.ball_rows = np.meshgrid(self.ballgrid, self.ballgrid)
-        self.bcols = self.ball_cols.ravel()[:, np.newaxis]
-        self.brows = self.ball_rows.ravel()[:, np.newaxis]
+        self.bcols = self.ball_cols.ravel()[:, np.newaxis].astype(DTYPE)
+        self.brows = self.ball_rows.ravel()[:, np.newaxis].astype(DTYPE)
         self.ds    = np.zeros([self.bcols.shape[0]], dtype=DTYPE)
 
         # Mask of bad balls
@@ -105,7 +105,7 @@ class MBT:
 
         for n in range(self.nt):
 
-            print('Frame n=%d'%n)
+            #print('Frame n=%d'%n)
 
             self.image = load_data(self, n)
             self.surface = prep_data(self.image)
@@ -432,20 +432,21 @@ def marker_watershed(data, x, y, threshold, polarity):
     labels -=1
     return labels, markers, borders
 
-def watershed_series(datafile, nframes, threshold, polarity, ballpos):
+def watershed_series(datafile, nframes, threshold, polarity, ballpos, verbose=False):
 
     # Declare an empty list for storing the watershed labels map at each frame
     ws_series = []
     markers_series = []
     borders_series = []
     # For parallelization, need to see how to share a proper container, whatever is more efficient
-    for i in range(nframes):
-        print('Frame #%i'%i)
-        data = fitstools.fitsread(datafile, tslice=i)
+    for n in range(nframes):
+        if verbose:
+            print('Watershed series frame n = %d'%n)
+        data = fitstools.fitsread(datafile, tslice=n)
         # Get a view of (x,y) coords at frame #i (use slice instead of fancy insteading). Either with slice(0,1) or 0:2
         # I'll use slice for clarity
-        # positions = ballpos[slice(0,1),:,i]
-        labels_ws, markers, borders = marker_watershed(data, ballpos[0,:,i], ballpos[1,:,i], threshold, polarity)
+        # positions = ballpos[slice(0,1),:,n]
+        labels_ws, markers, borders = marker_watershed(data, ballpos[0,:,n], ballpos[1,:,n], threshold, polarity)
         ws_series.append(labels_ws)
         markers_series.append(markers)
         borders_series.append(borders)
