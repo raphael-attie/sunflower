@@ -212,6 +212,9 @@ class MBT:
 
 
 
+
+
+
 def mballtrack_main(**kwargs):
 
     mbt_p = MBT(polarity=1, **kwargs)
@@ -411,8 +414,8 @@ def get_balls_at(x, y, xpos, ypos, tolerance=0.2):
 
 def label_from_pos(x, y, dims):
 
-    label_map = np.zeros(dims, dtype=np.int64)
-    labels = np.arange(x.size, dtype = np.int64)+1
+    label_map = np.zeros(dims, dtype= np.int32)
+    labels = np.arange(x.size, dtype = np.int32)+1
     # This assumes bad balls are flagged with coordinate value of -1 in x (and y)
     valid_mask = x > 0
     label_map[y[valid_mask], x[valid_mask]] = labels[valid_mask]
@@ -434,10 +437,12 @@ def marker_watershed(data, x, y, threshold, polarity):
 
 def watershed_series(datafile, nframes, threshold, polarity, ballpos, verbose=False):
 
-    # Declare an empty list for storing the watershed labels map at each frame
-    ws_series = []
-    markers_series = []
-    borders_series = []
+    # Load a sample to determine shape
+    data = fitstools.fitsread(datafile, tslice=0)
+    ws_series = np.empty([nframes, data.shape[1], data.shape[0]], dtype=np.int32)
+    markers_series = np.empty([nframes, data.shape[1], data.shape[0]], dtype=np.int32)
+    borders_series = np.empty([nframes, data.shape[1], data.shape[0]], dtype=np.bool)
+
     # For parallelization, need to see how to share a proper container, whatever is more efficient
     for n in range(nframes):
         if verbose:
@@ -447,10 +452,9 @@ def watershed_series(datafile, nframes, threshold, polarity, ballpos, verbose=Fa
         # I'll use slice for clarity
         # positions = ballpos[slice(0,1),:,n]
         labels_ws, markers, borders = marker_watershed(data, ballpos[0,:,n], ballpos[1,:,n], threshold, polarity)
-        ws_series.append(labels_ws)
-        markers_series.append(markers)
-        borders_series.append(borders)
-
+        ws_series[n,...] = labels_ws
+        markers_series[n,...] = markers
+        borders_series[n,...] = borders
 
     return ws_series, markers_series, borders_series
 

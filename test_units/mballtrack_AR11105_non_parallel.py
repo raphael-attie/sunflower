@@ -17,6 +17,9 @@ from skimage.exposure import rescale_intensity
 from skimage.morphology import thin
 from sklearn.metrics.pairwise import euclidean_distances
 import matplotlib.animation as animation
+from datetime import datetime
+import pickle
+
 DTYPE = np.float32
 
 def custom_cmap(nballs):
@@ -116,11 +119,14 @@ def init():
     line = [line1p, line1n, line2p, line2n]
     return line
 
+def save_object(obj, filename):
+    with open(filename, 'wb') as output:  # Overwrites any existing file.
+        pickle.dump(obj, output, pickle.HIGHEST_PROTOCOL)
 
 
 datafile = '/Users/rattie/Data/SDO/HMI/EARs/AR11105_2010_09_02_Aimee/mtrack_20100901_120034_TAI_20100902_120034_TAI_LambertCylindrical_magnetogram.fits'
 
-mbt_dict = {"nt":50,
+mbt_dict = {"nt":1920,
             "rs":2,
             "am":0.5,
             "dp":0.3,
@@ -139,12 +145,42 @@ mbt_dict = {"nt":50,
 # prows, pcols = np.where(dist > 2*mbt_p.ballspacing)
 # # Each element in the above prows and pcols are indices in the distance array.
 
+start_time = datetime.now()
+
 mbt_p, mbt_n = mblt.mballtrack_main(**mbt_dict)
 
+fname = '/Users/rattie/Data/SDO/HMI/EARs/AR11105_2010_09_02_Aimee/mbt_pn.pkl'
+save_object([mbt_p, mbt_n], fname)
+
+elapsed_time1 = datetime.now() - start_time
+print("Tracking time: %d s"%elapsed_time1.total_seconds())
+
+# Restore
+# with open(fname, 'rb') as input:
+#     mbt_p, mbt_n = pickle.load(input)
+
 # Flux extraction by markers-based watershed
+
 ws_list_p, markers_list_p, borders_list_p = mblt.watershed_series(mbt_dict['datafiles'], mbt_dict['nt'], mbt_dict['noise_level'], 1, mbt_p.ballpos.astype(np.int32))
 ws_list_n, markers_list_n, borders_list_n = mblt.watershed_series(mbt_dict['datafiles'], mbt_dict['nt'], mbt_dict['noise_level'], -1, mbt_n.ballpos.astype(np.int32))
 
+elapsed_time2 = datetime.now() - start_time
+print("Total time: %d s"%elapsed_time2.total_seconds())
+
+fname = '/Users/rattie/Data/SDO/HMI/EARs/AR11105_2010_09_02_Aimee/watershed_arrays.npz'
+np.savez(fname,
+         ws_list_p=ws_list_p, markers_list_p=markers_list_p, borders_list_p=borders_list_p,
+         ws_list_n=ws_list_n, markers_list_n=markers_list_n, borders_list_n=borders_list_n)
+
+# load above saved file as:
+# npzfile = np.load(fname)
+# List content with: npzfile.files
+# Get a specific array named 'a' with:
+# a = npzfile['a']
+
+
+
+### Get a sample
 data = fitstools.fitsread(datafile, tslice=0).astype(DTYPE)
 ws_labels, borders = mblt.merge_watershed(ws_list_p[0], borders_list_p[0], mbt_p.nballs, ws_list_n[0], borders_list_n[0])
 

@@ -17,6 +17,7 @@ from skimage.exposure import rescale_intensity
 from skimage.morphology import thin
 from sklearn.metrics.pairwise import euclidean_distances
 import matplotlib.animation as animation
+from datetime import datetime
 DTYPE = np.float32
 
 def custom_cmap(nballs):
@@ -139,6 +140,8 @@ mbt_dict = {"nt":50,
 # prows, pcols = np.where(dist > 2*mbt_p.ballspacing)
 # # Each element in the above prows and pcols are indices in the distance array.
 
+start_time = datetime.now()
+
 mbt_p, mbt_n = mblt.mballtrack_main(**mbt_dict)
 
 # Flux extraction by markers-based watershed
@@ -151,7 +154,9 @@ ws_labels, borders = mblt.merge_watershed(ws_list_p[0], borders_list_p[0], mbt_p
 range_minmax = (-200,200)
 data_borders_rgb = make_data_borders_rgb(data, borders, range_minmax)
 
+elapsed_time = datetime.now() - start_time
 
+print("Total time: %d s"%elapsed_time.total_seconds())
 
 ### Visualize
 
