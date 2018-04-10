@@ -407,17 +407,23 @@ def compute_force(bt, brows, bcols, xt, yt, zt, ds):
     delta_z = ds - zt
 
     r = np.sqrt(delta_x** 2 + delta_y**2 + delta_z**2)
+    r_h = np.sqrt(delta_x** 2 + delta_y**2)
     # Singularity at r = 0. Need to get rid of them.
     # & Force that are beyond the radius must be set to zero
     rmask = np.logical_or(r == 0, r > bt.rs)
-    rm = np.ma.masked_array(r, mask=rmask)
+    rmask_h = np.logical_or(r == 0, r_h > bt.rs)
 
-    f = bt.k_force * (r - bt.rs)
+    rm = np.ma.masked_array(r, mask=rmask)
+    rm_h = np.ma.masked_array(r, mask=rmask_h)
+
+    f = bt.k_force * (rm - bt.rs)
+    f_h = bt.k_force * (rm_h - bt.rs)
     # Calculate each force vector component
-    fxtm = -np.sum(f * delta_x / rm, 0)
-    fytm = -np.sum(f * delta_y / rm, 0)
+    fxtm = np.sum(np.abs(f_h) * delta_x / rm_h, 0)
+    fytm = np.sum(np.abs(f_h) * delta_y / rm_h, 0)
     # Buoyancy must stay oriented upward. Used to be signed, but that caused more lost balls without other advantage
-    fztm = -np.sum(f * np.abs(delta_z) / rm, 0) - bt.am
+    fztm = -np.sum(f * np.abs(delta_z) / rm_h, 0) - bt.am
+    #fztm[...] = 0
 
     # Return the plain numpy array instead of the masked array. The fill value will ensure that in case of
     # a sum performed on an entirely masked array (all elements ignored), we don't end up with the default filled value

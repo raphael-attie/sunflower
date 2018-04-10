@@ -64,9 +64,13 @@ class MBT:
         # Storage arrays of the above, for all time steps
         self.ballpos = np.zeros([3, self.nballs_max, self.nt], dtype=DTYPE)
         self.balls_age_t = np.ones([self.nballs_max, self.nt], dtype=np.uint32)
+        # Store intermediate positions, force and velocity
+        self.ballpos_inter = np.zeros([3, self.nballs_max, self.intsteps])
+        self.vel_inter = np.zeros([3, self.nballs_max, self.intsteps])
+        self.force_inter = []
 
         # Ball grid and mesh. Add +1 at the np.arange stop for including right-hand side boundary
-        self.ballgrid = np.arange(-self.rs-1, self.rs + 2, dtype=DTYPE)
+        self.ballgrid = np.arange(-self.rs, self.rs + 1, dtype=DTYPE)
         self.ball_cols, self.ball_rows = np.meshgrid(self.ballgrid, self.ballgrid)
         self.bcols = self.ball_cols.ravel()[:, np.newaxis].astype(DTYPE)
         self.brows = self.ball_rows.ravel()[:, np.newaxis].astype(DTYPE)
@@ -75,7 +79,6 @@ class MBT:
         # Mask of bad balls
         self.bad_balls_mask = np.zeros(self.nballs_max, dtype=bool)
         # Mask of valid balls
-        self.new_valid_balls_mask = np.ones(self.nballs_max, dtype=bool)
         self.valid_balls_mask_t = np.ones([self.nballs_max, self.nt], dtype=bool)
 
         # Data dependent parameters
@@ -163,6 +166,15 @@ class MBT:
             self.ballpos[..., n] = self.pos.copy()
 
 
+    def track_start_intermediate(self):
+
+        for i in range(self.intsteps):
+            pos, vel, force = blt.integrate_motion(self, self.surface, return_copies=True)
+            self.ballpos_inter[...,i] = pos
+            self.vel_inter[...,i] = vel
+            self.force_inter.append(force)
+
+
     def populate_emergence(self):
 
         flux_posx, flux_posy = get_local_extrema_ar(self.image, self.surface, self.polarity, self.ballspacing, self.mag_thresh, self.mag_thresh_sunspots)
@@ -210,16 +222,11 @@ class MBT:
 
 
 
-
-
-
-
-
 def mballtrack_main(**kwargs):
 
     mbt_p = MBT(polarity=1, **kwargs)
-    mbt_p.track_all_frames()
     mbt_n = MBT(polarity=-1, **kwargs)
+    mbt_p.track_all_frames()
     mbt_n.track_all_frames()
 
     return mbt_p, mbt_n
@@ -439,6 +446,7 @@ def watershed_series(datafile, nframes, threshold, polarity, ballpos, verbose=Fa
 
     # Load a sample to determine shape
     data = fitstools.fitsread(datafile, tslice=0)
+
     ws_series = np.empty([nframes, data.shape[1], data.shape[0]], dtype=np.int32)
     markers_series = np.empty([nframes, data.shape[1], data.shape[0]], dtype=np.int32)
     borders_series = np.empty([nframes, data.shape[1], data.shape[0]], dtype=np.bool)

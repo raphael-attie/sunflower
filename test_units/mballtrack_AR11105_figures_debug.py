@@ -57,12 +57,8 @@ def make_data_borders_rgb(data, borders, in_range):
 
 
 
-def save_object(obj, filename):
-    with open(filename, 'wb') as output:  # Overwrites any existing file.
-        pickle.dump(obj, output, pickle.HIGHEST_PROTOCOL)
-
-
 datafile = '/Users/rattie/Data/SDO/HMI/EARs/AR11105_2010_09_02_Aimee/mtrack_20100901_120034_TAI_20100902_120034_TAI_LambertCylindrical_magnetogram.fits'
+
 
 mbt_dict = {"nt":1920,
             "rs":2,
@@ -77,39 +73,44 @@ mbt_dict = {"nt":1920,
             "track_emergence":True,
             "datafiles":datafile}
 
+mbtp = mblt.MBT(polarity=1, **mbt_dict)
+mbtp.track_start_intermediate()
 
-### Start processing
+### Get a sample
+data = fitstools.fitsread(datafile, tslice=0).astype(DTYPE)
+range_minmax = (-200,200)
 
-start_time = datetime.now()
 
-mbt_p, mbt_n = mblt.mballtrack_main(**mbt_dict)
+### Visualize
+surface = mbtp.surface
 
-fname = '/Users/rattie/Data/SDO/HMI/EARs/AR11105_2010_09_02_Aimee/mbt_pn.pkl'
-save_object([mbt_p, mbt_n], fname)
+ball = mblt.get_balls_at(mbtp.xstart, mbtp.ystart, 285, 211) # 129
+xt, yt, zt = mbtp.xstart[ball], mbtp.ystart[ball], mbtp.zstart[ball]
 
-elapsed_time1 = datetime.now() - start_time
-print("Tracking time: %d s"%elapsed_time1.total_seconds())
 
-# Restore
-# with open(fname, 'rb') as input:
-#     mbt_p, mbt_n = pickle.load(input)
+fig = plt.figure(figsize=(8, 8))
+ax1 = plt.subplot(111)
+im1 = ax1.imshow(surface, cmap='gray', origin='lower', interpolation='nearest')
+line1p, = plt.plot(xt, yt, marker='.', ms=2, color='red', ls='none')
 
-# Flux extraction by markers-based watershed
+fxp, fyp, fzp = mbtp.force_inter[0][0:3,ball]
+vxp, vyp = mbtp.vel_inter[0, ball, 0], mbtp.vel_inter[1, ball, 0]
 
-ws_list_p, markers_list_p, borders_list_p = mblt.watershed_series(mbt_dict['datafiles'], mbt_dict['nt'], mbt_dict['noise_level'], 1, mbt_p.ballpos.astype(np.int32))
-ws_list_n, markers_list_n, borders_list_n = mblt.watershed_series(mbt_dict['datafiles'], mbt_dict['nt'], mbt_dict['noise_level'], -1, mbt_n.ballpos.astype(np.int32))
+shaft_width = 0.1
+plt.quiver(xt, yt, fxp, fyp, units='xy', scale=0.3, width=shaft_width, headwidth=0.5 / shaft_width,
+           headlength=0.5 / shaft_width, color='blue')
 
-elapsed_time2 = datetime.now() - start_time
-print("Total time: %d s"%elapsed_time2.total_seconds())
+plt.quiver(xt, yt, vxp, vyp, units='xy', scale=0.3, width=shaft_width, headwidth=0.5 / shaft_width,
+           headlength=0.5 / shaft_width, color='green')
 
-fname = '/Users/rattie/Data/SDO/HMI/EARs/AR11105_2010_09_02_Aimee/watershed_arrays.npz'
-np.savez(fname,
-         ws_list_p=ws_list_p, markers_list_p=markers_list_p, borders_list_p=borders_list_p,
-         ws_list_n=ws_list_n, markers_list_n=markers_list_n, borders_list_n=borders_list_n)
+xt2, yt2, zt2 = mbtp.ballpos_inter[0:3, ball, 1]
+plt.plot(xt2, yt2, marker='.', ms=2, color='red', ls='none')
 
-# load above saved file as:
-# npzfile = np.load(fname)
-# List content with: npzfile.files
-# Get a specific array named 'a' with:
-# a = npzfile['a']
+xtf, ytf, ztf = mbtp.ballpos_inter[0:3, ball, -1]
+plt.plot(xtf, ytf, marker='o', ms=4, color='red', ls='none', markerfacecolor='none')
 
+plt.axis([xt-10, xt+10, yt-10, yt+10])
+
+ax1.set_xlabel('Lambert cyl. X')
+ax1.set_ylabel('Lambert cyl. Y')
+ax1.set_title('Tracked local extrema at frame 0')
