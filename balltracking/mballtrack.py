@@ -30,7 +30,7 @@ class MBT:
         self.polarity=polarity
 
         # Load 1st image
-        self.image = load_data(self, 0)
+        self.image = load_data(self.datafiles, 0)
         self.nx = self.image.shape[1]
         self.ny = self.image.shape[0]
         # Contrary to the Matlab implementation, and given the new way of initialization with locating the local extrema,
@@ -89,9 +89,9 @@ class MBT:
         self.emergence_box = emergence_box
 
         # Initialization of ball positions
-        self.image = load_data(self, 0)
         self.surface = prep_data(self.image)
-        self.xstart, self.ystart = get_local_extrema_ar(self.image, self.surface, self.polarity, self.ballspacing, self.mag_thresh, self.mag_thresh_sunspots)
+        #self.xstart, self.ystart = get_local_extrema_ar(self.image, self.surface, self.polarity, self.ballspacing, self.mag_thresh, self.mag_thresh_sunspots)
+        self.xstart, self.ystart = get_local_extrema(self.image, self.surface, self.polarity, self.ballspacing, self.mag_thresh)
         self.nballs = self.xstart.size
         self.zstart = blt.put_balls_on_surface(self.surface, self.xstart, self.ystart, self.rs, self.dp)
 
@@ -106,17 +106,19 @@ class MBT:
 
     def track_all_frames(self):
 
-        for n in range(self.nt):
+        for n in range(0, self.nt-7):
 
             #print('Frame n=%d'%n)
 
-            self.image = load_data(self, n)
+            self.image = load_data(self.datafiles, n)
             self.surface = prep_data(self.image)
 
             if self.track_emergence and n > 0:
                 self.populate_emergence()
             # The current position "pos" and velocity "vel" are attributes of bt.
             # They are integrated in place.
+            if n==0:
+                old_surface = self.surface.copy()
 
             for i in range(self.intsteps):
 
@@ -124,9 +126,9 @@ class MBT:
                 #fig_title = '/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/mballtrack/frame_%d_%d.png'%(n,i)
                 #plot_balls_over_frame(self.image, self.pos[0, :], self.pos[1, :], fig_title)
                 # Interpolate surface
-                #surface = (old_surface*(self.intsteps - i) + self.surface)/self.intsteps
-                blt.integrate_motion(self, self.surface)
-            #old_surface = self.surface.copy()
+                surface_i = (old_surface*(self.intsteps - i) + self.surface * i)/self.intsteps
+                blt.integrate_motion(self, surface_i)
+            old_surface = self.surface.copy()
             # fig_title = '/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/mballtrack/frame_%d_%d.png'%(n,self.intsteps)
             # plot_balls_over_frame(self.image, self.pos[0, :], self.pos[1, :], fig_title)
             set_bad_balls(self, self.pos)
@@ -150,11 +152,11 @@ class MBT:
 
     def track_all_frames_debug(self):
 
-        for n in range(self.nt):
+        for n in range(3, self.nt-4):
 
             print('Frame n=%d'%n)
 
-            self.image = load_data(self, n)
+            self.image = load_data(self.datafiles, n)
             self.surface = prep_data(self.image)
 
             if self.track_emergence and n > 0:
@@ -177,7 +179,9 @@ class MBT:
 
     def populate_emergence(self):
 
-        flux_posx, flux_posy = get_local_extrema_ar(self.image, self.surface, self.polarity, self.ballspacing, self.mag_thresh, self.mag_thresh_sunspots)
+        #flux_posx, flux_posy = get_local_extrema_ar(self.image, self.surface, self.polarity, self.ballspacing, self.mag_thresh, self.mag_thresh_sunspots)
+        flux_posx, flux_posy = get_local_extrema(self.image, self.surface, self.polarity, self.ballspacing,
+                                                    self.mag_thresh)
 
         # TODO: Consider profiling this for optimization
         # Consider getting a view by using tuples of indices...
@@ -232,11 +236,10 @@ def mballtrack_main(**kwargs):
     return mbt_p, mbt_n
 
 
-def load_data(mbt, n):
-    if mbt.data is None:
-        image = fitstools.fitsread(mbt.datafiles, tslice=n).astype(DTYPE)
-    else:
-        image = mbt.data[:,:,n]
+def load_data(datafiles, n):
+    #image = fitstools.fitsread(mbt.datafiles, tslice=n).astype(DTYPE)
+    image = fitstools.fitsread(datafiles, tslice=slice(n,n+7)).astype(DTYPE)
+    image = np.median(image, 2)
     return image
 
 def get_local_extrema(image, surface, polarity, min_distance, threshold):
@@ -254,7 +257,8 @@ def get_local_extrema(image, surface, polarity, min_distance, threshold):
 
     se = disk(round(min_distance/2))
     #se = np.ones([min_distance, min_distance])
-    ystart, xstart = np.array( peak_local_max(np.abs(image), indices=True, footprint=se,labels=mask_maxi)).T
+    #ystart, xstart = np.array( peak_local_max(np.abs(image), indices=True, footprint=se,labels=mask_maxi)).T
+    ystart, xstart = np.array(peak_local_max(np.abs(image), indices=True, min_distance=min_distance, labels=mask_maxi)).T
 
     # Because transpose only creates a view, and this is eventually given to a C function, it needs to be copied as C-ordered
     return xstart.copy(order='C'), ystart.copy(order='C')
@@ -277,7 +281,7 @@ def get_local_extrema_ar(image, surface, polarity, min_distance, threshold, thre
     xstart, ystart = get_local_extrema(image, surface, polarity, min_distance, threshold)
     # Get the intensity at these locations
     data_int = image[ystart, xstart]
-    # Build a distance-based matrix for coordinates of pixel whose intensity is above 400G, and keep the maximum
+    # Build a distance-based matrix for coordinates of pixel whose intensity is above threshold2, and keep the maximum
     if polarity >= 0:
         select_mask = np.logical_and(data_int >=0, data_int < threshold2)
         mask_maxi_sunspots = image >= threshold2
@@ -290,8 +294,12 @@ def get_local_extrema_ar(image, surface, polarity, min_distance, threshold, thre
     se = disk(round(min_distance/2))
     #se = np.ones([3*min_distance, 3*min_distance])
 
+    # ystart2, xstart2 = np.array(peak_local_max(np.abs(image), indices=True,
+    #                                            footprint= se,
+    #                                            labels=mask_maxi_sunspots), dtype=DTYPE).T
+
     ystart2, xstart2 = np.array(peak_local_max(np.abs(image), indices=True,
-                                               footprint= se,
+                                               min_distance=min_distance,
                                                labels=mask_maxi_sunspots), dtype=DTYPE).T
 
     xstart = np.concatenate((xstart1, xstart2))
@@ -316,7 +324,8 @@ def get_local_extrema_ar(image, surface, polarity, min_distance, threshold, thre
 
 def prep_data(image):
 
-    image2 = np.sqrt(np.abs(image))
+    #image2 = np.sqrt(np.abs(image))
+    image2 = np.abs(image)**0.3
     image3 = image2.max() - image2
     surface = (image3 - image3.mean())/image3.std()
 
@@ -447,15 +456,16 @@ def watershed_series(datafile, nframes, threshold, polarity, ballpos, verbose=Fa
     # Load a sample to determine shape
     data = fitstools.fitsread(datafile, tslice=0)
 
-    ws_series = np.empty([nframes, data.shape[1], data.shape[0]], dtype=np.int32)
-    markers_series = np.empty([nframes, data.shape[1], data.shape[0]], dtype=np.int32)
-    borders_series = np.empty([nframes, data.shape[1], data.shape[0]], dtype=np.bool)
+    ws_series = np.empty([nframes-7, data.shape[1], data.shape[0]], dtype=np.int32)
+    markers_series = np.empty([nframes-7, data.shape[1], data.shape[0]], dtype=np.int32)
+    borders_series = np.empty([nframes-7, data.shape[1], data.shape[0]], dtype=np.bool)
 
     # For parallelization, need to see how to share a proper container, whatever is more efficient
-    for n in range(nframes):
+    for n in range(nframes-7):
         if verbose:
             print('Watershed series frame n = %d'%n)
-        data = fitstools.fitsread(datafile, tslice=n)
+        #data = fitstools.fitsread(datafile, tslice=n)
+        data = load_data(datafile, n)
         # Get a view of (x,y) coords at frame #i (use slice instead of fancy insteading). Either with slice(0,1) or 0:2
         # I'll use slice for clarity
         # positions = ballpos[slice(0,1),:,n]

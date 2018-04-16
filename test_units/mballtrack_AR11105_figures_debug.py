@@ -57,15 +57,16 @@ def make_data_borders_rgb(data, borders, in_range):
 
 
 
+
 datafile = '/Users/rattie/Data/SDO/HMI/EARs/AR11105_2010_09_02_Aimee/mtrack_20100901_120034_TAI_20100902_120034_TAI_LambertCylindrical_magnetogram.fits'
 
 
-mbt_dict = {"nt":1920,
-            "rs":2,
+mbt_dict = {"nt":50,
+            "rs":3,
             "am":0.5,
             "dp":0.3,
             "td":2,
-            "ballspacing":8,
+            "ballspacing":4,
             "intsteps":10,
             "mag_thresh":50,
             "mag_thresh_sunspots":800,
@@ -76,6 +77,9 @@ mbt_dict = {"nt":1920,
 mbtp = mblt.MBT(polarity=1, **mbt_dict)
 mbtp.track_start_intermediate()
 
+# mbtp2 = mblt.MBT(polarity=1, **mbt_dict)
+# mbtp2.track_all_frames()
+
 ### Get a sample
 data = fitstools.fitsread(datafile, tslice=0).astype(DTYPE)
 range_minmax = (-200,200)
@@ -85,13 +89,16 @@ range_minmax = (-200,200)
 surface = mbtp.surface
 
 ball = mblt.get_balls_at(mbtp.xstart, mbtp.ystart, 285, 211) # 129
-xt, yt, zt = mbtp.xstart[ball], mbtp.ystart[ball], mbtp.zstart[ball]
+xt, yt, zt = mbtp.xstart, mbtp.ystart, mbtp.zstart
 
-
+datamax = 200
 fig = plt.figure(figsize=(8, 8))
 ax1 = plt.subplot(111)
-im1 = ax1.imshow(surface, cmap='gray', origin='lower', interpolation='nearest')
+im1 = ax1.imshow(data, vmin=-datamax, vmax=datamax, cmap='gray', origin='lower', interpolation='nearest')
 line1p, = plt.plot(xt, yt, marker='.', ms=2, color='red', ls='none')
+
+
+
 
 fxp, fyp, fzp = mbtp.force_inter[0][0:3,ball]
 vxp, vyp = mbtp.vel_inter[0, ball, 0], mbtp.vel_inter[1, ball, 0]
@@ -109,8 +116,24 @@ plt.plot(xt2, yt2, marker='.', ms=2, color='red', ls='none')
 xtf, ytf, ztf = mbtp.ballpos_inter[0:3, ball, -1]
 plt.plot(xtf, ytf, marker='o', ms=4, color='red', ls='none', markerfacecolor='none')
 
-plt.axis([xt-10, xt+10, yt-10, yt+10])
+#plt.axis([xt-10, xt+10, yt-10, yt+10])
 
 ax1.set_xlabel('Lambert cyl. X')
 ax1.set_ylabel('Lambert cyl. Y')
 ax1.set_title('Tracked local extrema at frame 0')
+
+
+framenb = 1
+surface = mblt.prep_data(mblt.load_data(mbtp2, framenb))
+xt, yt, zt = mbtp2.ballpos[:, ball, framenb]
+
+
+fig = plt.figure(figsize=(8, 8))
+ax1 = plt.subplot(111)
+im1 = ax1.imshow(surface, cmap='gray', origin='lower', interpolation='nearest')
+line1p, = plt.plot(xt, yt, marker='.', ms=2, color='red', ls='none')
+
+ax1.set_xlabel('Lambert cyl. X')
+ax1.set_ylabel('Lambert cyl. Y')
+ax1.set_title('Tracked local extrema at frame %d'%framenb)
+

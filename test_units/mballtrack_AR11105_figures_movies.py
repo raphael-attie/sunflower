@@ -3,9 +3,9 @@ import multiprocessing
 import time
 from functools import partial
 import matplotlib
-matplotlib.use('macosx')
+#matplotlib.use('macosx')
 #matplotlib.use('qt5agg')
-#matplotlib.use('agg')
+matplotlib.use('agg')
 import numpy as np
 import fitstools
 import matplotlib.pyplot as plt
@@ -76,8 +76,9 @@ def update_fig(i):
 
     # Merge watershed labels and borders.
     ws_labels, borders = mblt.merge_watershed(labels_p, borders_p, mbt_p.nballs, labels_n, borders_n)
-
-    data = fitstools.fitsread(datafile, tslice=i).astype(DTYPE)
+    ws_labels[0, 0] = mbt_p.nballs + mbt_n.nballs
+    #data = fitstools.fitsread(datafile, tslice=i).astype(DTYPE)
+    data = mblt.load_data(datafile, i)
     im1.set_array(data)
 
 
@@ -127,14 +128,14 @@ def save_object(obj, filename):
 
 datafile = '/Users/rattie/Data/SDO/HMI/EARs/AR11105_2010_09_02_Aimee/mtrack_20100901_120034_TAI_20100902_120034_TAI_LambertCylindrical_magnetogram.fits'
 
-fname = '/Users/rattie/Data/SDO/HMI/EARs/AR11105_2010_09_02_Aimee/mbt_pn.pkl'
+fname = '/Users/rattie/Data/SDO/HMI/EARs/AR11105_2010_09_02_Aimee/mbt_pn2.pkl'
 
 # Restore
 with open(fname, 'rb') as input:
     mbt_p, mbt_n = pickle.load(input)
 
 # Restore flux extraction by markers-based watershed
-ws_fname = '/Users/rattie/Data/SDO/HMI/EARs/AR11105_2010_09_02_Aimee/watershed_arrays.npz'
+ws_fname = '/Users/rattie/Data/SDO/HMI/EARs/AR11105_2010_09_02_Aimee/watershed_arrays2.npz'
 # np.savez(fname,
 #          ws_list_p=ws_list_p, markers_list_p=markers_list_p, borders_list_p=borders_list_p,
 #          ws_list_n=ws_list_n, markers_list_n=markers_list_n, borders_list_n=borders_list_n)
@@ -150,7 +151,8 @@ ws_list_n, borders_list_n  = npzfile['ws_list_n'], npzfile['borders_list_n']
 
 
 ### Get a sample
-data = fitstools.fitsread(datafile, tslice=0).astype(DTYPE)
+# data = fitstools.fitsread(datafile, tslice=0).astype(DTYPE)
+data = mblt.load_data(datafile, 0)
 range_minmax = (-200,200)
 
 ### Visualize
@@ -186,20 +188,18 @@ ax3.set_title('Tracked fragments with ball-based color labeling')
 fig.tight_layout()
 
 # # Create iterable for funcAnimation(). It must contain the series
-i = 0
-#for i in range(mbt_dict['nt']):
-update_fig(i)
+# i = 1816
+# update_fig(i)
 
 
 # Animation
 
-interval = 100
-ani = animation.FuncAnimation(fig, update_fig, interval=interval, frames=50, blit=True, repeat=False, init_func=init)
-#
-# plt.show()
-#
-#
-# # TODO: investigate shape_index to reject some local maxima that should be rejected
-# # TODO: or see usage of removing the small area, filling the hole, and relabel?
-fps = 20
-ani.save('/Users/rattie/Data/SDO/HMI/EARs/AR11105_2010_09_02_Aimee/movie_anim_fps%d.mp4'%fps, fps=fps)
+interval = 10
+ani = animation.FuncAnimation(fig, update_fig, interval=interval, frames=1900, blit=True, repeat=False, init_func=init)
+fps = 400
+ani.save('/Users/rattie/Data/SDO/HMI/EARs/AR11105_2010_09_02_Aimee/movie_anim_interval%d_fps%d_segmentation.mp4'%(interval, fps), fps=fps)
+
+# #
+# #
+# # # TODO: investigate shape_index to reject some local maxima that should be rejected
+# # # TODO: or see usage of removing the small area, filling the hole, and relabel?
