@@ -1,4 +1,4 @@
-#%gui qt
+# %gui qt
 from importlib import reload
 import glob, os
 import numpy as np
@@ -30,10 +30,24 @@ def get_data(frame_number):
     return mag, lanes, vx, vy
 
 
+def get_tranges_times(nframes, tavg, tstep):
+    tcenters = np.arange(0, nframes - tstep, tstep)
+    tranges = [[tcenters[i], tcenters[i] + tavg] for i in range(tcenters.size)]
+    # Build list of slices for extracting the corresponding magnetograms
+    tslices = [slice(trange[0], trange[1]) for trange in tranges]
+
+    ### Build a list of datetime centered on each flow map
+    # Middle date of first map
+    dtime = datetime.datetime(year=2017, month=9, day=1, hour=0, minute=30, second=0)
+    dstep = datetime.timedelta(minutes= tstep * 45/60)
+    dtimes = [dtime + i * dstep for i in range(len(tranges))]
+    return tslices, dtimes
+
+
 def lanes_plot(frame_number, file_name, fov=None, do_print=False):
 
-    mag, lanes, vx, vy = get_data(frame_numbers[0])
-    cont = get_avg_data(datafile, tslices[frame_numbers[0]])
+    mag, lanes, vx, vy = get_data(frame_number)
+    cont = get_avg_data(datafile, tslices[frame_number])
 
     offset = 1
     if fov is not None:
@@ -64,41 +78,31 @@ def lanes_plot(frame_number, file_name, fov=None, do_print=False):
         mlab.savefig(file_name + '_%d' % frame_number + '.png', magnification = 4)
 
     mlab.show()
-
-
-
+    return fig
 
 
 datafile = '/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/mtrack_20170901_000000_TAI20170905_235959_LambertCylindrical_continuum.fits'
 datafilem = '/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/mtrack_20170901_000000_TAI20170905_235959_LambertCylindrical_magnetogram.fits'
 tracking_dir ='/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/python_balltracking'
 fig_dir = '/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/figures/'
-vx_files = glob.glob(os.path.join(tracking_dir,'vx_[0-9]*.fits'))
-vy_files = glob.glob(os.path.join(tracking_dir,'vy_[0-9]*.fits'))
-lanes_files = glob.glob(os.path.join(tracking_dir,'lanes_[0-9]*.fits'))
-
-nlanes = len(lanes_files)
+### Velocity field parameters
+fwhm = 15
+tavg = 160
+tstep = 80
 ### Lanes parameters
-nsteps = 50
+nsteps = 40
 maxstep = 4
+
+vx_files = glob.glob(os.path.join(tracking_dir,'vx_fwhm%d_tavg%d_[0-9]*.fits'%(fwhm, tavg)))
+vy_files = glob.glob(os.path.join(tracking_dir,'vy_fwhm%d_tavg%d_[0-9]*.fits'%(fwhm, tavg)))
 
 
 sample = fitstools.fitsread(datafile, tslice=0).astype(np.float32)
 header = fitstools.fitsheader(datafile)
 ### time windows of the flow maps
 nframes = int((3600*24*2 + 18*3600)/45) # 5280 frames
-tspan = 80
-tstep = 40
-tcenters = np.arange(0, nframes-tstep, tstep)
-tranges = [[tcenters[i], tcenters[i]+ tspan] for i in range(tcenters.size)]
-# Build list of slices for extracting the corresponding magnetograms
-tslices = [slice(trange[0], trange[1]) for trange in tranges]
 
-### Build a list of datetime centered on each flow map
-# Middle date of first map
-dtime = datetime.datetime(year=2017, month=9, day=1, hour=0, minute=30, second=0)
-dstep = datetime.timedelta(minutes=30)
-dtimes = [dtime + i*dstep for i in range(len(tranges))]
+tslices, dtimes = get_tranges_times(nframes, tavg, tstep)
 
 # Velocity unit
 # 1 px = 0.03 deg  solar radius = 6.957 x 10^8 m
@@ -108,8 +112,13 @@ px_meter = 0.03 * 3.1415/180 * 6.957e8
 ms_unit = px_meter / 45
 
 # Grab data
-frame_numbers = [20, 27, 31, 50]
+frame_numbers = [3, 12, 14, 25, 39, 46]
 
 # for frame_nb in frame_numbers:
-fov=(225-50, 225+50, 176-50, 176+50)
-lanes_plot(frame_numbers[0], os.path.join(fig_dir, 'lanes_streamlines_res12'), fov=fov, do_print=True)
+fov=(235-50, 235+50, 190-50, 190+50)
+
+fig = lanes_plot(frame_numbers[2], os.path.join(fig_dir, 'sample_lanes_streamlines_fwhm%d_tavg%d_nsteps%d'%(fwhm, tavg, nsteps)), fov=fov, do_print=True)
+
+for frame_nb in frame_numbers:
+    fig = lanes_plot(frame_nb, os.path.join(fig_dir, 'lanes_streamlines_fwhm%d_tavg%d_nsteps%d'%(fwhm, tavg, nsteps)), fov=fov, do_print=True)
+    mlab.close()

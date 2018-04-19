@@ -1,4 +1,4 @@
-import sys
+import sys, os
 import numpy as np
 import numpy.ma as ma
 import matplotlib.pyplot as plt
@@ -73,8 +73,8 @@ class BT:
         # Ball grid and mesh. Add +1 at the np.arange stop for including right-hand side boundary
         self.ballgrid = np.arange(-self.rs, self.rs + 1, dtype=DTYPE)
         self.ball_cols, self.ball_rows = np.meshgrid(self.ballgrid, self.ballgrid)
-        self.bcols = self.ball_cols.ravel()[:, np.newaxis]
-        self.brows = self.ball_rows.ravel()[:, np.newaxis]
+        self.bcols = self.ball_cols.ravel()[:, np.newaxis].astype(DTYPE)
+        self.brows = self.ball_rows.ravel()[:, np.newaxis].astype(DTYPE)
         self.ds    = np.zeros([self.bcols.shape[0]], dtype=DTYPE)
         # Initialize deepest height at a which ball can fall down. Typically it will be set to a multiple of -surface.std().
         self.min_ds = -5
@@ -824,6 +824,38 @@ def drift_series(images, drift_rate):
         drift_images[:,:,i] = filters.translate_by_phase_shift(images[:,:,i], dx, dy)
 
     return drift_images
+
+
+def make_euler_velocity(ballpos_top, ballpos_bottom, cal_top, cal_bottom, dims, trange, fwhm):
+
+    vx_top, vy_top, wplane_top = make_velocity_from_tracks(ballpos_top, dims, trange, fwhm)
+    vx_bottom, vy_bottom, wplane_bottom = make_velocity_from_tracks(ballpos_bottom, dims, trange, fwhm)
+
+    vx_top *= cal_top
+    vy_top *= cal_top
+    vx_bottom *= cal_bottom
+    vy_bottom *= cal_bottom
+
+    vx = 0.5 * (vx_top + vx_bottom)
+    vy = 0.5 * (vy_top + vy_bottom)
+
+    return vx, vy
+
+def make_euler_velocity_lanes(ballpos_top, ballpos_bottom, cal_top, cal_bottom, dims, nframes, tavg, tstep, fwhm, nsteps, maxstep, outputdir):
+
+    tcenters = np.arange(0, nframes - tstep, tstep)
+    tranges = [[tcenters[i], tcenters[i] + tavg] for i in range(tcenters.size)]
+
+    for i in range(len(tranges)):
+        # Velocity field
+        vx, vy = make_euler_velocity(ballpos_top, ballpos_bottom, cal_top, cal_bottom, dims, tranges[i], fwhm)
+        # lanes
+        lanes = make_lanes(vx, vy, nsteps, maxstep)
+        # Write fits file
+        fitstools.writefits(vx, os.path.join(outputdir, 'vx_fwhm%d_tavg%d_%03d.fits'%(fwhm, tavg, i)))
+        fitstools.writefits(vy, os.path.join(outputdir, 'vy_fwhm%d_tavg%d_%03d.fits'%(fwhm, tavg, i)))
+        fitstools.writefits(lanes, os.path.join(outputdir, 'lanes_fwhm%d_tavg%d_nsteps%d_%03d.fits' %(fwhm, tavg, nsteps, i)))
+
 
 def make_lanes(vx, vy, nsteps, maxstep):
 

@@ -9,11 +9,15 @@ import fitsio
 import datetime
 from multiprocessing import Pool
 import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib.colors import Normalize
 import matplotlib.animation as animation
 import balltracking.balltrack as blt
 from mpl_toolkits.axes_grid1.inset_locator import InsetPosition
+
+
+fs = 9
 
 def get_mag_cmap():
     lut_file = '/Users/rattie/Dev/sdo_tracking_framework/graphics/HMI.MagColor.IDL_256.lut.txt'
@@ -37,57 +41,90 @@ def get_vel(frame_number):
     return v
 
 
-def get_data(frame_number):
-
-    mag = get_avg_data(datafilem, tslices[frame_number])
-    v = get_vel(frame_number)
-    lanes = blt.make_lanes(*v, nsteps, maxstep)
-    lanes_blue = get_lanes_rgba(lanes)
-
-    return mag, lanes_blue, v
-
-
 def get_lanes_rgba(lanes_data):
     # Create an alpha channel from the lanes data.
     lanes_norm = Normalize(0, 0.5 * lanes_data.max(), clip=True)(lanes_data)
     lanes_rgba = np.ones(lanes_norm.shape + (4,))
     lanes_rgba[..., 0] = 0
-    lanes_rgba[..., 1] = 1
+    lanes_rgba[..., 1] = 0
     lanes_rgba[..., 2] = 1
     lanes_rgba[..., 3] = lanes_norm
     return lanes_rgba
 
 
-def create_plot(frame_number, ax, coords=None):
+def get_data(frame_number, fov = None):
 
-    mag, lanes_colored, _ = get_data(frame_number)
+    mag = get_avg_data(datafilem, tslices[frame_number])
+    vx, vy = get_vel(frame_number)
+    lanes = blt.make_lanes(vx, vy, nsteps, maxstep)
+    lanes_rgb = get_lanes_rgba(lanes)
+
+    if fov is not None:
+        mag = mag[fov[2]:fov[3], fov[0]:fov[1]]
+        vx = vx[fov[2]:fov[3], fov[0]:fov[1]]
+        vy = vy[fov[2]:fov[3], fov[0]:fov[1]]
+        lanes_rgb = lanes_rgb[fov[2]:fov[3], fov[0]:fov[1]]
+
+    return mag, lanes_rgb, vx, vy
+
+
+def get_tranges_times(nframes, tavg, tstep):
+    tcenters = np.arange(0, nframes - tstep, tstep)
+    tranges = [[tcenters[i], tcenters[i] + tavg] for i in range(tcenters.size)]
+    # Build list of slices for extracting the corresponding magnetograms
+    tslices = [slice(trange[0], trange[1]) for trange in tranges]
+
+    ### Build a list of datetime centered on each flow map
+    # Middle date of first map
+    dtime = datetime.datetime(year=2017, month=9, day=1, hour=0, minute=30, second=0)
+    dstep = datetime.timedelta(minutes= tstep * 45/60)
+    dtimes = [dtime + i * dstep for i in range(len(tranges))]
+    return tslices, dtimes
+
+
+def create_plot(frame_number, ax, fov=None, coords=None, quiver=False):
+
+    mag, lanes_colored, vx, vy = get_data(frame_number, fov)
+    vx *= ms_unit
+    vy *= ms_unit
+
 
     im1 = ax.imshow(mag, vmin=vmin, vmax=vmax, cmap='gray', origin='lower')
 
-    text = ax.text(8, 470, dtimes[frame_number].strftime('%x %X'), fontsize=10,
-                    bbox=dict(boxstyle="square", fc='white', alpha=0.8))
+    text = ax.text(0.02, 0.95, dtimes[frame_number].strftime('%x %X'), fontsize=fs,
+                   bbox=dict(boxstyle="square", fc='white', alpha=0.8),
+                   transform=ax.transAxes)
     # create an axes on the right side of ax. The width of cax will be 5%
     # of ax and the padding between cax and ax will be fixed at 0.05 inch.
 
     im2 = ax.imshow(lanes_colored, origin='lower')
 
-    ax.set_xticks(np.arange(0, mag.shape[1], 100))
-    ax.set_xticks(np.arange(0, mag.shape[1], 100))
+    ax.set_xticks(np.arange(0, mag.shape[1], 50))
+    ax.set_yticks(np.arange(0, mag.shape[1], 50))
     ax.tick_params(
         axis='both',
         which='both',
         labelbottom=False,
-        labelleft=False
+        labelleft=False,
+        labelsize = fs
     )
 
+    quiv = []
+    if quiver:
+        vnorm = np.sqrt(vx ** 2 + vy ** 2)
+        x, y = np.meshgrid(np.arange(vx.shape[0]), np.arange(vx.shape[1]))
+        quiv = ax.quiver(x[::step, ::step], y[::step, ::step], vx[::step, ::step], vy[::step, ::step], vnorm[::step, ::step],
+                  units='xy', scale=quiver_scale, width=shaft_width, headwidth=headwidth, headlength=headlength, cmap='Oranges')
 
     if coords is not None:
         #ax.plot(coords[0], coords[1], color='red', marker='.', markerfacecolor='none', ms=64)
         #ax.plot(222, 294, color='red', marker='.', markerfacecolor='none', ms=60)
-        circle = plt.Circle(coords, radius=20, alpha=.6, color='red', fill=False)
-        ax.add_patch(circle)
+        # circle = plt.Circle(coords, radius=40, alpha=.6, color='red', fill=False)
+        # ax.add_patch(circle)
+        rectangle = patches.Rectangle(coords, 100, 100, fill=False, color='yellow')
+        ax.add_patch(rectangle)
 
-    return im1, text, im2
+    return im1, im2, quiv
 
 
 def create_fig_31(frame_numbers, figsize, **kwargs):
@@ -147,10 +184,13 @@ def create_fig_22(frame_numbers, figsize, **kwargs):
     axs[0, 0].set_ylabel('Lambert cylindrical Y')
     axs[1, 0].set_ylabel('Lambert cylindrical Y')
 
+    axs[0, 0].tick_params(labelleft=True)
+    axs[1,0].tick_params(labelleft=True, labelbottom=True)
+    axs[1, 1].tick_params(labelbottom=True)
 
-    fig.subplots_adjust(top=0.98, right=0.85, hspace = 0)
-    cbar_ax = fig.add_axes([0.85, 0.15, 0.05, 0.7])
-    ip = InsetPosition(axs[1,1], [1.05, 0, 0.05, 2.14])
+    fig.subplots_adjust(top=0.98, right=0.85, hspace = 0, wspace=0.1)
+    cbar_ax = fig.add_axes([0.85, 0.15, 0.05, 0.68])
+    ip = InsetPosition(axs[1,1], [1.05, 0, 0.05, 2.09])
     cbar_ax.set_axes_locator(ip)
 
     cb = fig.colorbar(im1, cax=cbar_ax, ax=[axs[0,0], axs[0,1], axs[1,0], axs[1,1]], orientation='vertical')
@@ -178,19 +218,22 @@ def create_fig_32(frame_numbers, figsize, **kwargs):
     # axs[1, 0].set_yticks(np.arange(0, mag.shape[1], 100))
     # axs[2, 0].set_yticks(np.arange(0, mag.shape[1], 100))
 
-    # axs[1, 0].set_xlabel('Lambert cylindrical X')
-    # axs[1, 1].set_xlabel('Lambert cylindrical X')
-    # axs[0, 0].set_ylabel('Lambert cylindrical Y')
-    # axs[1, 0].set_ylabel('Lambert cylindrical Y')
+    axs[0, 0].set_ylabel('Lambert cyl. Y', fontsize=fs)
+    axs[1, 0].set_ylabel('Lambert cyl. Y', fontsize=fs)
+    axs[2, 0].set_ylabel('Lambert cyl. Y', fontsize=fs)
+    axs[2, 0].set_xlabel('Lambert cyl. X', fontsize=fs)
+    axs[2, 1].set_xlabel('Lambert cyl. X', fontsize=fs)
 
 
-    fig.subplots_adjust(top=0.98, right=0.85, hspace = 0.1)
+    fig.subplots_adjust(left=0.10, bottom=0.08, top=0.98, right=0.88, hspace = 0.05, wspace=0.055)
     cbar_ax = fig.add_axes([0.85, 0.15, 0.05, 0.7])
-    ip = InsetPosition(axs[2,1], [1.05, 0, 0.05, 3.2])
+    ip = InsetPosition(axs[2,1], [1.05, 0, 0.05, 3.15])
+    #ip = InsetPosition(axs[0, 0], [0, 1.15, 2.15, 0.05])
     cbar_ax.set_axes_locator(ip)
 
     cb = fig.colorbar(im1, cax=cbar_ax, ax=[axs[0,0], axs[0,1], axs[1,0], axs[1,1], axs[2,0], axs[2,1]], orientation='vertical')
-    cbar_ax.set_ylabel('Bz')
+    cb.ax.tick_params(labelsize=fs)
+    cbar_ax.set_title('Bz', fontsize=fs)
 
     return fig, axs, cb
 
@@ -202,97 +245,102 @@ datafile = '/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/mtrack_20170901_0
 datafilem = '/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/mtrack_20170901_000000_TAI20170905_235959_LambertCylindrical_magnetogram.fits'
 tracking_dir ='/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/python_balltracking'
 fig_dir = '/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/figures/'
-vx_files = glob.glob(os.path.join(tracking_dir,'vx_[0-9]*.fits'))
-vy_files = glob.glob(os.path.join(tracking_dir,'vy_[0-9]*.fits'))
-lanes_files = glob.glob(os.path.join(tracking_dir,'lanes_[0-9]*.fits'))
 
-nlanes = len(lanes_files)
+### Velocity field parameters
+fwhm = 15
+tavg = 160
+tstep = 80
+
+px_meter = 0.03 * 3.1415/180 * 6.957e8
+ms_unit = px_meter / 45
+
 ### Lanes parameters
-nsteps = 50
+nsteps = 40
 maxstep = 4
+
+vx_files = glob.glob(os.path.join(tracking_dir,'vx_fwhm%d_tavg%d_[0-9]*.fits'%(fwhm, tavg)))
+vy_files = glob.glob(os.path.join(tracking_dir,'vy_fwhm%d_tavg%d_[0-9]*.fits'%(fwhm, tavg)))
+
+# lanes_files = glob.glob(os.path.join(tracking_dir,'lanes_[0-9]*.fits'))
+# nlanes = len(lanes_files)
 
 sample = fitstools.fitsread(datafile, tslice=0).astype(np.float32)
 header = fitstools.fitsheader(datafile)
 ### time windows of the flow maps
 nframes = int((3600*24*2 + 18*3600)/45) # 5280 frames
-tspan = 80
-tstep = 40
-tcenters = np.arange(0, nframes-tstep, tstep)
-tranges = [[tcenters[i], tcenters[i]+ tspan] for i in range(tcenters.size)]
-# Build list of slices for extracting the corresponding magnetograms
-tslices = [slice(trange[0], trange[1]) for trange in tranges]
-
-### Build a list of datetime centered on each flow map
-# Middle date of first map
-dtime = datetime.datetime(year=2017, month=9, day=1, hour=0, minute=30, second=0)
-dstep = datetime.timedelta(minutes=30)
-dtimes = [dtime + i*dstep for i in range(len(tranges))]
-
+tslices, dtimes = get_tranges_times(nframes, tavg, tstep)
 
 ### Visualization - should loop over frame_numbers
-#frame_numbers = [20, 27, 31, 50]
-frame_numbers = [20, 27, 31]
-mag, lanes_blue, v = get_data(frame_numbers[0])
-vx, vy = v
-vnorm = np.sqrt(vx**2 + vy**2)
-x, y = np.meshgrid(np.arange(vx.shape[0]), np.arange(vx.shape[1]))
 
-vmin = -0.1 * np.max(np.abs(mag))
-vmax = 0.1 * np.max(np.abs(mag))
+vmin = -180
+vmax = abs(vmin)
 
-
-# Plot 3 figures
-
-figsize = (3.25, 9.125)
-fig, axs, cb = create_fig_31(frame_numbers, figsize)
+## Print time series of lanes over magnetograms. Single frames.
+# fig, axs = plt.subplots(1,1, figsize=(8,8))
+# for i in range(len(vx_files)):
+#     create_plot(i, axs)
+#     plt.savefig('/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/figures/lanes_fwhm%d_tavg%d_nsteps%d_plot_%d.png'%(fwhm, tavg, nsteps, i))
 
 
-# plot 4 figures
-
-frame_numbers = [20, 27, 31, 50, 75, 100]
-mag, lanes_blue, v = get_data(frame_numbers[0])
-vx, vy = v
-vnorm = np.sqrt(vx**2 + vy**2)
-x, y = np.meshgrid(np.arange(vx.shape[0]), np.arange(vx.shape[1]))
-
-vmin = -0.1 * np.max(np.abs(mag))
-vmax = 0.1 * np.max(np.abs(mag))
-
-figsize = (6.375, 5.5)
-#fig, axs, cb = create_fig_41(frame_numbers, figsize)
-fig, axs, cb = create_fig_22(frame_numbers, figsize)
-
-
-plt.savefig('/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/figures/lanes_plot1_cyan.pdf', dpi=300)
 
 
 ####
-frame_numbers = [20, 27, 31, 50, 75, 100]
-mag, lanes_blue, v = get_data(frame_numbers[0])
-vx, vy = v
-vnorm = np.sqrt(vx**2 + vy**2)
-x, y = np.meshgrid(np.arange(vx.shape[0]), np.arange(vx.shape[1]))
+## For tavg = 80
+#frame_numbers = [21, 27, 31, 65, 75, 100]
+## For tavg = 160
+frame_numbers = [3, 12, 14, 25, 39, 46]
+
+fov = [50, 350, 50, 350]
+mag, lanes_blue, vx, vy = get_data(frame_numbers[0], fov=fov)
+
+
+### Overview
+# Quiver plot parameters
+step = 10
+quiver_scale = 45
+shaft_width = 1.2
+headwidth = 3
+headlength = 5
+
+figsize = (6.5, 6.5)
+fig, ax = plt.subplots(1,1, figsize=figsize)
+im1, im2, quiv = create_plot(2, ax, quiver=True)
+ax.tick_params(labelbottom=True,  labelleft=True, labelsize = fs)
+divider = make_axes_locatable(ax)
+cax = divider.append_axes("right", size="5%", pad=0.05)
+fig.colorbar(quiv, cax=cax)
+cax.set_ylabel('v (m/s)')
+ax.set_xlabel('x [px]')
+ax.set_ylabel('y [px]')
+fig.tight_layout()
+
+plt.savefig('/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/figures/lanes_fwhm%d_tavg%d_nsteps%d_maxstep%d_OVERVIEW_frame_%d.pdf'%(fwhm, tavg, nsteps, maxstep, frame_numbers[0]), dpi=300)
+
+# Circle coordinates
+#coords=(225 - fov[0], 176 - fov[2])
+# Rectangle coordinates
+coords = (235-50 - fov[0], 190-50-fov[2])
 
 vmin = -0.1 * np.max(np.abs(mag))
 vmax = 0.1 * np.max(np.abs(mag))
 
-figsize = (6.375, 7)
-fig, axs, cb = create_fig_32(frame_numbers, figsize, coords=(225, 176))
 
-plt.savefig('/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/figures/lanes_plot22_cyan.pdf', dpi=300)
+figsize = (6.5, 9)
+fig, axs, cb = create_fig_32(frame_numbers, figsize, fov=fov, coords=coords)
+
+plt.savefig('/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/figures/lanes_fwhm%d_tavg%d_nsteps%d_maxstep%d_plot32_blue_1stf_%d.pdf'%(fwhm, tavg, nsteps, maxstep, frame_numbers[0]), dpi=300)
 
 
 
 ### Quiver plots
-
+# vnorm = np.sqrt(vx**2 + vy**2)
+# x, y = np.meshgrid(np.arange(vx.shape[0]), np.arange(vx.shape[1]))
+#
 # step = 8
+# shaft_width = 0.4
 #
-#
-# axs.quiver(x[::step, ::step], y[::step, ::step], vx[::step, ::step], vy[::step, ::step], vnorm[::step, ::step], units='xy', scale=0.006, width=shaft_width, headwidth=3/shaft_width, headlength=3/shaft_width, cmap='magma')
-# axs.set_xlabel('Lambert cylindrical X [px]', fontsize=10)
-# axs.set_ylabel('Lambert cylindrical Y [px]', fontsize=10)
-# axs.tick_params(labelsize=10)
-# fig.tight_layout()
+# figsize = (6.5, 9)
+# fig, axs, cb = create_fig_32(frame_numbers, figsize, fov=fov, coords=(225 - fov[0], 176 - fov[2]), quiver=True)
 #
 # fname = os.path.join(fig_dir, 'lanes_plot_matplotlib.pdf')
 # plt.savefig(fname, dpi=300)

@@ -26,21 +26,6 @@ rs = 2
 dp = 0.2
 # Multiplier to the standard deviation.
 sigma_factor = 2
-# Smoothing for Euler maps
-fwhm = 15
-# Calibration factors
-a_top = 1.41
-a_bottom = 1.30
-
-### time windows for the euler map
-tspan = 80
-tstep = 40
-tcenters = np.arange(0, nframes-tstep, tstep)
-tranges = [[tcenters[i], tcenters[i]+ tspan] for i in range(tcenters.size)]
-
-### Lanes parameters
-nsteps = 30
-maxstep = 4
 
 # Get a BT instance with the above parameters
 bt_tf = blt.BT(dims, nframes, rs, dp, sigma_factor=sigma_factor, mode='top', direction='forward', datafiles=datafile)
@@ -54,6 +39,8 @@ if __name__ == '__main__':
 
     startTime = datetime.now()
 
+    # Parallel pools does not work because of unable to pickle the bt objects. Try using them as global resources.
+    # See https://stackoverflow.com/questions/47776486/python-struct-error-i-format-requires-2147483648-number-2147483647
     # with Pool(processes=4) as pool:
     #     bt_tf, bt_tb, bt_bf, bt_bb = pool.map(blt.track_all_frames, [bt_tf, bt_tb, bt_bf, bt_bb])
     bt_tf, bt_tb, bt_bf, bt_bb = list(map(blt.track_all_frames, [bt_tf, bt_tb, bt_bf, bt_bb]))
@@ -64,39 +51,4 @@ if __name__ == '__main__':
     print(" Time elapsed: %s " % (datetime.now() - startTime))
 
     np.save(os.path.join(outputdir,'ballpos_top.npy'), ballpos_top)
-    np.save(os.path.join(outputdir, 'ballpos_bottom.npy'), ballpos_top)
-
-    startTime = datetime.now()
-
-    for i in range(len(tranges)):
-
-        vx_top, vy_top, wplane_top = blt.make_velocity_from_tracks(ballpos_top, dims, tranges[i], fwhm)
-        vx_bottom, vy_bottom, wplane_top = blt.make_velocity_from_tracks(ballpos_bottom, dims, tranges[i], fwhm)
-
-        vx_top *= a_top
-        vy_top *= a_top
-        vx_bottom *= a_bottom
-        vy_bottom *= a_bottom
-
-        vx = 0.5*(vx_top + vx_bottom)
-        vy = 0.5*(vy_top + vy_bottom)
-
-        # Write fits file
-        fitstools.writefits(vx, os.path.join(outputdir, 'vx_%03d.fits'%i))
-        fitstools.writefits(vy, os.path.join(outputdir, 'vy_%03d.fits'%i))
-
-        lanes_top = blt.make_lanes(vx_top, vy_top, nsteps, maxstep)
-        lanes_bottom = blt.make_lanes(vx_bottom, vy_bottom, nsteps, maxstep)
-        lanes = blt.make_lanes(vx, vy, nsteps, maxstep)
-
-        fitstools.writefits(lanes_top, os.path.join(outputdir, 'lanes_top_%03d.fits'%i))
-        fitstools.writefits(lanes_bottom, os.path.join(outputdir, 'lanes_bottom_%03d.fits' % i))
-        fitstools.writefits(lanes, os.path.join(outputdir, 'lanes_%03d.fits' % i))
-
-    total_time = datetime.now() - startTime
-    avg_time = total_time.total_seconds()/len(tranges)
-    print("avg_time: %0.1f seconds" %avg_time)
-
-
-
-
+    np.save(os.path.join(outputdir, 'ballpos_bottom.npy'), ballpos_bottom)

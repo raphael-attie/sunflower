@@ -1,5 +1,6 @@
 import numpy as np
 from mayavi import mlab
+from matplotlib.colors import Normalize
 
 px_meter = int(0.03 * 3.1415/180 * 6.957e8)
 ms_unit = int(px_meter / 45)
@@ -22,8 +23,10 @@ def plot_im(im, vmin=None, vmax=None):
 def plot_lanes(lanes):
 
     lanes_t = lanes.copy().T
-    dims = lanes_t.shape[0], lanes_t.shape[1]
-    s2 = mlab.imshow(lanes_t, colormap='Blues', extent=[0, dims[1] - 1, 0, dims[0] - 1, 0, 0])
+    lanes_norm = Normalize(0, 0.7 * lanes_t.max(), clip=True)(lanes_t)
+
+    dims = lanes_norm.shape[0], lanes_norm.shape[1]
+    s2 = mlab.imshow(lanes_norm, colormap='Blues', extent=[0, dims[1] - 1, 0, dims[0] - 1, 0, 0])
     cmap = s2.module_manager.scalar_lut_manager.lut.table.to_array()
     cmap[:, -1] = np.linspace(0, 255, 256)
     s2.module_manager.scalar_lut_manager.lut.table = cmap
@@ -48,10 +51,12 @@ def plot_flow_vectors(vx, vy, fig, offset=0, reverse = False):
 
     x, y, z = np.mgrid[0:vx_t.shape[0], 0:vy_t.shape[1], 0:2]
 
+    # Possible bug here if using a recent version of numpy > 1.11
+    # See https://github.com/enthought/mayavi/issues/499
     src = mlab.pipeline.vector_field(x+offset, y+offset, z, u, v, w, figure=fig)
     #src = mlab.pipeline.vector_field(u, v, w, figure=fig)
     magnitude = mlab.pipeline.extract_vector_norm(src)
-    vec = mlab.pipeline.vectors(magnitude, mask_points=40, scale_factor=6., line_width=4, colormap='Oranges')
+    vec = mlab.pipeline.vectors(magnitude, mask_points=20, scale_factor=9., line_width=4, colormap='Oranges')
     vec.module_manager.vector_lut_manager.reverse_lut = reverse
     vec.glyph.glyph_source.glyph_position = 'center'
 
@@ -78,7 +83,7 @@ def plot_streamlines(magnitude, vx, vy, reverse = False):
     flow.seed.widget.point1 = np.array([vx_t.shape[0]-1, 0, 0])
     flow.seed.widget.point2 = np.array([0, vy_t.shape[1]-1, 0])
     flow.seed.widget.enabled = 1
-    flow.seed.widget.resolution = 12
+    #flow.seed.widget.resolution = 12
     flow.stream_tracer.maximum_propagation = 30
     flow.stream_tracer.integration_direction = 'both'
     flow.module_manager.scalar_lut_manager.reverse_lut = reverse
