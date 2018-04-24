@@ -15,7 +15,10 @@ from matplotlib.colors import Normalize
 import matplotlib.animation as animation
 import balltracking.balltrack as blt
 from mpl_toolkits.axes_grid1.inset_locator import InsetPosition
-
+import skimage.morphology
+from scipy.ndimage.morphology import binary_dilation, binary_opening, distance_transform_edt
+from scipy.ndimage.measurements import center_of_mass
+import cv2
 
 fs = 9
 
@@ -55,6 +58,7 @@ def get_lanes_rgba(lanes_data):
 def get_data(frame_number, fov = None):
 
     mag = get_avg_data(datafilem, tslices[frame_number])
+    cont = fitstools.fitsread(datafile, tslice=int((tslices[frame_number].stop - tslices[frame_number].start)/2)).astype(np.float32)
     vx, vy = get_vel(frame_number)
     lanes = blt.make_lanes(vx, vy, nsteps, maxstep)
     lanes_rgb = get_lanes_rgba(lanes)
@@ -64,8 +68,9 @@ def get_data(frame_number, fov = None):
         vx = vx[fov[2]:fov[3], fov[0]:fov[1]]
         vy = vy[fov[2]:fov[3], fov[0]:fov[1]]
         lanes_rgb = lanes_rgb[fov[2]:fov[3], fov[0]:fov[1]]
+        cont = cont[fov[2]:fov[3], fov[0]:fov[1]]
 
-    return mag, lanes_rgb, vx, vy
+    return mag, lanes_rgb, vx, vy, cont
 
 
 def get_tranges_times(nframes, tavg, tstep):
@@ -82,14 +87,16 @@ def get_tranges_times(nframes, tavg, tstep):
     return tslices, dtimes
 
 
-def create_plot(frame_number, ax, fov=None, coords=None, quiver=False):
+def create_plot(frame_number, ax, fov=None, coords=None, continuum=False, quiver=False):
 
-    mag, lanes_colored, vx, vy = get_data(frame_number, fov)
+    mag, lanes_colored, vx, vy, cont = get_data(frame_number, fov)
     vx *= ms_unit
     vy *= ms_unit
 
-
-    im1 = ax.imshow(mag, vmin=vmin, vmax=vmax, cmap='gray', origin='lower')
+    if continuum:
+        im1 = ax.imshow(cont, cmap='gray', origin='lower')
+    else:
+        im1 = ax.imshow(mag, vmin=vmin, vmax=vmax, cmap='gray', origin='lower')
 
     text = ax.text(0.02, 0.95, dtimes[frame_number].strftime('%x %X'), fontsize=fs,
                    bbox=dict(boxstyle="square", fc='white', alpha=0.8),
@@ -291,7 +298,7 @@ vmax = abs(vmin)
 frame_numbers = [3, 12, 14, 25, 39, 46]
 
 fov = [50, 350, 50, 350]
-mag, lanes_blue, vx, vy = get_data(frame_numbers[0], fov=fov)
+mag, lanes_blue, vx, vy, cont = get_data(frame_numbers[0], fov=fov)
 
 
 ### Overview
@@ -303,8 +310,70 @@ headwidth = 3
 headlength = 5
 
 figsize = (6.5, 6.5)
+
+frame_number = int((tslices[frame_numbers[0]].stop - tslices[frame_numbers[0]].start)/2)
+mag, lanes_colored, vx, vy, cont = get_data(frame_numbers[0])
+vnorm = np.sqrt(vx**2 + vy**2)
+
+sigma_factor = 2
+surface, mean, sigma = blt.prep_data2(cont, sigma_factor)
+ymin, xmin = np.unravel_index(np.argmin(cont, axis=None), cont.shape)
+sfov = [0, 200, 0, 200]
+scont = cont[sfov[2]:sfov[3], sfov[0]:sfov[1]]
+sfactor = 5
+threshold = scont.mean() - sfactor*scont.std()
+# Mask based on standard deviation
+spot_mask = cont < threshold
+# Dilation
+se = skimage.morphology.disk(6)
+spot_mask_dilated = binary_dilation(spot_mask, structure=se)
+spot_mask_dilated2 = binary_dilation(spot_mask_dilated, structure=skimage.morphology.disk(25))
+spot_dist = distance_transform_edt(spot_mask_dilated)
+ymax2, xmax2 = np.unravel_index(np.argmax(spot_dist, axis=None), spot_dist.shape)
+ycom, xcom = center_of_mass(spot_mask_dilated)
+circle1 = plt.Circle((xcom, ycom), radius=spot_dist.max(), alpha=.6, color='red', fill=False)
+circle2 = plt.Circle((xcom, ycom), radius=spot_dist.max()+20, alpha=.6, color='green', fill=False)
+
+xm, ym = np.meshgrid(np.arange(cont.shape[1]), np.arange(cont.shape[0]))
+xm2 = xm - xcom
+ym2 = ym - ycom
+r = np.sqrt(xm2**2 + ym2**2)
+rm1 = r < spot_dist.max()
+rm2 = r < spot_dist.max() + 20
+phi = np.arctan(ym2/xm2)
+
+#
+vnorm_pol = cv2.linearPolar(vnorm, (xcom, ycom), vnorm.shape[1], cv2.INTER_LANCZOS4 + cv2.WARP_FILL_OUTLIERS)
+rho, phi = cv2.cartToPolar(xm2, ym2)
+phi *= 180 / np.pi
+
+# Continuum
+fig, ax = plt.subplots(1,2, figsize=figsize)
+im1 = ax[0].imshow(cont, cmap='gray', origin='lower')
+im2 = ax[0].imshow(lanes_colored, origin='lower')
+#plt.contour(cont, levels = [cont[0:200, 0:200].mean() - 4 * cont[0:200, 0:200].std()], colors='orange')
+#ax.contour(spot_mask_dilated.astype(int), 1, colors='red')
+#ax.contour(spot_mask_dilated2.astype(int), 1, colors='green')
+ax[0].plot(xmax2, ymax2, 'r+')
+ax[0].plot(xcom, ycom, 'g.', markerfacecolor='none')
+# ax.add_patch(circle1)
+# ax.add_patch(circle2)
+ax[0].contour(rm1, 1, colors='red')
+ax[0].contour(rm2, 1, colors='green')
+
+ax[0].set_xlabel('x [px]')
+ax[0].set_ylabel('y [px]')
+
+ax[1].imshow(vnorm_pol, cmap='Oranges',origin='lower', extent=[rho.min(), rho.max(), phi.min(), phi.max()])
+
+fig.tight_layout()
+
+plt.savefig('/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/figures/cont_OVERVIEW_frame_%d.pdf'%(fwhm, tavg, nsteps, maxstep, frame_number), dpi=300)
+
+
+# Magnetogram
 fig, ax = plt.subplots(1,1, figsize=figsize)
-im1, im2, quiv = create_plot(2, ax, quiver=True)
+im1, im2, quiv = create_plot(frame_numbers[0], ax, quiver=True)
 ax.tick_params(labelbottom=True,  labelleft=True, labelsize = fs)
 divider = make_axes_locatable(ax)
 cax = divider.append_axes("right", size="5%", pad=0.05)
@@ -314,7 +383,11 @@ ax.set_xlabel('x [px]')
 ax.set_ylabel('y [px]')
 fig.tight_layout()
 
-plt.savefig('/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/figures/lanes_fwhm%d_tavg%d_nsteps%d_maxstep%d_OVERVIEW_frame_%d.pdf'%(fwhm, tavg, nsteps, maxstep, frame_numbers[0]), dpi=300)
+plt.savefig('/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/figures/mag_lanes_fwhm%d_tavg%d_nsteps%d_maxstep%d_OVERVIEW_frame_%d.pdf'%(fwhm, tavg, nsteps, maxstep, frame_numbers[0]), dpi=300)
+
+
+
+
 
 # Circle coordinates
 #coords=(225 - fov[0], 176 - fov[2])
