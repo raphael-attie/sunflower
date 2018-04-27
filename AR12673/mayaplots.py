@@ -56,7 +56,7 @@ def plot_flow_vectors(vx, vy, fig, offset=0, reverse = False):
     src = mlab.pipeline.vector_field(x+offset, y+offset, z, u, v, w, figure=fig)
     #src = mlab.pipeline.vector_field(u, v, w, figure=fig)
     magnitude = mlab.pipeline.extract_vector_norm(src)
-    vec = mlab.pipeline.vectors(magnitude, mask_points=20, scale_factor=9., line_width=4, colormap='Oranges')
+    vec = mlab.pipeline.vectors(magnitude, mask_points=20, scale_factor=8., line_width=4, colormap='Oranges')
     vec.module_manager.vector_lut_manager.reverse_lut = reverse
     vec.glyph.glyph_source.glyph_position = 'center'
 
@@ -98,7 +98,7 @@ def add_scalar_colorbar(src, data_min, data_max, nlabels):
     #mlab.move(-380, 0, 0)
 
 
-    src.module_manager.scalar_lut_manager.scalar_bar_representation.position = np.array([0.85, 0.14])
+    src.module_manager.scalar_lut_manager.scalar_bar_representation.position = np.array([0.87, 0.14])
     src.module_manager.scalar_lut_manager.scalar_bar_representation.position2 = np.array([0.1, 0.725])
     src.module_manager.scalar_lut_manager.show_scalar_bar = True
     src.module_manager.scalar_lut_manager.show_legend = True
@@ -119,7 +119,7 @@ def add_vector_colorbar(src):
 
     mlab.move(-380, 0, 0)
 
-    src.module_manager.vector_lut_manager.scalar_bar_representation.position = np.array([0.85, 0.14])
+    src.module_manager.vector_lut_manager.scalar_bar_representation.position = np.array([0.87, 0.14])
     src.module_manager.vector_lut_manager.scalar_bar_representation.position2 = np.array([0.1, 0.725])
     src.module_manager.vector_lut_manager.show_scalar_bar = True
 

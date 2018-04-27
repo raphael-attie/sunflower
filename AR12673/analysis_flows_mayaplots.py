@@ -49,7 +49,7 @@ def lanes_plot(frame_number, file_name, fov=None, do_print=False):
     mag, lanes, vx, vy = get_data(frame_number)
     cont = get_avg_data(datafile, tslices[frame_number])
 
-    offset = 1
+    offset = 2
     if fov is not None:
         lanes = lanes[fov[2]:fov[3], fov[0]:fov[1]]
         cont = cont[fov[2]:fov[3], fov[0]:fov[1]]
@@ -57,11 +57,12 @@ def lanes_plot(frame_number, file_name, fov=None, do_print=False):
         vx = vx[fov[2]+offset:fov[3]-offset, fov[0]+offset:fov[1]-offset]
         vy = vy[fov[2]+offset:fov[3]-offset, fov[0]+offset:fov[1]-offset]
 
-    fig = mlab.figure(size=(500, 500), bgcolor=(1,1,1), fgcolor=(0.5, 0.5, 0.5))
+    fig = mlab.figure(size=(1000, 1000), bgcolor=(1,1,1), fgcolor=(0.5, 0.5, 0.5))
 
     mag_plot = mayaplots.plot_im(mag, vmin=-200, vmax=200)
     lanes_plot = mayaplots.plot_lanes(lanes)
 
+    ## axes tick labels are incompatible with the magnification/printing mechanism
     #ax = mayaplots.add_axes_labels(fig, mag.T.shape, ranges=[0, 500, 0, 500, 0, 1])
 
     magnitude, vec = mayaplots.plot_flow_vectors(vx, vy, fig, offset=offset, reverse = False)
@@ -75,7 +76,7 @@ def lanes_plot(frame_number, file_name, fov=None, do_print=False):
 
     mlab.draw()
     if do_print:
-        mlab.savefig(file_name + '_%d' % frame_number + '.png', magnification = 4)
+        mlab.savefig(file_name + '_%d' % frame_number + '.png', magnification = 2)
 
     mlab.show()
     return fig
@@ -84,7 +85,7 @@ def lanes_plot(frame_number, file_name, fov=None, do_print=False):
 datafile = '/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/mtrack_20170901_000000_TAI20170905_235959_LambertCylindrical_continuum.fits'
 datafilem = '/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/mtrack_20170901_000000_TAI20170905_235959_LambertCylindrical_magnetogram.fits'
 tracking_dir ='/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/python_balltracking'
-fig_dir = '/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/figures/'
+fig_dir = '/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/figures/paper/'
 ### Velocity field parameters
 fwhm = 15
 tavg = 160
@@ -113,12 +114,25 @@ ms_unit = px_meter / 45
 
 # Grab data
 frame_numbers = [3, 12, 14, 25, 39, 46]
-
 # for frame_nb in frame_numbers:
-fov=(235-50, 235+50, 190-50, 190+50)
+fov=(220-50, 220+75, 190-50, 190+75)
 
 fig = lanes_plot(frame_numbers[2], os.path.join(fig_dir, 'sample_lanes_streamlines_fwhm%d_tavg%d_nsteps%d'%(fwhm, tavg, nsteps)), fov=fov, do_print=True)
 
 for frame_nb in frame_numbers:
     fig = lanes_plot(frame_nb, os.path.join(fig_dir, 'lanes_streamlines_fwhm%d_tavg%d_nsteps%d'%(fwhm, tavg, nsteps)), fov=fov, do_print=True)
     mlab.close()
+
+# 2nd case of emergence
+
+# Grab data
+frame_numbers = [44, 46, 50, 52, 56, 60]
+# for frame_nb in frame_numbers:
+fov=(200-50, 200+75, 285-50, 285+75)
+
+fig = lanes_plot(frame_numbers[2], os.path.join(fig_dir, 'sample_lanes_streamlines_fwhm%d_tavg%d_nsteps%d_case2'%(fwhm, tavg, nsteps)), fov=fov, do_print=True)
+
+for frame_nb in frame_numbers:
+    fig = lanes_plot(frame_nb, os.path.join(fig_dir, 'lanes_streamlines_fwhm%d_tavg%d_nsteps%d_case2'%(fwhm, tavg, nsteps)), fov=fov, do_print=True)
+    mlab.close()
+
