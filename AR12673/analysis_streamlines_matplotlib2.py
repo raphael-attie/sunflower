@@ -3,8 +3,8 @@ import csv
 import numpy as np
 import matplotlib
 #matplotlib.use('qt4agg')
-matplotlib.use('macosx')
-#matplotlib.use('agg')
+#matplotlib.use('macosx')
+matplotlib.use('agg')
 import fitstools
 import fitsio
 import datetime
@@ -21,6 +21,8 @@ from scipy.ndimage.morphology import binary_dilation, binary_opening, binary_clo
 from scipy.ndimage.measurements import center_of_mass
 from scipy.ndimage.filters import gaussian_filter
 import cv2
+from sunpy.coordinates.ephemeris import get_sun_L0, get_sun_B0
+import astropy.units as u
 
 fs = 9
 
@@ -104,9 +106,16 @@ def azimuth_analysis(frame_number, dr, case, doprint=False):
     plt.close('all')
     mag, lanes, lanes_colored, vx, vy, cont = get_data(frame_number)
     lanes = blt.make_lanes(vx, vy, 50, maxstep)
+
+    # convert the lambert cylindrical unit to meters and meters/second
+    #L0 = get_sun_L0(time=dtimes[frame_number]).to_value(u.deg)
+    #lon = 118.0 - L0
+    lat = -8.5 - get_sun_B0(time=dtimes[frame_number]).to_value(u.deg)
+    dlat = 1.0 / np.cos(lat * np.pi/180.0)
+
     vx *= ms_unit
     vy *= ms_unit
-    vnorm = np.sqrt(vx ** 2 + vy ** 2)
+    vnorm = np.sqrt(vx ** 2 + (vy*dlat) ** 2)
 
     sigma_factor = 2
     surface, mean, sigma = blt.prep_data2(cont, sigma_factor)
@@ -122,7 +131,8 @@ def azimuth_analysis(frame_number, dr, case, doprint=False):
     se = skimage.morphology.disk(dilation_radius)
     spot_mask_dilated = binary_dilation(spot_mask, structure=se)
     spot_dist = distance_transform_edt(spot_mask_dilated)
-    min_radius = round(spot_dist.max() - dilation_radius/2)+1
+    #min_radius = round(spot_dist.max() - dilation_radius/2)+1
+    min_radius = round(spot_dist.max() - dilation_radius / 2) + 1
     max_radius = min_radius + dr
     spot_mask_dilated2 = binary_dilation(spot_mask_dilated, structure=skimage.morphology.disk(max_radius))
 
@@ -179,21 +189,31 @@ def azimuth_analysis(frame_number, dr, case, doprint=False):
         pass_nb += 1
 
     if doprint:
-        fig, axs = plt.subplots(1, 2, figsize=(9,4))
-        axs[0].imshow(lanes_pol2.T, extent=[phi.min(), phi.max(), rho.min(), rho.max()], cmap='gray_r', origin='lower')
+        fig, axs = plt.subplots(2, 1, figsize=(4,5.5))
+        imlanes = axs[0].imshow(lanes_pol2.T, extent=[phi.min(), phi.max(), rho.min(), rho.max()], cmap='gray_r', origin='lower')
         axs[0].set_ylim([0, 220])
-        axs[0].set_xlabel('Azimuth [degrees]')
-        axs[0].set_ylabel('Radial distance [px]')
+        #axs[0].set_xlabel('Azimuth [degrees]')
+        axs[0].set_ylabel('Radial distance [px]', fontsize=fs)
+
+        divider = make_axes_locatable(axs[0])
+        cax = divider.append_axes("top", size="3%", pad=0.3)
+        fig.colorbar(imlanes, cax=cax, ax=[axs[0], axs[1]], orientation='horizontal')
+        cax.set_title('Distance [px]', fontsize=fs)
+
+        axs[0].tick_params(labelsize=fs)
+
         axs[1].imshow(binary_dilation(lanes_pol2 > lanes_max, skimage.morphology.rectangle(dilation_length,2)).T, extent=[phi.min(), phi.max(), rho.min(), rho.max()], cmap='gray_r', origin='lower')
         axs[1].set_ylim([0, 220])
-        axs[1].set_xlabel('Azimuth [degrees]')
-        axs[0].set_ylabel('Radial distance [px]')
-        plt.tight_layout()
+        axs[1].set_xlabel('Azimuth [degrees]', fontsize=fs)
+        axs[1].set_ylabel('Radial distance [px]', fontsize=fs)
+        axs[1].tick_params(labelsize=fs)
+        #plt.tight_layout()
         #plt.show()
+        fig.subplots_adjust(top=0.99, hspace=-0.15, left=0.15, bottom=0.02)
         plt.savefig('/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/figures/paper/lanes_polar_frame_%d_case_%d.pdf'%(frame_number, case), dpi=300)
     # Extract within the boundary radius
     boundary_min = boundary_r - 5
-    vn_mean1d = [vn_pol[i, int(min_radius):boundary_min[i]].mean() for i in range(phi.size)]
+    vn_mean1d = np.array([vn_pol[i, int(min_radius):boundary_min[i]].mean() for i in range(phi.size)])
     # Smooth the boundary
     boundary_r = gaussian_filter(boundary_r.astype(float), 3)
     # Smooth the velocity
@@ -204,8 +224,28 @@ def azimuth_analysis(frame_number, dr, case, doprint=False):
     #vn_pol2 = [vn_pol[i, int(min_radius):boundary_min[i]] for i in range(phi.size)]
     # Take mean value along rho axis
 
+
     if doprint:
+
+
         lanes_colored = get_lanes_rgba(lanes, color=(0,0,1))
+
+        figsize = (4, 4)
+        fig, ax = plt.subplots(1, 1, figsize=figsize)
+        imlanes = ax.imshow(lanes, vmin=0, vmax=65, cmap='gray_r', origin='lower')
+        ax.set_xlabel('x [px]', fontsize=fs)
+        ax.set_ylabel('y [px]', fontsize=fs)
+        ax.tick_params(labelsize=fs)
+
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("top", size="3%", pad=0.3)
+        fig.colorbar(imlanes, cax=cax, ax=[axs[0], axs[1]], orientation='horizontal')
+        cax.set_title('Distance [px]', fontsize=fs)
+        cax.tick_params(labelsize=fs)
+        fig.tight_layout()
+        plt.savefig(
+            '/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/figures/paper/lanes_fwhm%d_tavg%d_nsteps%d_overview_frame_%d_case_%d.pdf' % (
+            fwhm, tavg, nsteps, frame_number, case), dpi=300)
 
         figsize = (6.5, 6.5)
         fig, ax = plt.subplots(1, 1, figsize=figsize)
@@ -217,15 +257,13 @@ def azimuth_analysis(frame_number, dr, case, doprint=False):
                          units='xy', scale=quiver_scale, width=shaft_width, headwidth=headwidth, headlength=headlength,
                          cmap='Oranges')
 
-        # divider = make_axes_locatable(ax)
-        # cax = divider.append_axes("right", size="5%", pad=0.05)
-        # fig.colorbar(quiv, cax=cax)
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="3%", pad=0.10)
+        fig.colorbar(quiv, cax=cax)
+        cax.set_ylabel('v [m/s]')
 
-        # plt.contour(cont, levels = [cont[0:200, 0:200].mean() - 4 * cont[0:200, 0:200].std()], colors='orange')
-        # ax.contour(spot_mask_dilated.astype(int), 1, colors='red')
-        # ax.contour(spot_mask_dilated2.astype(int), 1, colors='green')
         ax.plot(xmax2, ymax2, 'r+')
-        ax.plot(xcom, ycom, 'g.', markerfacecolor='none')
+        ax.plot(xcom, ycom, '.', color=(0,1,0), markerfacecolor='none', ms = 8, lw=2)
 
         circle1 = plt.Circle((xcom, ycom), radius=220, color='black', ls='--', fill=False)
         ax.add_patch(circle1)
@@ -233,8 +271,9 @@ def azimuth_analysis(frame_number, dr, case, doprint=False):
         ax.contour(rm1, 1, colors='red')
         #ax.contour(rm2, 1, colors='green')
 
-        ax.set_xlabel('x [px]')
-        ax.set_ylabel('y [px]')
+        ax.set_xlabel('x [px]', fontsize=fs)
+        ax.set_ylabel('y [px]', fontsize=fs)
+        ax.tick_params(labelsize=fs)
 
         text = ax.text(0.02, 0.97, dtimes[frame_number].strftime('%x %X') + ' Frame %d'%frame_number, fontsize=fs,
                        bbox=dict(boxstyle="square", fc='white', alpha=0.8),
@@ -485,8 +524,13 @@ shaft_width = 1.2
 headwidth = 3
 headlength = 5
 
-doprint=False
+doprint=True
+
+L0_start = get_sun_L0(time='2017-09-01T01:00:00').to_value(u.deg)
+L0 = get_sun_L0(time='2017-09-03T12:30:00').to_value(u.deg)
+
 # Get the preceding quiet states
+
 
 dr = 20
 phi_vn_r0 = [azimuth_analysis(i, dr, 0, doprint=doprint) for i in [0,1,2]]
@@ -501,58 +545,165 @@ phi_vn_r2 = [azimuth_analysis(f, dr, 2, doprint=doprint) for f in frame_numbers]
 phi = phi_vn_r1[0][0]
 rho = np.arange(512)
 
+phi_mask = np.logical_and(phi >=220, phi<260)
+
 figsize = (6, 6)
 frame_numbers = [3, 12, 14, 25, 39, 46]
+max_r_loc = int(np.argmax(phi_vn_r1[1][2]))
+phi_max = phi[max_r_loc]
+
+
+med_r = np.median(phi_vn_r1[0][2])
+mean_r = phi_vn_r1[0][2].mean()
+sigma_r = phi_vn_r1[0][2].std()
+
+
+# max position when indexing from the end
+max_r_loc_end =phi_vn_r1[1][2].size - max_r_loc -1
+# Get the left and right azimuthal limits
+r_mask1 = np.abs(phi_vn_r1[1][2][::-1][max_r_loc_end:] - mean_r) >  sigma_r
+r_off_left = int(round(max_r_loc - np.where(~r_mask1)[0][0]))
+r_mask2 = np.abs(phi_vn_r1[1][2][max_r_loc:] - mean_r) >  sigma_r
+r_off_right = int(round(max_r_loc + np.where(~r_mask2)[0][0]))
+
+phi_mask = np.ones(phi.size, dtype=np.bool)
+phi_mask[r_off_left:r_off_right] = False
+
+v_filtered = phi_vn_r1[0][1][phi_mask]
+med_v = np.median(v_filtered)
+mean_v = v_filtered.mean()
+sigma_v = v_filtered.std()
+
 
 fig, ax = plt.subplots(2, 1, figsize=figsize)
 ax[0].plot(phi, phi_vn_r1[0][2], 'k--', lw=2, label='frame %d'%frame_numbers[0])
 ax[0].plot(phi, phi_vn_r1[1][2], 'g-', lw=2, label='frame %d'%frame_numbers[1])
-ax[0].plot(phi, phi_vn_r1[2][2], color='red', lw=2, ls='-.', label='frame %d'%frame_numbers[2])
+ax[0].plot(phi, phi_vn_r1[2][2], 'r-.', lw=2, label='frame %d'%frame_numbers[2])
 # ax[0].plot(phi_vn_r1[3][0], phi_vn_r1[3][2], color='blue', lw=2, ls=':', label='frame %d'%frame_numbers[3])
-# ax[0].plot(phi_vn_r1[4][0], phi_vn_r1[4][2], color='orange', ls='-', lw=1, label='frame %d'%frame_numbers[4])
+ax[0].plot(phi_vn_r1[4][0], phi_vn_r1[4][2], 'b:', lw=2, label='frame %d'%frame_numbers[4])
 #ax[0].plot(phi_vn_r1[5][0], phi_vn_r1[5][2], color='grey', ls='--', lw=1, label='frame %d'%frame_numbers[5])
-ax[0].axvline(x=220, ls='-', linewidth=1, color='black')
-ax[0].axvline(x=260, ls='-', linewidth=1, color='black')
+ax[0].axvline(x=phi[r_off_left], ls='-', linewidth=1, color='black')
+ax[0].axvline(x=phi[r_off_right], ls='-', linewidth=1, color='black')
+text = ax[0].text(phi[r_off_left]+2, 105, 'Case 1 & 2', fontsize=fs)
+
+text = ax[0].text(0.86, 0.1, r'$\overline{r}$ = %d px'%mean_r, fontsize=fs, transform=ax[0].transAxes)
+text = ax[0].text(0.86, 0.04, r'$\sigma_r$ = %d px'%sigma_r, fontsize=fs, transform=ax[0].transAxes)
+ax[0].axhline(y=mean_r, ls='-', linewidth=2, color='gray')
+ax[0].axhline(y=mean_r + 2*sigma_r, ls='--', linewidth=1, color='gray')
+ax[0].axhline(y=mean_r - 2*sigma_r, ls='--', linewidth=1, color='gray')
+text = ax[0].text(5, mean_r + 2, r'$\overline{r}$', fontsize=fs)
+text = ax[0].text(5, mean_r + 2*sigma_r + 2, r'$\overline{r} + 2 \sigma_r$', fontsize=fs)
+text = ax[0].text(5, mean_r - 2*sigma_r - 6, r'$\overline{r} - 2 \sigma_r$', fontsize=fs)
 
 ax[0].set_xlim([0, 360])
 ax[0].set_ylim([20, 110])
-ax[0].set_xlabel('Moat azimuth [degrees]')
-ax[0].set_ylabel('Moat radius [px]')
-ax[0].legend()
+ax[0].set_xlabel('Azimuth [degrees]')
+ax[0].set_ylabel('r [px]')
+ax[0].legend(loc='upper right')
 ax[0].tick_params(labelsize=fs)
 
 ax[1].plot(phi, phi_vn_r1[0][1], 'k--', lw=2)
 ax[1].plot(phi, phi_vn_r1[1][1], 'g-', lw=2)
-ax[1].plot(phi, phi_vn_r1[2][1], color='red', lw=2, ls='-.')
+ax[1].plot(phi, phi_vn_r1[2][1], 'r-.', lw=2)
+ax[1].plot(phi, phi_vn_r1[4][1], 'b:', lw=2)
 ax[1].set_xlim([0, 360])
 ax[1].set_ylim([100, 700])
 ax[1].set_ylabel('v [m/s]')
 ax[1].set_xlabel('Azimuth [degrees]')
-ax[1].axvline(x=220, ls='-', linewidth=1, color='black')
-ax[1].axvline(x=260, ls='-', linewidth=1, color='black')
+ax[1].axvline(x=phi[r_off_left], ls='-', linewidth=1, color='black')
+ax[1].axvline(x=phi[r_off_right], ls='-', linewidth=1, color='black')
+
+text = ax[1].text(0.84, 0.1, r'$\overline{v}$ = %d m/s'%mean_v, fontsize=fs, transform=ax[1].transAxes)
+text = ax[1].text(0.84, 0.04, r'$\sigma_v$ = %d m/s'%sigma_v, fontsize=fs, transform=ax[1].transAxes)
+ax[1].axhline(y=mean_v, ls='-', linewidth=2, color='gray', label=r'$\overline{v}$')
+ax[1].axhline(y=mean_v + 2*sigma_v, ls='--', linewidth=1, color='gray')
+ax[1].axhline(y=mean_v - 2*sigma_v, ls='--', linewidth=1, color='gray')
+text = ax[1].text(5, mean_v + 5, r'$\overline{v}$', fontsize=fs)
+text = ax[1].text(5, mean_v + 2*sigma_v + 10, r'$\overline{v} + 2 \sigma_v$', fontsize=fs)
+text = ax[1].text(5, mean_v - 2*sigma_v - 40, r'$\overline{v} - 2 \sigma_v$', fontsize=fs)
 
 plt.tight_layout()
 plt.show()
-
 plt.savefig('/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/figures/paper/moat_radius_velocity_1.pdf', dpi=300)
 
 
 frame_numbers = [44, 46, 50, 52, 56, 60]
+
+med_r2 = np.median(phi_vn_r2[0][2])
+mean_r2 = phi_vn_r2[0][2].mean()
+sigma_r2 = phi_vn_r2[0][2].std()
+
+med_v2 = np.median(phi_vn_r2[0][1])
+mean_v2 = phi_vn_r2[0][1].mean()
+sigma_v2 = phi_vn_r2[0][1].std()
+
+# case 3
+vel3 = phi_vn_r2[2][2].copy()
+# max position
+max_r_loc = int(np.argmax(vel3))
+
+# max position when indexing from the end
+max_r_loc_end =vel3.size - max_r_loc -1
+# Get the left and right azimuthal limits
+r_mask1 = np.abs(vel3[::-1][max_r_loc_end:] - mean_r2) >  sigma_r2
+r_off_left1 = int(round(max_r_loc - np.where(~r_mask1)[0][0]))
+r_mask2 = np.abs(vel3[max_r_loc:] - mean_r2) >  sigma_r2
+r_off_right1 = int(round(max_r_loc + np.where(~r_mask2)[0][0]))
+
+phi_mask = np.ones(phi.size, dtype=np.bool)
+phi_mask[r_off_left1:r_off_right1] = False
+
+# case 4 - need to get rid of points over case 3
+vel3[~phi_mask] = 0
+# max position
+max_r_loc2 = int(np.argmax(vel3))
+# max position when indexing from the end
+max_r_loc_end =vel3.size - max_r_loc2 -1
+# Get the left and right azimuthal limits
+r_mask1 = np.abs(vel3[::-1][max_r_loc_end:] - mean_r2) >  sigma_r2
+r_off_left2 = int(round(max_r_loc2 - np.where(~r_mask1)[0][0]))
+r_mask2 = np.abs(vel3[max_r_loc2:] - mean_r2) >  sigma_r2
+r_off_right2 = int(round(max_r_loc2 + np.where(~r_mask2)[0][0]))
+# Update the phi mask
+phi_mask[r_off_left2:r_off_right2] = False
+
+
+v_filtered = phi_vn_r2[0][1][phi_mask]
+med_v2 = np.median(v_filtered)
+mean_v2 = v_filtered.mean()
+sigma_v2 = v_filtered.std()
+
+
+
 fig, ax = plt.subplots(2, 1, figsize=figsize)
-ax[0].plot(phi_vn_r2[0][0], phi_vn_r2[0][2], 'k--', label='frame %d'%frame_numbers[0])
-ax[0].plot(phi_vn_r2[1][0], phi_vn_r2[1][2], 'g-', label='frame %d'%frame_numbers[1])
-ax[0].plot(phi_vn_r2[2][0], phi_vn_r2[2][2], color='red', ls='-.', label='frame %d'%frame_numbers[2])
+ax[0].plot(phi, phi_vn_r2[0][2], 'k--', label='frame %d'%frame_numbers[0])
+ax[0].plot(phi, phi_vn_r2[1][2], 'g-', label='frame %d'%frame_numbers[1])
+ax[0].plot(phi, phi_vn_r2[2][2], color='red', ls='-.', label='frame %d'%frame_numbers[2])
 # ax[1].plot(phi_vn_r2[3][0], phi_vn_r2[3][2], color='blue', ls=':', label='frame %d'%frame_numbers[3])
 # ax[1].plot(phi_vn_r2[4][0], phi_vn_r2[4][2], color='orange', ls='-', lw=1, label='frame %d'%frame_numbers[4])
 ax[0].plot(phi_vn_r2[5][0], phi_vn_r2[5][2], color='grey', ls='--', lw=2, label='frame %d'%frame_numbers[5])
 
-ax[0].axvline(x=130, ls='-', linewidth=1, color='black')
-ax[0].axvline(x=155, ls='-', linewidth=1, color='black')
-ax[0].axvline(x=190, ls='-', linewidth=1, color='black')
+ax[0].axvline(x=phi[r_off_left1], ls='-', linewidth=1, color='black')
+ax[0].axvline(x=phi[r_off_right1], ls='-', linewidth=1, color='black')
+ax[0].axvline(x=phi[r_off_left2], ls='-', linewidth=1, color='black')
+ax[0].axvline(x=phi[r_off_right2], ls='-', linewidth=1, color='black')
+
+text = ax[0].text(0.86, 0.1, r'$\overline{r}$ = %d px'%mean_r2, fontsize=fs, transform=ax[0].transAxes)
+text = ax[0].text(0.86, 0.04, r'$\sigma_r$ = %d px'%sigma_r2, fontsize=fs, transform=ax[0].transAxes)
+ax[0].axhline(y=mean_r2, ls='-', linewidth=2, color='gray')
+ax[0].axhline(y=mean_r2 + 2*sigma_r2, ls='--', linewidth=1, color='gray')
+ax[0].axhline(y=mean_r2 - 2*sigma_r2, ls='--', linewidth=1, color='gray')
+text = ax[0].text(1, mean_r2 + 1, r'$\overline{r}$', fontsize=fs)
+text = ax[0].text(5, mean_r2 + 2*sigma_r2 + 7, r'$\overline{r} + 2 \sigma_r$', fontsize=fs)
+text = ax[0].text(5, mean_r2 - 2*sigma_r2 - 6, r'$\overline{r} - 2 \sigma_r$', fontsize=fs)
+
+text = ax[0].text(phi[r_off_left2]+2, 90, 'Case 3', fontsize=fs, rotation = 'vertical')
+text = ax[0].text(phi[r_off_left1]+2, 90, 'Case 4', fontsize=fs, rotation = 'vertical')
+
 
 ax[0].set_xlim([0, 360])
 ax[0].set_ylim([20, 110])
-ax[0].set_xlabel('Moat azimuth [degrees]')
+ax[0].set_xlabel('Azimuth [degrees]')
 ax[0].set_ylabel('Moat radius [px]')
 ax[0].legend(loc='upper right')
 ax[0].tick_params(labelsize=fs)
@@ -565,33 +716,45 @@ ax[1].set_xlim([0, 360])
 ax[1].set_ylim([100, 700])
 ax[1].set_ylabel('v [m/s]')
 ax[1].set_xlabel('Azimuth [degrees]')
-ax[1].axvline(x=130, ls='-', linewidth=1, color='black')
-ax[1].axvline(x=155, ls='-', linewidth=1, color='black')
-ax[1].axvline(x=190, ls='-', linewidth=1, color='black')
+ax[1].axvline(x=phi[r_off_left1], ls='-', linewidth=1, color='black')
+ax[1].axvline(x=phi[r_off_right1], ls='-', linewidth=1, color='black')
+ax[1].axvline(x=phi[r_off_left2], ls='-', linewidth=1, color='black')
+ax[1].axvline(x=phi[r_off_right2], ls='-', linewidth=1, color='black')
+
+text = ax[1].text(0.84, 0.1, r'$\overline{v}$ = %d m/s'%mean_v2, fontsize=fs, transform=ax[1].transAxes)
+text = ax[1].text(0.84, 0.04, r'$\sigma_v$ = %d m/s'%sigma_v2, fontsize=fs, transform=ax[1].transAxes)
+ax[1].axhline(y=mean_v2, ls='-', linewidth=2, color='gray', label=r'$\overline{v}$')
+ax[1].axhline(y=mean_v2 + 2*sigma_v2, ls='--', linewidth=1, color='gray')
+ax[1].axhline(y=mean_v2 - 2*sigma_v2, ls='--', linewidth=1, color='gray')
+text = ax[1].text(5, mean_v2 + 30, r'$\overline{v}$', fontsize=fs)
+text = ax[1].text(5, mean_v2 + 2*sigma_v2 + 30, r'$\overline{v} + 2 \sigma_v$', fontsize=fs)
+text = ax[1].text(5, mean_v2 - 2*sigma_v2 - 60, r'$\overline{v} - 2 \sigma_v$', fontsize=fs)
 
 plt.tight_layout()
 plt.show()
-
 plt.savefig('/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/figures/paper/moat_radius_velocity_2.pdf', dpi=300)
 
 # Relative evolution
 ref = phi_vn_r1[0][2]
 vref = phi_vn_r1[0][1]
+
+mean_dr = phi_vn_r1[0][2].mean()
+sigma_dr = phi_vn_r1[0][2].std()
+
 figsize = (6, 6)
 frame_numbers = [3, 12, 14, 25, 39, 46]
 fig, ax = plt.subplots(2, 1, figsize=figsize)
 ax[0].axhline(y=0, ls='--', linewidth=1, color='black')
-ax[0].plot(phi_vn_r1[1][0], (phi_vn_r1[1][2] - ref)/ref, 'g-', lw=2, label='frame %d'%frame_numbers[1])
-ax[0].plot(phi_vn_r1[2][0], (phi_vn_r1[2][2] - ref)/ref, color='red', lw=2, ls='-.', label='frame %d'%frame_numbers[2])
-# ax[0].plot(phi_vn_r1[3][0], phi_vn_r1[3][2], color='blue', lw=2, ls=':', label='frame %d'%frame_numbers[3])
-# ax[0].plot(phi_vn_r1[4][0], phi_vn_r1[4][2], color='orange', ls='-', lw=1, label='frame %d'%frame_numbers[4])
-#ax[0].plot(phi_vn_r1[5][0], phi_vn_r1[5][2], color='grey', ls='--', lw=1, label='frame %d'%frame_numbers[5])
-ax[0].axvline(x=220, ls='-', linewidth=1, color='black')
-ax[0].axvline(x=260, ls='-', linewidth=1, color='black')
+ax[0].plot(phi, (phi_vn_r1[1][2] - ref)/ref, 'g-', lw=2, label='frame %d'%frame_numbers[1])
+ax[0].plot(phi, (phi_vn_r1[2][2] - ref)/ref, color='red', lw=2, ls='-.', label='frame %d'%frame_numbers[2])
+ax[0].plot(phi, (phi_vn_r1[4][2] - ref)/ref, 'b:', lw=2, label='frame %d'%frame_numbers[4])
+ax[0].axvline(x=phi[r_off_left], ls='-', linewidth=1, color='black')
+ax[0].axvline(x=phi[r_off_right], ls='-', linewidth=1, color='black')
+text = ax[0].text(phi[r_off_left], 0.45, 'Case 1 & 2', fontsize=fs)
 
 ax[0].set_xlim([0, 360])
 ax[0].set_ylim([-0.51, 0.51])
-ax[0].set_xlabel('Moat azimuth [degrees]')
+ax[0].set_xlabel('Azimuth [degrees]')
 ax[0].set_ylabel(r'$\Delta$r / r')
 ax[0].legend()
 ax[0].tick_params(labelsize=fs)
@@ -599,13 +762,15 @@ ax[0].tick_params(labelsize=fs)
 
 ax[1].axhline(y=0, ls='--', linewidth=1, color='black')
 ax[1].plot(phi, (phi_vn_r1[1][1] - vref)/vref, 'g-', lw=2)
-ax[1].plot(phi, (phi_vn_r1[2][1] - vref)/vref, color='red', lw=2, ls='-.')
+ax[1].plot(phi, (phi_vn_r1[2][1] - vref)/vref, 'r-.', lw=2)
+ax[1].plot(phi, (phi_vn_r1[4][1] - vref)/vref, 'b:', lw=2)
 ax[1].set_xlim([0, 360])
-ax[1].set_ylim([-1, 1])
+ax[1].set_ylim([-1.05, 1.05])
 ax[1].set_ylabel(r'$\Delta$v / v')
 ax[1].set_xlabel('Azimuth [degrees]')
-ax[1].axvline(x=220, ls='-', linewidth=1, color='black')
-ax[1].axvline(x=260, ls='-', linewidth=1, color='black')
+ax[1].axvline(x=phi[r_off_left], ls='-', linewidth=1, color='black')
+ax[1].axvline(x=phi[r_off_right], ls='-', linewidth=1, color='black')
+ax[1].set_yticks(np.arange(-1, 1.05, 0.25))
 
 plt.tight_layout()
 plt.show()
@@ -625,13 +790,17 @@ ax[0].plot(phi_vn_r2[2][0], (phi_vn_r2[2][2] - ref)/ref, color='red', ls='-.', l
 # ax[0].plot(phi_vn_r2[4][0], phi_vn_r2[4][2], color='orange', ls='-', lw=1, label='frame %d'%frame_numbers[4])
 ax[0].plot(phi_vn_r2[5][0], (phi_vn_r2[5][2] - ref)/ref, color='grey', ls='--', lw=2, label='frame %d'%frame_numbers[5])
 
-ax[0].axvline(x=130, ls='-', linewidth=1, color='black')
-ax[0].axvline(x=155, ls='-', linewidth=1, color='black')
-ax[0].axvline(x=190, ls='-', linewidth=1, color='black')
+ax[0].axvline(x=phi[r_off_left1], ls='-', linewidth=1, color='black')
+ax[0].axvline(x=phi[r_off_right1], ls='-', linewidth=1, color='black')
+ax[0].axvline(x=phi[r_off_left2], ls='-', linewidth=1, color='black')
+ax[0].axvline(x=phi[r_off_right2], ls='-', linewidth=1, color='black')
+text = ax[0].text(phi[r_off_left2]+1, 0.45, 'Case 3', fontsize=fs, rotation = 'vertical')
+text = ax[0].text(phi[r_off_left1]+1, 0.45, 'Case 4', fontsize=fs, rotation = 'vertical')
+
 
 ax[0].set_xlim([0, 360])
 ax[0].set_ylim([-0.51, 0.51])
-ax[0].set_xlabel('Moat azimuth [degrees]')
+ax[0].set_xlabel('Azimuth [degrees]')
 ax[0].set_ylabel(r'$\Delta$r / r')
 ax[0].legend(loc='upper right')
 ax[0].tick_params(labelsize=fs)
@@ -641,15 +810,16 @@ ax[1].plot(phi, (phi_vn_r2[1][1] - vref)/vref, 'g-', lw=2)
 ax[1].plot(phi, (phi_vn_r2[2][1] - vref)/vref, color='red', lw=2, ls='-.')
 ax[1].plot(phi, (phi_vn_r2[5][1] - vref)/vref, color='grey', ls='--', lw=2)
 ax[1].set_xlim([0, 360])
-ax[1].set_ylim([-1, 1])
+ax[1].set_ylim([-1.05, 1.05])
 ax[1].set_ylabel(r'$\Delta$v / v')
 ax[1].set_xlabel('Azimuth [degrees]')
 
-ax[1].axvline(x=130, ls='-', linewidth=1, color='black')
-ax[1].axvline(x=155, ls='-', linewidth=1, color='black')
-ax[1].axvline(x=190, ls='-', linewidth=1, color='black')
+ax[1].axvline(x=phi[r_off_left1], ls='-', linewidth=1, color='black')
+ax[1].axvline(x=phi[r_off_right1], ls='-', linewidth=1, color='black')
+ax[1].axvline(x=phi[r_off_left2], ls='-', linewidth=1, color='black')
+ax[1].axvline(x=phi[r_off_right2], ls='-', linewidth=1, color='black')
 
-#ax[1].set_yticks(np.arange(-0.5, 0.6, 0.1))
+ax[1].set_yticks(np.arange(-1, 1.05, 0.25))
 plt.tight_layout()
 plt.show()
 plt.savefig('/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/figures/paper/moat_radius_velocity_relative_2.pdf', dpi=300)

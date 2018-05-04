@@ -15,7 +15,7 @@ def plot_im(im, vmin=None, vmax=None):
     im_t = im.copy().T
     dims = im_t.shape[0], im_t.shape[1]
     s1 = mlab.imshow(im_t, vmin=vmin, vmax=vmax, colormap='Greys', extent=[0, dims[1] - 1, 0, dims[0] - 1, 0, 0])
-    #s1.module_manager.scalar_lut_manager.reverse_lut = True
+    s1.module_manager.scalar_lut_manager.reverse_lut = True
     s1.update_pipeline()
     return s1
 
