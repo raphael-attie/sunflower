@@ -194,10 +194,13 @@ fig.tight_layout()
 
 # Animation
 
-interval = 10
-ani = animation.FuncAnimation(fig, update_fig, interval=interval, frames=1900, blit=True, repeat=False, init_func=init)
-fps = 400
-ani.save('/Users/rattie/Data/SDO/HMI/EARs/AR11105_2010_09_02_Aimee/movie_anim_interval%d_fps%d_segmentation.mp4'%(interval, fps), fps=fps)
+
+frames = range(0, 1900, 10)
+interval = 80
+ani = animation.FuncAnimation(fig, update_fig, interval=interval, frames=frames, blit=True, repeat=False, init_func=init)
+fps = 40
+codec = 'libx264'
+ani.save('/Users/rattie/Data/SDO/HMI/EARs/AR11105_2010_09_02_Aimee/movie_anim_interval%d_fps%d_segmentation_codec_%s.mp4'%(interval, fps, codec), fps=fps, extra_args=['-vcodec', codec])
 
 # #
 # #
