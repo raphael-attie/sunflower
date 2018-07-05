@@ -361,27 +361,6 @@ def create_plot(frame_number, ax, lanes_color=(0,1,1), fov=None, coords=None, co
     return im1, im2, quiv
 
 
-def create_fig_31(frame_numbers, figsize, **kwargs):
-
-    fig, axs = plt.subplots(4,1, figsize=figsize, gridspec_kw={"height_ratios":[1, 1, 1, 0.07]})
-
-    _ = create_plot(frame_numbers[0], axs[0], **kwargs)
-    _ = create_plot(frame_numbers[1], axs[1], **kwargs)
-    im1,_,_ = create_plot(frame_numbers[2], axs[2], **kwargs)
-    axs[2].set_xlabel('Lambert cylindrical X')
-    fig.subplots_adjust(bottom=0.01, top=0.92, right=0.97, hspace=0.2)
-
-    ip = InsetPosition(axs[0], [0, 1.05, 1, 0.05])
-    axs[-1].set_axes_locator(ip)
-    cb = fig.colorbar(im1, cax=axs[-1], ax=[axs[0], axs[1], axs[2]], orientation='horizontal')
-    cb.set_ticks(np.arange(-800, 801, 400))
-    axs[-1].xaxis.tick_top()
-    axs[-1].xaxis.set_label_position('top')
-    axs[-1].set_xlabel('Bz')
-
-    return fig, axs, cb
-
-
 def create_fig_22(frame_numbers, figsize, **kwargs):
 
     fig, axs = plt.subplots(2,2, figsize=figsize)
@@ -630,7 +609,7 @@ plt.show()
 
 plt.savefig('/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/figures/paper/moat_radius_velocity_1.pdf', dpi=300)
 
-
+# Case 2
 frame_numbers = [44, 46, 50, 52, 56, 60]
 
 med_r2 = np.median(phi_vn_r2[0][2])
@@ -657,7 +636,7 @@ r_off_right1 = int(round(max_r_loc + np.where(~r_mask2)[0][0]))
 phi_mask = np.ones(phi.size, dtype=np.bool)
 phi_mask[r_off_left1:r_off_right1] = False
 
-# case 4 - need to get rid of points over case 3
+# case 3 and 4 - need to get rid of points over case 3
 vel3[~phi_mask] = 0
 # max position
 max_r_loc2 = int(np.argmax(vel3))
@@ -738,7 +717,7 @@ plt.tight_layout()
 plt.show()
 plt.savefig('/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/figures/paper/moat_radius_velocity_2.pdf', dpi=300)
 
-# Relative evolution
+# Relative evolution Case 1 & 2
 ref = phi_vn_r1[0][2]
 vref = phi_vn_r1[0][1]
 
@@ -783,7 +762,7 @@ plt.savefig('/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/figures/paper/mo
 #TODO: bin the data over wedges. Integrate magnetogram over wedges
 # see https://stackoverflow.com/questions/6163334/binning-data-in-python-with-scipy-numpy
 bins = np.arange(0,361,24)
-
+# Bin the relative change of the moat radius
 drrs = [(phi_vn_r1[i][2] - ref)/ref for i in range(len(phi_vn_r1))]
 bin_width = 34
 conv_drrs = [np.convolve(drr, np.ones((bin_width,))/bin_width, mode='valid') for drr in drrs]
