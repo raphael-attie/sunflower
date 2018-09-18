@@ -17,7 +17,6 @@ nframes = int((3600*24*2 + 18*3600)/45) # 5280 frames
 
 # Load the series
 image = fitstools.fitsread(datafile, tslice=0).astype(np.float32)
-dims = image.shape
 ### Ball parameters
 
 # Ball radius
@@ -28,10 +27,10 @@ dp = 0.2
 sigma_factor = 2
 
 # Get a BT instance with the above parameters
-bt_tf = blt.BT(dims, nframes, rs, dp, sigma_factor=sigma_factor, mode='top', direction='forward', datafiles=datafile)
-bt_tb = blt.BT(dims, nframes, rs, dp, sigma_factor=sigma_factor, mode='top', direction='backward', datafiles=datafile)
-bt_bf = blt.BT(dims, nframes, rs, dp, sigma_factor=sigma_factor, mode='bottom', direction='forward', datafiles=datafile)
-bt_bb = blt.BT(dims, nframes, rs, dp, sigma_factor=sigma_factor, mode='bottom', direction='backward', datafiles=datafile)
+bt_tf = blt.BT(nframes, rs, dp, sigma_factor=sigma_factor, mode='top', direction='forward', datafiles=datafile)
+bt_tb = blt.BT(nframes, rs, dp, sigma_factor=sigma_factor, mode='top', direction='backward', datafiles=datafile)
+bt_bf = blt.BT(nframes, rs, dp, sigma_factor=sigma_factor, mode='bottom', direction='forward', datafiles=datafile)
+bt_bb = blt.BT(nframes, rs, dp, sigma_factor=sigma_factor, mode='bottom', direction='backward', datafiles=datafile)
 
 
 

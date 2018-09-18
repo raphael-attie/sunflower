@@ -64,7 +64,7 @@ hdu = fits.open(r.urls.url[0])
 """
 
 # Use url-tar export method
-out_dir = "/Users/rattie/Data/SDO/HMI/magnetograms/"
+out_dir = "/Users/rattie/Data/SDO/HMI/temp/"
 if not os.path.exists(out_dir):
     os.makedirs(out_dir)
 
@@ -77,6 +77,9 @@ c = drms.Client(email='raphael.attie@nasa.gov', verbose=True)
 # r = c.export('hmi.M_45s[2016.04.01_TAI/1h@900s]{magnetogram}', method='url-tar', protocol='fits')
 # r.wait()
 
+r = c.export('hmi.M_45s[2016.04.01_TAI/1h@45s]{magnetogram}', method='url-tar', protocol='fits')
+
+
 # spikes
 r3 = c.export('aia.lev1_euv_12s[2010.05.13_00:00/1h]{spikes}', method='url-tar', protocol='fits')
 r3.wait()
@@ -86,6 +89,17 @@ r4.wait()
 
 
 r.request_url
+
+
+out_dir = "/Users/rattie/Data/SDO/HMI/temp/"
+start_time = time.time()
+r = c.export('hmi.M_45s[2016.04.01_TAI/1d@45s]{magnetogram}', method='url-tar', protocol='fits')
+r.wait()
+r.download(out_dir)
+elapsed_time = time.time() - start_time
+print('export method url-tar, elapsed time (s):')
+print(elapsed_time)
+
 
 start_time2 = time.time()
 

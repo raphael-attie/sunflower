@@ -1,3 +1,8 @@
+"""
+This module hosts all the necessary functions to run balltracking.
+A main program should execute "balltrack_all()".
+"""
+
 import sys, os
 import numpy as np
 import numpy.ma as ma
@@ -7,17 +12,48 @@ from scipy.ndimage.filters import gaussian_filter
 import cython_modules.interp as cinterp
 import filters
 import fitstools
+from multiprocessing import Pool
+from functools import partial
 
 DTYPE = np.float32
 class BT:
 
-    def __init__(self, dims, nt, rs, dp, sigma_factor=1, mode='top', direction='forward', datafiles=None, data=None):
+    def __init__(self, nt, rs, dp, sigma_factor=1, mode='top', direction='forward', datafiles=None, data=None):
+
+        """
+        This is the class hosting all the parameters and intermediate results of balltracking.
+
+        :param nt: number of frames to process
+        :param rs: balls radius
+        :param dp: characteristic depth
+        :param sigma_factor: multiplier to the standard deviation
+        :param mode: string that determines which side of the data surface to track. Either 'top' or 'bottom'.
+        :param direction: string that determines whether we track 'forward' or 'backward' in time.
+        :param datafiles: path to data fits cube or to series of fits files.
+        :param data: numpy data cube whose dimensions are (y-axis, x-axis, time)
+        """
 
         self.datafiles = datafiles
         self.data = data
-        self.nx = int(dims[0])
-        self.ny = int(dims[1])
+        self.direction = direction
         self.nt = nt
+
+        # Get a sample. 1st of the series in forward direction. last of the series in backward direction.
+        # TODO: It could be wiser to get some average value between 1st, middle, and last of the series?
+        if self.data is None:
+            if self.direction == 'forward':
+                self.sample = fitstools.fitsread(self.datafiles, tslice=0).astype(np.float32)
+            elif self.direction == 'backward':
+                self.sample = fitstools.fitsread(self.datafiles, tslice=self.nt - 1).astype(np.float32)
+        else:
+            if self.direction == 'forward':
+                self.sample = self.data[:,:,0]
+            elif self.direction == 'backward':
+                self.sample = self.data[:,:,-1]
+
+        self.nx = int(self.sample.shape[1])
+        self.ny = int(self.sample.shape[0])
+
         self.intsteps = 3
         self.rs = rs
         self.dp = dp
@@ -95,20 +131,7 @@ class BT:
         # Sigma-clip outlyers (e.g. sunspots)
         # Get mean and standard deviation from the masked array, not affected by bad invalid values (sunspot, ...)
         # Generate the data surface from the image with the masked mean and sigma
-
-        if self.data is None:
-            if self.direction == 'forward':
-                data = fitstools.fitsread(self.datafiles, tslice=0).astype(np.float32)
-            elif self.direction == 'backward':
-                data = fitstools.fitsread(self.datafiles, tslice=self.nt - 1).astype(np.float32)
-        else:
-            if self.direction == 'forward':
-                data = self.data[:,:,0]
-            elif self.direction == 'backward':
-                data = self.data[:,:,-1]
-
-
-        surface, mean, sigma = prep_data2(data, self.sigma_factor)
+        surface, mean, sigma = prep_data2(self.sample, self.sigma_factor)
         self.mean = mean
         self.sigma = sigma
         # Initialize the height of the ball. Only possible if the data surface is given.
@@ -118,12 +141,237 @@ class BT:
         self.pos[2, :] = self.zstart.copy()
         # Setup the coarse grid: populate edges to avoid "leaks" of balls ~ balls falling off.
         # Although can't remember if that was actually ever used in the Matlab implementation
-        # TODO: check Matlab implementation about the use of the edge filling. (done)
         self.coarse_grid[0,:]   = 1
         self.coarse_grid[:, 0]  = 1
         self.coarse_grid[-1,:]  = 1
         self.coarse_grid[:, -1] = 1
         return
+
+
+    def track(self):
+
+        # Outer loop goes over the data frames.
+        # If data is a fits cube, we just access a slice of it
+
+        # Initialize
+
+        self.initialize()
+
+        for n in range(self.nt):
+
+            if self.direction == 'forward':
+                if self.data is None:
+                    image = fitstools.fitsread(self.datafiles, tslice=n).astype(np.float32)
+                else:
+                    image = self.data[:, :, n]
+            elif self.direction == 'backward':
+                if self.data is None:
+                    image = fitstools.fitsread(self.datafiles, tslice=self.nt - 1 - n).astype(np.float32)
+                else:
+                    image = self.data[:, :, self.nt - 1 - n]
+
+            surface = prep_data(image, self.mean, self.sigma, sigma_factor=self.sigma_factor)
+
+            if self.mode == 'bottom':
+                surface = -surface
+
+            # The current position "pos" and velocity "vel" are attributes of bt.
+            # They are integrated in place.
+            for _ in range(self.intsteps):
+                integrate_motion(self, surface)
+
+            self.balls_age += 1
+
+            # Get the bad balls at the current frame
+            self.get_bad_balls()
+
+            # TODO: check the modifications below where I flag the bad balls before saving the array and relocating the bad balls
+            # Flag the bad balls with -1
+            self.pos[:, self.bad_balls_mask] = -1
+            self.vel[:, self.bad_balls_mask] = np.nan
+
+            # Add the current position array to the time series of position
+            self.ballpos[..., n] = self.pos.copy()
+            self.ballvel[..., n] = self.vel.copy()
+
+            # The bad balls are assigned new positions (relocated to empty cells)
+            # This is done in place in bt.pos. For flexibility with debugging, the array
+            # of position is given explicitly as input
+            try:
+                _, _ = self.replace_bad_balls(surface)
+            except sys.SystemExit:
+                print('replace_bad_balls failed.')
+
+            self.balls_age_t[:, n] = self.balls_age.copy()
+
+        if self.direction == 'backward':
+            # Flip timeline for backward tracking
+            self.ballpos = np.flip(self.ballpos, 2)
+            self.ballvel = np.flip(self.ballvel, 2)
+
+
+    def get_bad_balls(self):
+        # See discussion at https://stackoverflow.com/questions/44802033/efficiently-index-2d-numpy-array-using-two-1d-arrays
+        # and https://stackoverflow.com/questions/36863404/accumulate-constant-value-in-numpy-array
+        # xpos0, ypos0, zpos0 = bt.pos
+
+        # Bad balls are flagged with -1 in the pos array. They will be excluded from the comparisons below
+        bad_balls1_mask = get_outliers(self)
+
+        # Ignore these bad balls in the arrays and enforce continuity principle
+        valid_balls = np.logical_not(bad_balls1_mask)
+        valid_balls_idx = np.nonzero(valid_balls)[0]
+        # valid_balls = np.logical_not(bad_balls1_mask)
+        # Map back to original balls indices
+        # valid_balls_idx = np.nonzero(valid_balls)[0]
+
+        xpos, ypos, zpos = self.pos[:, valid_balls]
+        balls_age = self.balls_age[valid_balls]
+
+        # Get the 1D position on the coarse grid, clipped to the edges of that grid.
+        _, _, coarse_pos = coarse_grid_pos(self, xpos, ypos)
+
+        # Get ball number and balls age sorted by position, sort positions too, and array of valid balls indices as well!!!
+        sorted_balls = np.argsort(coarse_pos)
+        balls_age = balls_age[sorted_balls]
+        coarse_pos = coarse_pos[sorted_balls]
+        valid_balls_idx = valid_balls_idx[sorted_balls]
+        # There can be repetitions in the coarse_pos because there can be more than one ball per finegrid cell.
+        # The point is to keep only one ball per coarse grid point: the oldest.
+        # So we need to sort coarse_pos further using the balls age as weight and extract a unique set where each ball is the oldest
+        sidx = np.lexsort([balls_age, coarse_pos])
+        # Indices of the valid balls to keep
+        unique_oldest_balls = valid_balls_idx[sidx[np.r_[np.flatnonzero(coarse_pos[1:] != coarse_pos[:-1]), -1]]]
+
+        # Now the point is to have a mask or list of balls at overpopulated cells.
+        # They are simply the ones not listed by unique_oldest_balls
+        bad_full_balls = np.ones([self.nballs], dtype=bool)
+        bad_full_balls[unique_oldest_balls] = False
+        # The bad balls are not just the ones in overpopulated cells, there's also the ones off edges & sunk balls
+        # bad_balls_mask = np.logical_or(bad_balls1, bad_full_balls)
+        self.bad_balls_mask = np.logical_or(bad_balls1_mask, bad_full_balls)
+
+        return
+
+
+    def replace_bad_balls(self, surface):
+
+        nbadballs = self.bad_balls_mask.sum()
+
+        # Get the mask of the valid balls that we are going to keep
+        valid_balls_mask = np.logical_not(self.bad_balls_mask)
+        # Work with with views on coordinate and velocity arrays of valid balls for clarity (instead of working with pos[:, :, valid_balls_mask] directly)
+        xpos, ypos, zpos = self.pos[:, valid_balls_mask]
+
+        # Get the 1D position on the coarse grid, clipped to the edges of that grid.
+        _, _, coarse_pos_idx = coarse_grid_pos(self, xpos, ypos)
+
+        # Set these positions on the coarse grid as filled. Remember that to avoid putting new balls on the edge, the coarse_grid is pre-filled with ones at its edges
+        # See discussion at https://stackoverflow.com/questions/44802033/efficiently-index-2d-numpy-array-using-two-1d-arrays
+        coarse_grid = self.coarse_grid.copy()
+        coarse_grid.ravel()[coarse_pos_idx] = 1
+        y0, x0 = np.where(coarse_grid == 0)
+        nemptycells = x0.size
+
+        if nemptycells <= nbadballs:
+
+            # Get the indices of bad balls in order to assign them with new positions
+            bad_balls_idx = np.nonzero(self.bad_balls_mask)[0][0:nemptycells]
+            # Relocate the previously flagged balls in all the empty cells
+            # IMPROVEMENT with respect to Matlab version:
+            # y0, x0 above are from np.where => integer values! All values in xnew, ynew are integers.
+            # => There is no need to interpolate in put_ball_on_surface!
+            xnew = self.ballspacing * x0.astype(np.float32)#+ bt.rs
+            ynew = self.ballspacing * y0.astype(np.float32)#+ bt.rs
+            znew = put_balls_on_surface(surface, xnew, ynew, self.rs, self.dp)
+
+            self.pos[0, bad_balls_idx] = xnew
+            self.pos[1, bad_balls_idx] = ynew
+            self.pos[2, bad_balls_idx] = znew
+            # Reset the velocity and age at these new positions
+            self.vel[:, bad_balls_idx] = 0
+            self.balls_age[bad_balls_idx] = 0
+
+            # Rest of bad balls
+            bad_balls_remaining_idx = np.nonzero(self.bad_balls_mask)[0][nemptycells:nbadballs]
+
+            # Update the list valid balls in bt.new_valid_balls_mask
+            new_valid_balls_mask = np.ones([self.nballs], dtype = bool)
+            new_valid_balls_mask[bad_balls_remaining_idx] = False
+            self.new_valid_balls_mask = new_valid_balls_mask
+
+        else:
+            # This case means the number of bad balls available for relocation is smaller than the number of empty cells where they can be relocated.
+            # This means the continuity principle is not satisfied and needs investigation.
+            raise SystemExit('The number of empy cells is greater than the number of bad balls.')
+
+        return xnew, ynew
+
+
+
+def track_instance(mode_direction, nframes, rs, dp, sigma_factor, datafile=None, data=None):
+
+    """
+    Run balltracking on a given tuple (mode,direction). This routine must be executed with 4 of these pairs for
+    a complete flow tracking.
+
+    :param mode_direction: tracking mode and tracking direction, e.g. ('top', 'forward').
+    :param nframes: number of frames to track in the image series
+    :param rs: ball radius
+    :param dp: charateristic depth
+    :param sigma_factor: multiplier to the standard deviation
+    :param datafile: path to data cube file or series of files.
+    :param data: for calibration only. numpy data arrays of drifting data surface.
+    :return:
+    """
+    bt_instance = BT(nframes, rs, dp, sigma_factor=sigma_factor, mode=mode_direction[0], direction=mode_direction[1], datafiles=datafile, data=data)
+    bt_instance.track()
+
+    return bt_instance
+
+
+def balltrack_all(nt, rs, dp, sigma_factor, datafile, outputdir, ncores=1):
+
+    """
+    Run the 4 tracking on the 4 pairs of (mode, direction). Can be executed in parallel over 4 workers.
+
+    :param nt: number of frames to track in the image series
+    :param rs: ball radius
+    :param dp: charateristic depth
+    :param sigma_factor: multiplier to the standard deviation
+    :param datafile: path to data cube file or series of files.
+    :param outputdir: output directory to write the intermediate ball tracks as .npz files
+    :param ncores: number of cores to use for running the 4 modes/directions in parallel.
+    Default is 1 for sequential processing. There can up to 4 workers for these parallel tasks.
+    :return:
+    """
+    # Get a BT instance with the above parameters
+    mode_direction_list = (('top','forward'),
+                           ('top', 'backward'),
+                           ('bottom', 'forward'),
+                           ('bottom', 'backward'))
+
+    partial_track = partial(track_instance, nframes=nt, rs=rs, dp=dp, sigma_factor=sigma_factor, datafile=datafile)
+
+    # there can only 1 to 4 workers. 1 means no parallelization.
+    ncores = max(min(ncores, 4), 1)
+    if ncores == 1:
+        bt_tf, bt_tb, bt_bf, bt_bb = list(map(partial_track, mode_direction_list))
+    else:
+        with Pool(processes=ncores) as pool:
+            bt_tf, bt_tb, bt_bf, bt_bb = pool.map(partial_track, mode_direction_list)
+
+
+    ballpos_top = np.concatenate((bt_tf.ballpos, bt_tb.ballpos), axis=1)
+    ballpos_bottom = np.concatenate((bt_bf.ballpos, bt_bb.ballpos), axis=1)
+
+
+    np.save(os.path.join(outputdir,'ballpos_top.npy'), ballpos_top)
+    np.save(os.path.join(outputdir, 'ballpos_bottom.npy'), ballpos_bottom)
+
+
+    return ballpos_top, ballpos_bottom
+
 
 def calculate_invalid_mask(data):
     """
@@ -139,6 +387,7 @@ def calculate_invalid_mask(data):
 
     return ma.masked_less(data, mind)
 
+
 def filter_image(image):
     """
     Filter the image to enhance granulation signal
@@ -151,6 +400,7 @@ def filter_image(image):
     fdata = filters.ffilter_image(image, ffilter_hpf)
 
     return fdata
+
 
 def rescale_frame(data, offset, norm_factor):
     """
@@ -167,6 +417,7 @@ def rescale_frame(data, offset, norm_factor):
     rescaled_data = rescaled_data / norm_factor
 
     return rescaled_data
+
 
 def prep_data(image, mean, sigma, sigma_factor=1):
     """
@@ -187,6 +438,7 @@ def prep_data(image, mean, sigma, sigma_factor=1):
     surface = rescale_frame(fdata, mean, sigma_factor * sigma).astype(np.float32)
 
     return surface
+
 
 def prep_data2(image, sigma_factor=1):
     """
@@ -221,6 +473,7 @@ def coarse_grid_pos(bt, x, y):
     coarse_idx = np.ravel_multi_index((ycoarse, xcoarse), bt.coarse_grid.shape)
     return xcoarse, ycoarse, coarse_idx
 
+
 def fill_coarse_grid(bt, x, y):
     """
     Fill coarse_grid as a chess board: the positions in the original grid are mapped to the coarse grid points
@@ -244,6 +497,7 @@ def initialize_mesh(bt):
     xstart, ystart = np.meshgrid(x_start_points, y_start_points)
     return xstart, ystart
 
+
 def put_balls_on_surface(surface, x, y, rs, dp):
     if x.ndim !=1 or y.ndim !=1:
         sys.exit("Input coordinates have incorrect dimensions. x and y must be 1D numpy arrays")
@@ -259,89 +513,6 @@ def put_balls_on_surface(surface, x, y, rs, dp):
     z = surface[y.astype(np.int32), x.astype(np.int32)]
     z += rs * (1 - dp / 2)
     return z
-
-def balltrack_all(nt, rs, dp, sigma_factor=1, mode='top', data=None):
-
-    dims = data.shape[0:2]
-    # Setup BT objects for forward and backward tracking.
-    bt_forward = BT(dims, nt, rs, dp, sigma_factor=sigma_factor, mode=mode, direction='forward', data=data)
-    bt_backward = BT(dims, nt, rs, dp, sigma_factor=sigma_factor, mode=mode, direction='backward', data=data)
-    # Track
-    _ = track_all_frames(bt_forward)
-    _ = track_all_frames(bt_backward)
-
-    ballpos = np.concatenate((bt_forward.ballpos, bt_backward.ballpos), axis=1)
-
-    return ballpos, bt_forward, bt_backward
-
-
-
-def track_all_frames(bt):
-
-    # Outer loop goes over the data frames.
-    # If data is a fits cube, we just access a slice of it
-
-    # Initialize
-
-    bt.initialize()
-
-
-    for n in range(bt.nt):
-
-        if bt.direction == 'forward':
-            if bt.data is None:
-                image = fitstools.fitsread(bt.datafiles, tslice= n).astype(np.float32)
-            else:
-                image = bt.data[:,:,n]
-        elif bt.direction == 'backward':
-            if bt.data is None:
-                image = fitstools.fitsread(bt.datafiles, tslice= bt.nt - 1 - n).astype(np.float32)
-            else:
-                image = bt.data[:,:,bt.nt - 1 - n]
-
-        surface = prep_data(image, bt.mean, bt.sigma, sigma_factor = bt.sigma_factor)
-
-        if bt.mode == 'bottom':
-            surface = -surface
-
-
-        # The current position "pos" and velocity "vel" are attributes of bt.
-        # They are integrated in place.
-        for _ in range(bt.intsteps):
-            integrate_motion(bt, surface)
-
-        bt.balls_age += 1
-
-        # Get the bad balls at the current frame
-        get_bad_balls(bt)
-
-        # TODO: check the modifications below where I flag the bad balls before saving the array and relocating the bad balls
-        # Flag the bad balls with -1
-        bt.pos[:, bt.bad_balls_mask] = -1
-        bt.vel[:, bt.bad_balls_mask] = np.nan
-
-        # Add the current position array to the time series of position
-        bt.ballpos[..., n] = bt.pos.copy()
-        bt.ballvel[..., n] = bt.vel.copy()
-
-        # The bad balls are assigned new positions (relocated to empty cells)
-        # This is done in place in bt.pos. For flexibility with debugging, the array
-        # of position is given explicitly as input
-        try:
-            _, _ = replace_bad_balls(surface, bt)
-        except sys.SystemExit:
-            print('replace_bad_balls failed.')
-
-        bt.balls_age_t[:,n] = bt.balls_age.copy()
-
-    if bt.direction == 'backward':
-        # Flip timeline for backward tracking
-        bt.ballpos = np.flip(bt.ballpos, 2)
-        bt.ballvel = np.flip(bt.ballvel, 2)
-
-        # Although bt is changed in place, it seems necessary to return it when using the multiprocessing module
-    return bt
-
 
 
 def integrate_motion(bt, surface, return_copies=False):
@@ -494,6 +665,7 @@ def get_bad_balls(bt):
 
     return
 
+
 def get_outliers(bt):
 
     x, y, z = bt.pos
@@ -502,6 +674,7 @@ def get_outliers(bt):
     outlier_mask = np.logical_or(sunk, off_edges_mask)
 
     return outlier_mask
+
 
 def get_off_edges(bt, x,y):
 
@@ -599,13 +772,14 @@ def replace_bad_balls2(pos, bt):
 
 def make_velocity_from_tracks(ballpos, dims, trange, fwhm):
     """
-    Calculate the velocity field, i.e, differentiate the position to get the velocity in Lagrange and convert to Euler
+    Calculate the velocity field, i.e, differentiate the position to get the velocity in Lagrange ref. frame and
+    convert to Euler ref. frame.
 
-    :param ballpos:
-    :param dims:
-    :param trange:
-    :param fwhm:
-    :return:
+    :param ballpos: array of ball positions. Dimensions are [xyz, ball number, time]
+    :param dims: dimensions of the images used for the tracking.
+    :param trange: sequence of [1st index, last index[ on time axis over which the flows are averaged
+    :param fwhm: full width at half maximum for the spatial gaussian smoothing.
+    :return: 2 components of the flow fields and the weight plane.
     """
 
     # Slices for differentiating the ball positions, in ascending start & end frame number
@@ -686,7 +860,6 @@ def initialize_ball_vector(xstart, ystart, zstart):
     return pos, vel
 
 
-
 def bilin_interp_d(image, x, y):
     # Bilinear interpolation. About 7x to 10x slower than the Cython implementation.
     x0 = np.floor(x).astype(int)
@@ -710,6 +883,7 @@ def bilin_interp_d(image, x, y):
     w00 = dx0 * dy0
 
     return w11*q00 + w10*q01 + w01*q10 + w00*q11
+
 
 def bilin_interp_f(image, x, y):
     # Bilinear interpolation. About 7x to 10x slower than the Cython implementation.
@@ -736,7 +910,6 @@ def bilin_interp_f(image, x, y):
     return w11*q00 + w10*q01 + w01*q10 + w00*q11
 
 
-
 def gauss2d(size,  sigma):
 
     xgrid, ygrid = np.meshgrid(np.arange(size), np.arange(size))
@@ -750,6 +923,7 @@ def show_ballpos(image, ballpos):
     plt.figure(1)
     plt.imshow(image, cmap='gray', origin='lower')
     plt.plot(ballpos[:,0], ballpos[:,1], 'r.')
+
 
 def mesh_ball(rs):
 
@@ -825,6 +999,65 @@ def drift_series(images, drift_rate):
 
     return drift_images
 
+##############################################################################################################
+#################    Calibration     #########################################################################
+##############################################################################################################
+def process_calibration_series(rotation_rate, nt, rs, dp, sigma_factor, samples):
+
+    print("Creating drift images at rate: [{:.2f}, {:.2f}]".format(rotation_rate[0], rotation_rate[1]))
+    # Make the series of drifting image for 1 rotation rate
+    drift_images = drift_series(samples, rotation_rate)
+    # Balltrack forward and backward
+    # ballpos_top, _, _ = balltrack_all(nt, rs, dp, sigma_factor=sigma_factor, mode='top', data=drift_images)
+    # ballpos_bottom, _, _ = balltrack_all(nt, rs, dp, sigma_factor=sigma_factor, mode='bottom', data=drift_images)
+
+    # Get a BT instance with the above parameters
+    mode_direction_list = (('top','forward'),
+                           ('top', 'backward'),
+                           ('bottom', 'forward'),
+                           ('bottom', 'backward'))
+
+    partial_track = partial(track_instance, nframes=nt, rs=rs, dp=dp, sigma_factor=sigma_factor, data=drift_images)
+    bt_tf, bt_tb, bt_bf, bt_bb = list(map(partial_track, mode_direction_list))
+
+    ballpos_top = np.concatenate((bt_tf.ballpos, bt_tb.ballpos), axis=1)
+    ballpos_bot = np.concatenate((bt_bf.ballpos, bt_bb.ballpos), axis=1)
+
+
+    return ballpos_top, ballpos_bot
+
+
+def fit_calibration(ballpos_list, shift_rates, trange, fwhm, dims):
+
+    vxs, vys, wplanes = zip(*[make_velocity_from_tracks(ballpos, dims, trange, fwhm) for ballpos in ballpos_list])
+    # Select an ROI that contains valid data. At least one should exclude edges as wide as the ball radius.
+    # This one also excludes the sunspot in the middle. Beware of bias due to differential rotation!
+
+    vxmeans1 = np.array([vx[10:200, 30:-30].mean() for vx in vxs])
+    vxmeans2 = np.array([vx[350:500, 30:-30].mean() for vx in vxs])
+    vxmeans = 0.5*(vxmeans1 + vxmeans2)
+
+    p = np.polyfit(shift_rates, vxmeans, 1)
+    a = 1 / p[0]
+    vxfit = a * (vxmeans - p[1])
+    return a, vxfit, vxmeans
+
+
+def loop_calibration_series(rotation_rates, images, nt, rs, dp, sigma_factor, nthreads=1):
+
+    # Use partial to give process_calibration_series() the constant input "samples"
+    process_calibration_partial = partial(process_calibration_series, nt=nt, rs=rs, dp=dp, sigma_factor=sigma_factor, samples=images)
+    if nthreads < 2:
+        ballpos_top_list, ballpos_bottom_list = zip(*map(process_calibration_partial, rotation_rates))
+    else:
+        pool = Pool(processes=nthreads)
+        ballpos_top_list, ballpos_bottom_list = zip(*pool.map(process_calibration_partial, rotation_rates))
+
+    return ballpos_top_list, ballpos_bottom_list
+
+##############################################################################################################
+##############################################################################################################
+
 
 def make_euler_velocity(ballpos_top, ballpos_bottom, cal_top, cal_bottom, dims, trange, fwhm):
 
@@ -841,10 +1074,11 @@ def make_euler_velocity(ballpos_top, ballpos_bottom, cal_top, cal_bottom, dims, 
 
     return vx, vy
 
+
 def make_euler_velocity_lanes(ballpos_top, ballpos_bottom, cal_top, cal_bottom, dims, nframes, tavg, tstep, fwhm, nsteps, maxstep, outputdir):
 
-    tcenters = np.arange(0, nframes - tstep, tstep)
-    tranges = [[tcenters[i], tcenters[i] + tavg] for i in range(tcenters.size)]
+    tstarts = np.arange(0, nframes - tavg, tstep)
+    tranges = [[tstart, tstart + tavg] for tstart in tstarts]
 
     for i in range(len(tranges)):
         # Velocity field
