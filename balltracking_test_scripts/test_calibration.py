@@ -48,7 +48,7 @@ if __name__ == '__main__':
     # vx, vy, wplane = blt.make_velocity_from_tracks(ballpos, dims, trange, fwhm)
 
     ballpos_top_list, ballpos_bottom_list = blt.loop_calibration_series(rotation_rates, images, nframes, rs, dp, sigma_factor,
-                                                                        nthreads=1)
+                                                                        nthreads=5)
 
     print("\nProcessing time: %s seconds\n" % (datetime.now() - startTime))
 
@@ -73,7 +73,7 @@ if __name__ == '__main__':
     plt.legend()
     plt.show()
 
-    plt.savefig('/Users/rattie/Dev/sdo_tracking_framework/figures/calibration/calibration_12673_sequential.png')
+    #plt.savefig('/Users/rattie/Dev/sdo_tracking_framework/figures/calibration/calibration_12673_sequential.png')
 
 
 

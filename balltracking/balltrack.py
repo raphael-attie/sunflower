@@ -569,49 +569,49 @@ def integrate_motion(bt, surface, return_copies=False):
 
 
 def compute_force(bt, brows, bcols, xt, yt, zt, ds):
-    # TODO: must get rid of them also in bcols, brows, zt, ...
-    # So we need to work out the correct indices. r is 2D but xt, yt are 1D
-    # So we define an intermediate variable to calculate the delta, since
+    # need to work out the correct indices. r is 2D but xt, yt are 1D
+    # => define an intermediate variable to calculate the delta;
     # the minus operation is propagated to either dimensions.
     delta_x = xt - bcols
     delta_y = yt - brows
     delta_z = ds - zt
 
-    r = np.sqrt(delta_x** 2 + delta_y**2 + delta_z**2)
-    r_h = np.sqrt(delta_x** 2 + delta_y**2)
-    # Singularity at r = 0. Need to get rid of them.
-    # & Force that are beyond the radius must be set to zero
+    r = np.sqrt(delta_x**2 + delta_y**2 + delta_z**2)
+    # Singularity at r = 0. Need to get rid of them and force beyond the radius must be set to zero
+    # Need to fill the masked values before the summation. Otherwise, subtracting bt.am on a masked value still gives a
+    # masked value, instead of -bt.am = -1.0.
     rmask = np.logical_or(r == 0, r > bt.rs)
-    rmask_h = np.logical_or(r == 0, r_h > bt.rs)
+    rm = np.ma.masked_array(r, mask= rmask)
+    # When the sum is performed on an entirely masked row (1 ball grid), we must not end up with the default filled value
+    # instead, we must get fn = 0 for that row. The fill_value =0 takes care of that.
+    fn = bt.k_force * (rm - bt.rs)/rm
 
-    rm = np.ma.masked_array(r, mask=rmask)
-    rm_h = np.ma.masked_array(r, mask=rmask_h)
-
-    f = bt.k_force * (rm - bt.rs)
-
-    # Calculate each force vector component
-
-    # NEW GREAT STUFF
-    # f_h = bt.k_force * (rm_h - bt.rs)
-    # fxtm = np.sum(np.abs(f_h) * delta_x / rm_h, 0)
-    # fytm = np.sum(np.abs(f_h) * delta_y / rm_h, 0)
-    # fztm = -np.sum(f * np.abs(delta_z) / rm, 0) - bt.am
-
-    # OLD BAD STUFF
-    fxtm = -np.sum(f * delta_x / rm, 0)
-    fytm = -np.sum(f * delta_y / rm, 0)
-    # Buoyancy must stay oriented upward. Used to be signed, but that caused more lost balls without other advantage
-    fztm = -np.sum(f * np.abs(delta_z) / rm, 0) - bt.am
-
-
-    # Return the plain numpy array instead of the masked array. The fill value will ensure that in case of
-    # a sum performed on an entirely masked array (all elements ignored), we don't end up with the default filled value
-    # for the "empty" component.
+    fxtm = -np.ma.sum(fn * delta_x, 0)
+    fytm = -np.ma.sum(fn * delta_y, 0)
     fxt = np.ma.filled(fxtm, fill_value=0)
     fyt = np.ma.filled(fytm, fill_value=0)
-    fzt = np.ma.filled(fztm, fill_value=0)
+    # # Buoyancy must stay oriented upward. Used to be signed, but that caused more lost balls without other advantage
+    fztm = -np.ma.sum(fn * np.abs(delta_z), 0)
+    # On a few previous versions this was mistakenly resulting in all force components = 0 when filling the value after
+    # the subtraction by bt.am.
+    fzt = np.ma.filled(fztm, fill_value=0) - bt.am
+
 
     return fxt, fyt, fzt
+
+
+# def compute_force(bt, brows, bcols, xt, yt, zt, ds):
+#     r = np.sqrt((bcols - xt) ** 2 + (brows - yt) ** 2 + (ds - zt) ** 2)
+#     # Force that are beyond the radius must be set to zero
+#     f = bt.k_force * (r - bt.rs)
+#     f[r > bt.rs] = 0
+#     # Calculate each force vector component
+#     fxt = -np.sum(f * (xt - bcols) / r, 0)
+#     fyt = -np.sum(f * (yt - brows) / r, 0)
+#     # Buoyancy must stay oriented upward. Used to be signed, but that caused more lost balls without other advantage
+#     fzt = -np.sum(f * np.abs(zt - ds) / r, 0) - bt.am
+#
+#     return fxt, fyt, fzt
 
 
 def ravel_index(x, dims):
