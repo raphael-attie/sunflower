@@ -25,8 +25,11 @@ sigma_factor = 2
 # Smoothing for Euler maps
 fwhm = 15
 # Calibration factors
-cal_top = 1.41
-cal_bottom = 1.30
+# cal_top = 1.41
+# cal_bottom = 1.30
+# These new values change the speed within the error bar but this potentially reduces systematic tracking error.
+cal_top = 1.49
+cal_bottom = 1.35
 
 ### time windows for the euler map
 tavg = 160

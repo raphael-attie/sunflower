@@ -11,9 +11,13 @@ from numpy import pi, cos, sin
 from scipy.ndimage.filters import gaussian_filter
 import cython_modules.interp as cinterp
 import filters
+import fitsio
 import fitstools
+import multiprocessing
 from multiprocessing import Pool
 from functools import partial
+from pathlib import Path
+from datetime import datetime
 
 DTYPE = np.float32
 class BT:
@@ -158,6 +162,7 @@ class BT:
         self.initialize()
 
         for n in range(self.nt):
+            print("Tracking direction {}/{}, frame {:d}".format(self.direction, self.mode, n))
 
             if self.direction == 'forward':
                 if self.data is None:
@@ -208,6 +213,8 @@ class BT:
             # Flip timeline for backward tracking
             self.ballpos = np.flip(self.ballpos, 2)
             self.ballvel = np.flip(self.ballvel, 2)
+
+
 
 
     def get_bad_balls(self):
@@ -307,6 +314,15 @@ class BT:
 
         return xnew, ynew
 
+def create_bt_instances(nframes, rs, dp, sigma_factor, datafiles):
+
+
+    bt_tf = BT(nframes, rs, dp, sigma_factor=sigma_factor, mode='top', direction='forward', datafiles=datafiles)
+    bt_tb = BT(nframes, rs, dp, sigma_factor=sigma_factor, mode='top', direction='backward', datafiles=datafiles)
+    bt_bf = BT(nframes, rs, dp, sigma_factor=sigma_factor, mode='bottom', direction='forward', datafiles=datafiles)
+    bt_bb = BT(nframes, rs, dp, sigma_factor=sigma_factor, mode='bottom', direction='backward', datafiles=datafiles)
+
+    return bt_tf, bt_tb, bt_bf, bt_bb
 
 
 def track_instance(mode_direction, nframes, rs, dp, sigma_factor, datafile=None, data=None):
@@ -327,7 +343,7 @@ def track_instance(mode_direction, nframes, rs, dp, sigma_factor, datafile=None,
     bt_instance = BT(nframes, rs, dp, sigma_factor=sigma_factor, mode=mode_direction[0], direction=mode_direction[1], datafiles=datafile, data=data)
     bt_instance.track()
 
-    return bt_instance
+    return bt_instance.ballpos
 
 
 def balltrack_all(nt, rs, dp, sigma_factor, datafile, outputdir, ncores=1):
@@ -356,14 +372,14 @@ def balltrack_all(nt, rs, dp, sigma_factor, datafile, outputdir, ncores=1):
     # there can only 1 to 4 workers. 1 means no parallelization.
     ncores = max(min(ncores, 4), 1)
     if ncores == 1:
-        bt_tf, bt_tb, bt_bf, bt_bb = list(map(partial_track, mode_direction_list))
+        ballpos_tf, ballpos_tb, ballpos_bf, ballpos_bb = list(map(partial_track, mode_direction_list))
     else:
-        with Pool(processes=ncores) as pool:
-            bt_tf, bt_tb, bt_bf, bt_bb = pool.map(partial_track, mode_direction_list)
+        with Pool(processes=4) as pool:
+            ballpos_tf, ballpos_tb, ballpos_bf, ballpos_bb = pool.map(partial_track, mode_direction_list)
 
 
-    ballpos_top = np.concatenate((bt_tf.ballpos, bt_tb.ballpos), axis=1)
-    ballpos_bottom = np.concatenate((bt_bf.ballpos, bt_bb.ballpos), axis=1)
+    ballpos_top = np.concatenate((ballpos_tf, ballpos_tb), axis=1)
+    ballpos_bottom = np.concatenate((ballpos_bf, ballpos_bb), axis=1)
 
 
     np.save(os.path.join(outputdir,'ballpos_top.npy'), ballpos_top)
@@ -989,24 +1005,100 @@ def integrate_motion0(pos, vel, bt, surface):
     return pos.copy(), vel.copy(), force
 
 
-def drift_series(images, drift_rate):
 
-    drift_images = np.zeros(images.shape)
-    for i in range(images.shape[2]):
-        dx = -drift_rate[0] * float(i)
-        dy = -drift_rate[1]*i
-        drift_images[:,:,i] = filters.translate_by_phase_shift(images[:,:,i], dx, dy)
 
-    return drift_images
+
+
 
 ##############################################################################################################
 #################    Calibration     #########################################################################
 ##############################################################################################################
-def process_calibration_series(rotation_rate, nt, rs, dp, sigma_factor, samples):
+class Calibrator:
 
-    print("Creating drift images at rate: [{:.2f}, {:.2f}]".format(rotation_rate[0], rotation_rate[1]))
+    def __init__(self, images, drift_rates, nframes, rs, dp, sigma_factor, fwhm, outputdir, use_existing=False, nthreads=1):
+
+        self.images = images
+        self.nfiles = self.images.shape[2]
+        self.drift_rates = drift_rates
+        self.nframes = nframes
+        self.rs = rs
+        self.dp = dp
+        self.sigma_factor = sigma_factor
+        self.fwhm = fwhm
+        self.outputdir = outputdir
+        self.use_existing = use_existing
+        self.nthreads = nthreads
+
+        self.subdirs = [os.path.join(outputdir, 'drift_{:01d}'.format(i)) for i in range(len(drift_rates))]
+
+
+    def drift_series(self, rate_idx):
+
+        # Files supposed to be created or to be read if already exist.
+        filepaths = [Path(os.path.join(self.subdirs[rate_idx], 'drift_{:03d}.fits'.format(i))) for i in range(self.nfiles)]
+
+        if self.use_existing and check_file_series(filepaths):
+            # does not save much time compared to the total time of balltracking,
+            # but it significantly reduces disk usage compared to creating the images all over again.
+            print(
+                "Reading existing drift images at rate: [{:.2f}, {:.2f}] px/frame"
+                    .format(self.drift_rates[rate_idx][0], self.drift_rates[rate_idx][1]))
+
+            drift_images = np.zeros(self.images.shape)
+            for i in range(self.nfiles):
+                drift_images[:, :, i] = fitsio.read(str(filepaths[i]))
+        else:
+            if not os.path.exists(self.subdirs[rate_idx]):
+                os.makedirs(self.subdirs[rate_idx])
+
+            print("Creating drift images at rate: [{:.2f}, {:.2f}] px/frame".format(self.drift_rates[rate_idx][0], self.drift_rates[rate_idx][1]))
+            drift_images = create_drift_series(self.images, self.drift_rates[rate_idx], filepaths)
+
+        return drift_images
+
+
+    def balltrack_series(self, rate_idx):
+
+        drift_images = self.drift_series(rate_idx)
+
+        # Get a BT instance with the above parameters
+        mode_direction_list = (('top', 'forward'),
+                               ('top', 'backward'),
+                               ('bottom', 'forward'),
+                               ('bottom', 'backward'))
+
+        partial_track = partial(track_instance,
+                                nframes=self.nfiles, rs=self.rs, dp=self.dp, sigma_factor=self.sigma_factor, data=drift_images)
+
+        ballpos_tf, ballpos_tb, ballpos_bf, ballpos_bb = list(map(partial_track, mode_direction_list))
+
+        ballpos_top = np.concatenate((ballpos_tf, ballpos_tb), axis=1)
+        ballpos_bottom = np.concatenate((ballpos_bf, ballpos_bb), axis=1)
+
+        return ballpos_top, ballpos_bottom
+
+
+    def balltrack_all_series(self):
+
+        rate_idx_list = range(len(self.drift_rates))
+
+        if self.nthreads < 2:
+            ballpos_top_list, ballpos_bottom_list = zip(*map(self.balltrack_series, rate_idx_list))
+        else:
+            pool = Pool(processes=self.nthreads)
+            ballpos_top_list, ballpos_bottom_list = zip(*pool.map(self.balltrack_series, rate_idx_list))
+
+        return ballpos_top_list, ballpos_bottom_list
+
+
+
+
+
+
+def process_calibration_series(rotation_rate, nt, rs, dp, sigma_factor, samples, outputdir=None, use_existing=None):
+
     # Make the series of drifting image for 1 rotation rate
-    drift_images = drift_series(samples, rotation_rate)
+    drift_images = drift_series(samples, rotation_rate, outputdir=outputdir, use_existing=use_existing)
     # Balltrack forward and backward
     # ballpos_top, _, _ = balltrack_all(nt, rs, dp, sigma_factor=sigma_factor, mode='top', data=drift_images)
     # ballpos_bottom, _, _ = balltrack_all(nt, rs, dp, sigma_factor=sigma_factor, mode='bottom', data=drift_images)
@@ -1027,6 +1119,77 @@ def process_calibration_series(rotation_rate, nt, rs, dp, sigma_factor, samples)
     return ballpos_top, ballpos_bot
 
 
+def drift_series(images, drift_rate, subdir, use_existing=True):
+
+    # number of files to process:
+    nfiles = images.shape[2]
+    # # Create outputdir
+    # if drift_rate[0] < 0:
+    #     drate0_str = 'ratea_m{:.2f}'.format(abs(drift_rate[0]))
+    # else:
+    #     drate0_str = 'ratea_p{:.2f}'.format(drift_rate[0])
+    #
+    # if drift_rate[1] < 0:
+    #     drate1_str = 'ratea_m{:.2f}'.format(abs(drift_rate[1]))
+    # else:
+    #     drate1_str = 'rateb_p{:.2f}'.format(abs(drift_rate[1]))
+
+    if not os.path.exists(subdir):
+        os.makedirs(subdir)
+        # Create filenames "drift_[drift rate on x][drift rate on y]_[file number i].fits"
+    filepaths = [Path(os.path.join(subdir, 'drift_{:03d}.fits'.format(i))) for i in range(nfiles)]
+
+    drift_images = np.zeros(images.shape)
+
+    if use_existing and check_file_series(filepaths):
+        # does not save much time compared to the total time of balltracking,
+        # but it significantly reduces disk usage compared to creating the images all over again.
+        print("Reading existing drift images at rate: [{:.2f}, {:.2f}] px/frame".format(drift_rate[0], drift_rate[1]))
+        for i in range(nfiles):
+            drift_images[:, :, i] = fitsio.read(str(filepaths[i]))
+    else:
+        print("Creating drift images at rate: [{:.2f}, {:.2f}] px/frame".format(drift_rate[0], drift_rate[1]))
+        for i in range(nfiles):
+            dx = -drift_rate[0] * float(i)
+            dy = -drift_rate[1]*i
+            drift_images[:,:,i] = filters.translate_by_phase_shift(images[:,:,i], dx, dy)
+            fitstools.writefits(drift_images[:,:,i], filepaths[i])
+
+    return drift_images
+
+
+def create_drift_series(images, drift_rate, filepaths=None):
+
+    drift_images = np.zeros(images.shape)
+
+    for i in range(images.shape[2]):
+        dx = -drift_rate[0] * float(i)
+        dy = -drift_rate[1] * i
+        drift_images[:, :, i] = filters.translate_by_phase_shift(images[:, :, i], dx, dy)
+        if filepaths is not None:
+            fitstools.writefits(drift_images[:, :, i], filepaths[i])
+
+    return drift_images
+
+
+def loop_calibration_series(rotation_rates, images, nt, rs, dp, sigma_factor, nthreads=1, outputdir=None, use_existing=None):
+
+    # Index series to map the rotation rates data.
+    idx_rates = range(len(rotation_rates))
+    subdirs = [os.path.join(outputdir, 'drift_{:01d}'.format(i)) for i in range(len(rotation_rates))]
+
+    # Use partial to give process_calibration_series() the constant input "samples"
+    process_calibration_partial = partial(process_calibration_series, nt=nt, rs=rs, dp=dp, sigma_factor=sigma_factor,
+                                          samples=images, outputdir=outputdir, use_existing=use_existing)
+    if nthreads < 2:
+        ballpos_top_list, ballpos_bottom_list = zip(*map(process_calibration_partial, rotation_rates))
+    else:
+        pool = Pool(processes=nthreads)
+        ballpos_top_list, ballpos_bottom_list = zip(*pool.map(process_calibration_partial, rotation_rates))
+
+    return ballpos_top_list, ballpos_bottom_list
+
+
 def fit_calibration(ballpos_list, shift_rates, trange, fwhm, dims):
 
     vxs, vys, wplanes = zip(*[make_velocity_from_tracks(ballpos, dims, trange, fwhm) for ballpos in ballpos_list])
@@ -1043,17 +1206,25 @@ def fit_calibration(ballpos_list, shift_rates, trange, fwhm, dims):
     return a, vxfit, vxmeans
 
 
-def loop_calibration_series(rotation_rates, images, nt, rs, dp, sigma_factor, nthreads=1):
 
-    # Use partial to give process_calibration_series() the constant input "samples"
-    process_calibration_partial = partial(process_calibration_series, nt=nt, rs=rs, dp=dp, sigma_factor=sigma_factor, samples=images)
-    if nthreads < 2:
-        ballpos_top_list, ballpos_bottom_list = zip(*map(process_calibration_partial, rotation_rates))
+def check_file_series(filepaths):
+    """
+    Check if all files in a list exist
+    :param filepaths: list of file paths. Can be of type string or Path objects. Converted to the latter in case of string.
+    :return:
+    """
+
+    if not any(isinstance(x,Path) for x in filepaths):
+        paths = [Path(x) for x in filepaths]
     else:
-        pool = Pool(processes=nthreads)
-        ballpos_top_list, ballpos_bottom_list = zip(*pool.map(process_calibration_partial, rotation_rates))
+        paths = filepaths
 
-    return ballpos_top_list, ballpos_bottom_list
+    if any(x.is_file() for x in paths):
+        return True
+    else:
+        return False
+
+
 
 ##############################################################################################################
 ##############################################################################################################

@@ -8,8 +8,10 @@ from datetime import datetime
 
 
 
+# input data
 datafile = '/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/mtrack_20170901_000000_TAI20170905_235959_LambertCylindrical_continuum.fits'
-
+# output directory for the drifting images
+outputdir = '/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/calibration/'
 ### Ball parameters
 # Use 80 frames (1 hr)
 nframes = 80
@@ -27,28 +29,22 @@ images = fitstools.fitsread(datafile, tslice=slice(0,nframes)).astype(np.float32
 # Set npts drift rates
 npts = 10
 vx_rates = np.linspace(-0.2, 0.2, npts)
-rotation_rates = np.stack((vx_rates, np.zeros(npts)),axis=1).tolist()
+drift_rates = np.stack((vx_rates, np.zeros(npts)),axis=1).tolist()
 trange = np.arange(nframes)
 
 # Smoothing
 fwhm = 15
 dims = images.shape[0:2]
 
+
+
 if __name__ == '__main__':
 
     startTime = datetime.now()
 
-    # pool = multiprocessing.Pool(processes=4)
-    # # Use partial to give process_calibration_series() the constant input "samples"
-    # process_calibration_partial = partial(process_calibration_series, samples=images)
-    # ballpos_top_list, ballpos_bottom_list = zip(*pool.map(process_calibration_partial, rotation_rates))
+    cal = blt.Calibrator(images, drift_rates, nframes, rs, dp, sigma_factor, fwhm, outputdir, use_existing=True, nthreads=5)
 
-    #btop, bbot = blt.process_calibration_series(rotation_rates[0], nframes, rs, dp, sigma_factor, images)
-    # ballpos = btop
-    # vx, vy, wplane = blt.make_velocity_from_tracks(ballpos, dims, trange, fwhm)
-
-    ballpos_top_list, ballpos_bottom_list = blt.loop_calibration_series(rotation_rates, images, nframes, rs, dp, sigma_factor,
-                                                                        nthreads=5)
+    ballpos_top_list, ballpos_bottom_list = cal.balltrack_all_series()
 
     print("\nProcessing time: %s seconds\n" % (datetime.now() - startTime))
 
@@ -57,7 +53,7 @@ if __name__ == '__main__':
     trange = [0, nframes]
     fwhm = 15
 
-    xrates = np.array(rotation_rates)[:,0]
+    xrates = np.array(drift_rates)[:,0]
     a_top, vxfit_top, vxmeans_top = blt.fit_calibration(ballpos_top_list, xrates, trange, fwhm, images.shape[0:2])
     a_bottom, vxfit_bottom, vxmeans_bottom = blt.fit_calibration(ballpos_bottom_list, xrates, trange, fwhm, images.shape[0:2])
 
@@ -73,7 +69,7 @@ if __name__ == '__main__':
     plt.legend()
     plt.show()
 
-    #plt.savefig('/Users/rattie/Dev/sdo_tracking_framework/figures/calibration/calibration_12673_sequential.png')
+    plt.savefig('/Users/rattie/Dev/sdo_tracking_framework/figures/calibration/calibration_AR12673.png')
 
 
 
