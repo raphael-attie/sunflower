@@ -18,11 +18,14 @@ from multiprocessing import Pool
 from functools import partial
 from pathlib import Path
 from datetime import datetime
+from scipy.misc import bytescale, imsave
+import graphics
 
 DTYPE = np.float32
 class BT:
 
-    def __init__(self, nt, rs, dp, sigma_factor=1, mode='top', direction='forward', datafiles=None, data=None):
+    def __init__(self, nt, rs, dp, sigma_factor=1, mode='top', direction='forward', datafiles=None, data=None,
+                 output_prep_data=False, outputdir=''):
 
         """
         This is the class hosting all the parameters and intermediate results of balltracking.
@@ -39,6 +42,8 @@ class BT:
 
         self.datafiles = datafiles
         self.data = data
+        if direction != 'forward' and direction != 'backward':
+            raise ValueError
         self.direction = direction
         self.nt = nt
 
@@ -47,12 +52,12 @@ class BT:
         if self.data is None:
             if self.direction == 'forward':
                 self.sample = fitstools.fitsread(self.datafiles, tslice=0).astype(np.float32)
-            elif self.direction == 'backward':
+            else:
                 self.sample = fitstools.fitsread(self.datafiles, tslice=self.nt - 1).astype(np.float32)
         else:
             if self.direction == 'forward':
                 self.sample = self.data[:,:,0]
-            elif self.direction == 'backward':
+            else:
                 self.sample = self.data[:,:,-1]
 
         self.nx = int(self.sample.shape[1])
@@ -127,6 +132,10 @@ class BT:
         self.mode = mode
         self.direction = direction
 
+        # Optional parameter for writing the "prepped" data surface in fits files.
+        self.output_prep_data = output_prep_data
+        self.outputdir = outputdir
+
 
     def initialize(self):
 
@@ -169,16 +178,27 @@ class BT:
                     image = fitstools.fitsread(self.datafiles, tslice=n).astype(np.float32)
                 else:
                     image = self.data[:, :, n]
-            elif self.direction == 'backward':
+            else:
                 if self.data is None:
                     image = fitstools.fitsread(self.datafiles, tslice=self.nt - 1 - n).astype(np.float32)
                 else:
                     image = self.data[:, :, self.nt - 1 - n]
 
-            surface = prep_data(image, self.mean, self.sigma, sigma_factor=self.sigma_factor)
+            filename_data = os.path.join(self.outputdir, 'data_{}_{:05d}.png'.format(self.direction, n))
+            imsave(filename_data, bytescale(image, cmin=np.percentile(image, 0.1), cmax=np.percentile(image, 99.9)))
 
+            surface = prep_data(image, self.mean, self.sigma, sigma_factor=self.sigma_factor)
             if self.mode == 'bottom':
                 surface = -surface
+
+            if self.output_prep_data:
+
+                filename_surface = os.path.join(self.outputdir, 'prep_data_{}_{}_{:05d}.fits'.format(self.direction, self.mode, n))
+                fitstools.writefits(surface, filename_surface)
+                #filename_png = os.path.join(self.outputdir, os.path.splitext(os.path.basename(filename))[0] + '.png')
+                #imsave(filename_png, bytescale(surface))
+                graphics.fits_to_jpeg(filename_surface, self.outputdir)
+
 
             # The current position "pos" and velocity "vel" are attributes of bt.
             # They are integrated in place.
@@ -325,7 +345,7 @@ def create_bt_instances(nframes, rs, dp, sigma_factor, datafiles):
     return bt_tf, bt_tb, bt_bf, bt_bb
 
 
-def track_instance(mode_direction, nframes, rs, dp, sigma_factor, datafile=None, data=None):
+def track_instance(mode_direction, nframes, rs, dp, sigma_factor, datafile=None, data=None, output_prep_data=False, outputdir=''):
 
     """
     Run balltracking on a given tuple (mode,direction). This routine must be executed with 4 of these pairs for
@@ -340,34 +360,52 @@ def track_instance(mode_direction, nframes, rs, dp, sigma_factor, datafile=None,
     :param data: for calibration only. numpy data arrays of drifting data surface.
     :return:
     """
-    bt_instance = BT(nframes, rs, dp, sigma_factor=sigma_factor, mode=mode_direction[0], direction=mode_direction[1], datafiles=datafile, data=data)
+    bt_instance = BT(nframes, rs, dp, sigma_factor=sigma_factor, mode=mode_direction[0], direction=mode_direction[1],
+                     datafiles=datafile, data=data, output_prep_data=output_prep_data, outputdir=outputdir)
     bt_instance.track()
 
     return bt_instance.ballpos
 
 
-def balltrack_all(nt, rs, dp, sigma_factor, datafile, outputdir, ncores=1):
+def balltrack_all(nt, rs, dp, sigma_factor, outputdir, datafile=None, data=None, output_prep_data=False, ncores=1):
 
     """
-    Run the 4 tracking on the 4 pairs of (mode, direction). Can be executed in parallel over 4 workers.
+    Run the tracking on the 4 (mode, direction) pairs:
+    (('top', 'forward'),
+     ('top', 'backward'),
+     ('bottom', 'forward'),
+     ('bottom', 'backward'))
+
+     Can be executed in a parallel pool of up to 4 processes.
 
     :param nt: number of frames to track in the image series
     :param rs: ball radius
     :param dp: charateristic depth
     :param sigma_factor: multiplier to the standard deviation
     :param datafile: path to data cube file or series of files.
+    :param data: numpy data cube used if datafile not given.
     :param outputdir: output directory to write the intermediate ball tracks as .npz files
+    :param output_prep_data: write filtered "prepped" data surfacce as fits files in outputdir
     :param ncores: number of cores to use for running the 4 modes/directions in parallel.
     Default is 1 for sequential processing. There can up to 4 workers for these parallel tasks.
-    :return:
+    :return: 2D arrays of ball positions for top-side and bottom-side tracking -> [ball #, coordinates]
     """
+
+    if (datafile is None or not isinstance(datafile, str)) and data is None:
+        raise ValueError
+
     # Get a BT instance with the above parameters
     mode_direction_list = (('top','forward'),
                            ('top', 'backward'),
                            ('bottom', 'forward'),
                            ('bottom', 'backward'))
 
-    partial_track = partial(track_instance, nframes=nt, rs=rs, dp=dp, sigma_factor=sigma_factor, datafile=datafile)
+    if datafile is not None:
+        partial_track = partial(track_instance, nframes=nt, rs=rs, dp=dp, sigma_factor=sigma_factor, datafile=datafile,
+                                output_prep_data=output_prep_data, outputdir=outputdir)
+    else:
+        partial_track = partial(track_instance, nframes=nt, rs=rs, dp=dp, sigma_factor=sigma_factor, data=data,
+                                output_prep_data=output_prep_data, outputdir=outputdir)
 
     # there can only 1 to 4 workers. 1 means no parallelization.
     ncores = max(min(ncores, 4), 1)
@@ -1015,7 +1053,7 @@ def integrate_motion0(pos, vel, bt, surface):
 ##############################################################################################################
 class Calibrator:
 
-    def __init__(self, images, drift_rates, nframes, rs, dp, sigma_factor, fwhm, outputdir, use_existing=False, nthreads=1):
+    def __init__(self, images, drift_rates, nframes, rs, dp, sigma_factor, fwhm, outputdir, output_prep_data=False, use_existing=False, nthreads=1):
 
         self.images = images
         self.nfiles = self.images.shape[2]
@@ -1026,6 +1064,7 @@ class Calibrator:
         self.sigma_factor = sigma_factor
         self.fwhm = fwhm
         self.outputdir = outputdir
+        self.output_prep_data = output_prep_data
         self.use_existing = use_existing
         self.nthreads = nthreads
 
@@ -1057,36 +1096,44 @@ class Calibrator:
         return drift_images
 
 
-    def balltrack_series(self, rate_idx):
+    def balltrack_rate(self, rate_idx):
 
         drift_images = self.drift_series(rate_idx)
 
-        # Get a BT instance with the above parameters
-        mode_direction_list = (('top', 'forward'),
-                               ('top', 'backward'),
-                               ('bottom', 'forward'),
-                               ('bottom', 'backward'))
+        # # Get a BT instance with the above parameters
+        # mode_direction_list = (('top', 'forward'),
+        #                        ('top', 'backward'),
+        #                        ('bottom', 'forward'),
+        #                        ('bottom', 'backward'))
+        #
+        # partial_track = partial(track_instance,
+        #                         nframes=self.nfiles, rs=self.rs, dp=self.dp, sigma_factor=self.sigma_factor,
+        #                         data=drift_images, output_prep_data=self.output_prep_data, outputdir=self.subdirs[rate_idx])
+        #
+        # ballpos_tf, ballpos_tb, ballpos_bf, ballpos_bb = list(map(partial_track, mode_direction_list))
+        #
+        # ballpos_top = np.concatenate((ballpos_tf, ballpos_tb), axis=1)
+        # ballpos_bottom = np.concatenate((ballpos_bf, ballpos_bb), axis=1)
+        #
+        # np.save(os.path.join(self.outputdir, 'ballpos_top.npy'), ballpos_top)
+        # np.save(os.path.join(self.outputdir, 'ballpos_bottom.npy'), ballpos_bottom)
 
-        partial_track = partial(track_instance,
-                                nframes=self.nfiles, rs=self.rs, dp=self.dp, sigma_factor=self.sigma_factor, data=drift_images)
+        ballpos_top, ballpos_bottom = balltrack_all(self.nframes, self.rs, self.dp, self.sigma_factor, self.subdirs[rate_idx],
+                                                    data=drift_images, output_prep_data=self.output_prep_data, ncores=1)
 
-        ballpos_tf, ballpos_tb, ballpos_bf, ballpos_bb = list(map(partial_track, mode_direction_list))
-
-        ballpos_top = np.concatenate((ballpos_tf, ballpos_tb), axis=1)
-        ballpos_bottom = np.concatenate((ballpos_bf, ballpos_bb), axis=1)
 
         return ballpos_top, ballpos_bottom
 
 
-    def balltrack_all_series(self):
+    def balltrack_all_rates(self):
 
         rate_idx_list = range(len(self.drift_rates))
 
         if self.nthreads < 2:
-            ballpos_top_list, ballpos_bottom_list = zip(*map(self.balltrack_series, rate_idx_list))
+            ballpos_top_list, ballpos_bottom_list = zip(*map(self.balltrack_rate, rate_idx_list))
         else:
             pool = Pool(processes=self.nthreads)
-            ballpos_top_list, ballpos_bottom_list = zip(*pool.map(self.balltrack_series, rate_idx_list))
+            ballpos_top_list, ballpos_bottom_list = zip(*pool.map(self.balltrack_rate, rate_idx_list))
 
         return ballpos_top_list, ballpos_bottom_list
 
@@ -1174,10 +1221,6 @@ def create_drift_series(images, drift_rate, filepaths=None):
 
 def loop_calibration_series(rotation_rates, images, nt, rs, dp, sigma_factor, nthreads=1, outputdir=None, use_existing=None):
 
-    # Index series to map the rotation rates data.
-    idx_rates = range(len(rotation_rates))
-    subdirs = [os.path.join(outputdir, 'drift_{:01d}'.format(i)) for i in range(len(rotation_rates))]
-
     # Use partial to give process_calibration_series() the constant input "samples"
     process_calibration_partial = partial(process_calibration_series, nt=nt, rs=rs, dp=dp, sigma_factor=sigma_factor,
                                           samples=images, outputdir=outputdir, use_existing=use_existing)
@@ -1190,20 +1233,31 @@ def loop_calibration_series(rotation_rates, images, nt, rs, dp, sigma_factor, nt
     return ballpos_top_list, ballpos_bottom_list
 
 
-def fit_calibration(ballpos_list, shift_rates, trange, fwhm, dims):
+def fit_calibration(ballpos_list, shift_rates, trange, fwhm, dims, fov_slices, return_flow_maps=False):
 
     vxs, vys, wplanes = zip(*[make_velocity_from_tracks(ballpos, dims, trange, fwhm) for ballpos in ballpos_list])
     # Select an ROI that contains valid data. At least one should exclude edges as wide as the ball radius.
     # This one also excludes the sunspot in the middle. Beware of bias due to differential rotation!
 
-    vxmeans1 = np.array([vx[10:200, 30:-30].mean() for vx in vxs])
-    vxmeans2 = np.array([vx[350:500, 30:-30].mean() for vx in vxs])
-    vxmeans = 0.5*(vxmeans1 + vxmeans2)
+    # TODO: update calibration script for AR12673 with the slices given as arguments of this function
+    # vxmeans1 = np.array([vx[10:200, 30:-30].mean() for vx in vxs])
+    # vxmeans2 = np.array([vx[350:500, 30:-30].mean() for vx in vxs])
+    # vxmeans = 0.5 * (vxmeans1 + vxmeans2)
+
+    vxmeans = 0
+
+    for slices in fov_slices:
+        vxmeans += np.array([vx[slices[1], slices[0]].mean() for vx in vxs])
+    vxmeans /= len(fov_slices)
 
     p = np.polyfit(shift_rates, vxmeans, 1)
     a = 1 / p[0]
     vxfit = a * (vxmeans - p[1])
-    return a, vxfit, vxmeans
+
+    if return_flow_maps:
+        return a, vxfit, vxmeans, vxs, vys
+    else:
+        return a, vxfit, vxmeans
 
 
 
