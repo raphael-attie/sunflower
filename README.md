@@ -10,15 +10,23 @@ Following instructions are for linux and mac.
 I recommend using anaconda and conda virtual environments.
 First install anaconda for Python 3.x: https://www.anaconda.com/download/
 Using the provided requirements.txt file, you can install all packages at proper versions at once. 
-You don't have to use virtual environment though to use the requirements file. It's just a way to keep this project isolated from your main Python installation (if you have one already).
+You don't have to use virtual environment though to use the requirements file. It's just a way to keep this project isolated from your main Python installation (in case you have one already).
 
 After installation, make sure you have the "conda" command working. E.g: (from terminal, try ``conda -V``)
+Add conda-forge channel:
+
+``conda config --append channels conda-forge``
 Then create a new virtual environment, give it whatever name you want (here, i call it ``new_environment``), and using the *requirements.txt* file,
 from a terminal, execute the following:
+
 ``conda create -n new_environment --file requirements.txt``
 
-For Balltracking only, and not Magnetic Balltracking (in *balltracking.mballtrack*), you will also need to run a calibration procedure.
-After calibration, the function to embed in a script is found in the *balltracking.balltrack* module and called *balltrack_all*. 
+Compile some binaries written in Cython:
+- go to the *cython_modules* directory
+- execute ``python setup_cbinterp.py build ext --inplace``
+
+For Balltracking only, not Magnetic Balltracking, you will need to run a calibration procedure.
+After calibration, Balltracking runs through a script wrapping around the *balltrack_all()* function in *balltracking.balltrack*.
 
 See examples (won't work as is, adapt to your data):
 
