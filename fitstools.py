@@ -41,7 +41,7 @@ def write_cube_to_series(file, directory, compressed=False):
     nfiles = h['ZNAXIS3']
 
     for i in range(nfiles):
-        data = fitsread(file, n=i)
+        data = fitsread(file, tslice=slice(i,i+1))
         basename = '%s_%05d.fits' %(os.path.basename(os.path.splitext(file)[0]), i)
         fname = os.path.join(directory, basename)
         writefits(data, fname, compressed=compressed)

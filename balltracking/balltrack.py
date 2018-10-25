@@ -184,14 +184,14 @@ class BT:
                 else:
                     image = self.data[:, :, self.nt - 1 - n]
 
-            filename_data = os.path.join(self.outputdir, 'data_{}_{:05d}.png'.format(self.direction, n))
-            imsave(filename_data, bytescale(image, cmin=np.percentile(image, 0.1), cmax=np.percentile(image, 99.9)))
 
             surface = prep_data(image, self.mean, self.sigma, sigma_factor=self.sigma_factor)
             if self.mode == 'bottom':
                 surface = -surface
 
             if self.output_prep_data:
+                filename_data = os.path.join(self.outputdir, 'data_{}_{:05d}.png'.format(self.direction, n))
+                imsave(filename_data, bytescale(image, cmin=np.percentile(image, 0.1), cmax=np.percentile(image, 99.9)))
 
                 filename_surface = os.path.join(self.outputdir, 'prep_data_{}_{}_{:05d}.fits'.format(self.direction, self.mode, n))
                 fitstools.writefits(surface, filename_surface)
@@ -367,7 +367,7 @@ def track_instance(mode_direction, nframes, rs, dp, sigma_factor, datafile=None,
     return bt_instance.ballpos
 
 
-def balltrack_all(nt, rs, dp, sigma_factor, outputdir, datafile=None, data=None, output_prep_data=False, ncores=1):
+def balltrack_all(nt, rs, dp, sigma_factor, outputdir, datafiles=None, data=None, output_prep_data=False, ncores=1):
 
     """
     Run the tracking on the 4 (mode, direction) pairs:
@@ -382,7 +382,7 @@ def balltrack_all(nt, rs, dp, sigma_factor, outputdir, datafile=None, data=None,
     :param rs: ball radius
     :param dp: charateristic depth
     :param sigma_factor: multiplier to the standard deviation
-    :param datafile: path to data cube file or series of files.
+    :param datafiles: path to data cube file or series of files.
     :param data: numpy data cube used if datafile not given.
     :param outputdir: output directory to write the intermediate ball tracks as .npz files
     :param output_prep_data: write filtered "prepped" data surfacce as fits files in outputdir
@@ -391,8 +391,12 @@ def balltrack_all(nt, rs, dp, sigma_factor, outputdir, datafile=None, data=None,
     :return: 2D arrays of ball positions for top-side and bottom-side tracking -> [ball #, coordinates]
     """
 
-    if (datafile is None or not isinstance(datafile, str)) and data is None:
+    # Check user data input
+    if (datafiles is None or not isinstance(datafiles, str)) and not isinstance(datafiles, list) and data is None:
         raise ValueError
+    # Create outputdir if does not exist
+    if not os.path.exists(outputdir):
+        os.makedirs(outputdir)
 
     # Get a BT instance with the above parameters
     mode_direction_list = (('top','forward'),
@@ -400,8 +404,8 @@ def balltrack_all(nt, rs, dp, sigma_factor, outputdir, datafile=None, data=None,
                            ('bottom', 'forward'),
                            ('bottom', 'backward'))
 
-    if datafile is not None:
-        partial_track = partial(track_instance, nframes=nt, rs=rs, dp=dp, sigma_factor=sigma_factor, datafile=datafile,
+    if datafiles is not None:
+        partial_track = partial(track_instance, nframes=nt, rs=rs, dp=dp, sigma_factor=sigma_factor, datafile=datafiles,
                                 output_prep_data=output_prep_data, outputdir=outputdir)
     else:
         partial_track = partial(track_instance, nframes=nt, rs=rs, dp=dp, sigma_factor=sigma_factor, data=data,
@@ -418,7 +422,6 @@ def balltrack_all(nt, rs, dp, sigma_factor, outputdir, datafile=None, data=None,
 
     ballpos_top = np.concatenate((ballpos_tf, ballpos_tb), axis=1)
     ballpos_bottom = np.concatenate((ballpos_bf, ballpos_bb), axis=1)
-
 
     np.save(os.path.join(outputdir,'ballpos_top.npy'), ballpos_top)
     np.save(os.path.join(outputdir, 'ballpos_bottom.npy'), ballpos_bottom)
@@ -1302,9 +1305,15 @@ def make_euler_velocity(ballpos_top, ballpos_bottom, cal_top, cal_bottom, dims, 
 
 def make_euler_velocity_lanes(ballpos_top, ballpos_bottom, cal_top, cal_bottom, dims, nframes, tavg, tstep, fwhm, nsteps, maxstep, outputdir):
 
-    tstarts = np.arange(0, nframes - tavg, tstep)
+    if nframes == tavg:
+        tstarts = [0,]
+    else:
+        tstarts = np.arange(0, nframes - tavg, int(tstep))
     tranges = [[tstart, tstart + tavg] for tstart in tstarts]
 
+    vxl = []
+    vyl = []
+    lanesl = []
     for i in range(len(tranges)):
         # Velocity field
         vx, vy = make_euler_velocity(ballpos_top, ballpos_bottom, cal_top, cal_bottom, dims, tranges[i], fwhm)
@@ -1314,6 +1323,12 @@ def make_euler_velocity_lanes(ballpos_top, ballpos_bottom, cal_top, cal_bottom, 
         fitstools.writefits(vx, os.path.join(outputdir, 'vx_fwhm%d_tavg%d_%03d.fits'%(fwhm, tavg, i)))
         fitstools.writefits(vy, os.path.join(outputdir, 'vy_fwhm%d_tavg%d_%03d.fits'%(fwhm, tavg, i)))
         fitstools.writefits(lanes, os.path.join(outputdir, 'lanes_fwhm%d_tavg%d_nsteps%d_%03d.fits' %(fwhm, tavg, nsteps, i)))
+
+        vxl.append(vx)
+        vyl.append(vy)
+        lanesl.append(lanes)
+
+    return vxl, vyl, lanesl
 
 
 def make_lanes(vx, vy, nsteps, maxstep):

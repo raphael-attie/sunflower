@@ -28,23 +28,16 @@ dp = 0.2
 # Multiplier to the standard deviation.
 sigma_factor = 2
 
-# Get a BT instance with the above parameters
-# bt_tf = blt.BT(nframes, rs, dp, sigma_factor=sigma_factor, mode='top', direction='forward', datafiles=datafile)
-# bt_tb = blt.BT(nframes, rs, dp, sigma_factor=sigma_factor, mode='top', direction='backward', datafiles=datafile)
-# bt_bf = blt.BT(nframes, rs, dp, sigma_factor=sigma_factor, mode='bottom', direction='forward', datafiles=datafile)
-# bt_bb = blt.BT(nframes, rs, dp, sigma_factor=sigma_factor, mode='bottom', direction='backward', datafiles=datafile)
-
-
 if __name__ == '__main__':
 
     # the multiprocessing start method can only bet set once.
     multiprocessing.set_start_method('spawn')
 
-    # Parallel pools does not work because if we BT instances created within the children because they cannot be pickled.
+    # Parallel pools does not work because BT instances created within the children cannot be pickled.
     # The alternative to "hide" the creation of the 4 BT instances is to return pickable objects,e.g numpy arrays ballpos.
     # See https://stackoverflow.com/questions/47776486/python-struct-error-i-format-requires-2147483648-number-2147483647
 
     startTime = datetime.now()
-    ballpos_top, ballpos_bottom = blt.balltrack_all(nframes, rs, dp, sigma_factor, datafile, outputdir, ncores=4)
+    ballpos_top, ballpos_bottom = blt.balltrack_all(nframes, rs, dp, sigma_factor, outputdir, datafiles=datafile, ncores=4)
 
     print(" Time elapsed: %s " % (datetime.now() - startTime))

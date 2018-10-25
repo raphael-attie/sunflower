@@ -15,7 +15,7 @@ outputdir = '/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/python_balltrack
 nframes = int((3600*24*2 + 18*3600)/45) # 5280 frames
 #nframes = int(80 * 5)
 
-# Load the series
+# Load one slice of the series
 image = fitstools.fitsread(datafile, tslice=0).astype(np.float32)
 dims = image.shape
 ### Ball parameters
