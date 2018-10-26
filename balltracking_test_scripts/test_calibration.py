@@ -44,7 +44,7 @@ if __name__ == '__main__':
 
     cal = blt.Calibrator(images, drift_rates, nframes, rs, dp, sigma_factor, fwhm, outputdir, use_existing=True, nthreads=5)
 
-    ballpos_top_list, ballpos_bottom_list = cal.balltrack_all_series()
+    ballpos_top_list, ballpos_bottom_list = cal.balltrack_all_rates()
 
     print("\nProcessing time: %s seconds\n" % (datetime.now() - startTime))
 
