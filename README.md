@@ -16,12 +16,18 @@ After installation, make sure you have the "conda" command working. E.g: (from t
 Add conda-forge channel:
 
 ``conda config --append channels conda-forge``
+
 Then create a new virtual environment, give it whatever name you want (here, i call it ``new_environment``), and using the *requirements.txt* file,
 from a terminal, execute the following:
 
 ``conda create -n new_environment --file requirements.txt``
 
+You also need to install the python package *fitsio* with:
+
+``pip install fitsio``
+
 Compile some binaries written in Cython:
+
 - go to the *cython_modules* directory
 - execute ``python setup_cbinterp.py build ext --inplace``
 

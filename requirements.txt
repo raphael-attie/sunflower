@@ -2,6 +2,7 @@
 # $ conda create --name <env> --file <this file>
 # platform: osx-64
 cython
+fitsio
 astropy
 drms
 mahotas

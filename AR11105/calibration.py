@@ -2,6 +2,8 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.realpath(__file__)))
 import numpy as np
+import matplotlib
+matplotlib.use('agg')
 import matplotlib.pyplot as plt
 import balltracking.balltrack as blt
 import fitstools
@@ -9,9 +11,9 @@ from datetime import datetime
 
 
 # input data
-datafile = '/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/mtrack_20170901_000000_TAI20170905_235959_LambertCylindrical_continuum.fits'
+datafile = '/Users/rattie/Data/SDO/HMI/EARs/AR11105_2010_09_02/mtrack_20100901_120034_TAI_20100902_120034_TAI_LambertCylindrical_continuum.fits'
 # output directory for the drifting images
-outputdir = '/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/calibration/'
+outputdir = '/Users/rattie/Data/SDO/HMI/EARs/AR11105_2010_09_02/calibration/'
 ### Ball parameters
 # Use 80 frames (1 hr)
 nframes = 80
@@ -36,8 +38,7 @@ trange = np.arange(nframes)
 fwhm = 15
 dims = images.shape[0:2]
 
-fov_slices = [np.s_[10:200, 30:-30],
-              np.s_[350:500, 30:-30]]
+fov_slices = [np.s_[4:-4, 30:-30],]
 
 if __name__ == '__main__':
 
@@ -68,8 +69,6 @@ if __name__ == '__main__':
     plt.ylabel('Drift <Vx> (px/frame)')
     plt.grid('on')
     plt.legend()
-    plt.show()
-
 
     plt.savefig(os.path.join(outputdir,'calibration.png'))
 

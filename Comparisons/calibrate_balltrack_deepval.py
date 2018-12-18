@@ -43,7 +43,6 @@ images2[:, 263] = images.mean()
 npts = 9
 vx_rates = np.linspace(-0.2, 0.2, npts)
 drift_rates = np.stack((vx_rates, np.zeros(npts)),axis=1).tolist()
-trange = np.arange(nframes)
 
 # Smoothing
 fwhm = 7
