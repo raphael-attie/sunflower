@@ -1,6 +1,5 @@
 import sys
-# import matplotlib
-# matplotlib.use('qt5agg')
+import os
 import numpy as np
 from numpy import pi, cos, sin
 import cython_modules.interp as cinterp
@@ -237,10 +236,29 @@ def mballtrack_main(**kwargs):
 
 
 def load_data(datafiles, n):
+    _, ext = os.path.splitext(datafiles)
+    if ext == '.fits':
+        image = load_fits(datafiles, n)
+        return image
+    elif ext == '.npz':
+        image = load_npz(datafiles, n)
+        return image
+    else:
+        sys.exit("invalid file extension. Must be either .fits or .npz")
+
+
+def load_npz(datafiles, n):
+    data = np.load(datafiles[n])
+    image = data[data.files[0]]
+    return image
+
+
+def load_fits(datafiles, n):
     #image = fitstools.fitsread(mbt.datafiles, tslice=n).astype(DTYPE)
-    image = fitstools.fitsread(datafiles, tslice=slice(n,n+7)).astype(DTYPE)
+    image = fitstools.fitsread(datafiles, tslice=slice(n,n+1)).astype(DTYPE)
     image = np.median(image, 2)
     return image
+
 
 def get_local_extrema(image, surface, polarity, min_distance, threshold):
 
@@ -324,8 +342,8 @@ def get_local_extrema_ar(image, surface, polarity, min_distance, threshold, thre
 
 def prep_data(image):
 
-    #image2 = np.sqrt(np.abs(image))
-    image2 = np.abs(image)**0.3
+    image2 = np.sqrt(np.abs(image))
+    #image2 = np.abs(image)**0.3
     image3 = image2.max() - image2
     surface = (image3 - image3.mean())/image3.std()
 

@@ -1,26 +1,23 @@
-from importlib import reload
-import multiprocessing
-import time
-from functools import partial
+import os, glob
 import matplotlib
-#matplotlib.use('macosx')
-#matplotlib.use('qt5agg')
-matplotlib.use('agg')
+matplotlib.use('macosx')
+#matplotlib.use('agg')
 import numpy as np
-import fitstools
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
-import balltracking.balltrack as blt
 import balltracking.mballtrack as mblt
-from skimage.feature import peak_local_max
 from skimage.exposure import rescale_intensity
-from skimage.morphology import thin
-from sklearn.metrics.pairwise import euclidean_distances
-import matplotlib.animation as animation
 from datetime import datetime
 import pickle
 
 DTYPE = np.float32
+
+
+def save_object(obj, filename):
+    with open(filename, 'wb') as output:  # Overwrites any existing file.
+        pickle.dump(obj, output, pickle.HIGHEST_PROTOCOL)
+
+
 
 def custom_cmap(nballs):
 
@@ -78,7 +75,7 @@ def update_fig(i):
     ws_labels, borders = mblt.merge_watershed(labels_p, borders_p, mbt_p.nballs, labels_n, borders_n)
     ws_labels[0, 0] = mbt_p.nballs + mbt_n.nballs
     #data = fitstools.fitsread(datafile, tslice=i).astype(DTYPE)
-    data = mblt.load_data(datafile, i)
+    data = mblt.load_data(datafiles, i)
     im1.set_array(data)
 
 
@@ -108,46 +105,62 @@ def update_fig(i):
     line = [line1p, line1n, line2p, line2n]
     return line
 
-def init():
-    im1.set_data(data)
-    im2.set_data(np.zeros(data.shape))
-    im3.set_data(np.zeros([*data.shape, 3]))
-    line1p.set_data(np.ma.array(np.arange(10), mask=True), np.ma.array(np.arange(10), mask=True))
-    line1n.set_data(np.ma.array(np.arange(10), mask=True), np.ma.array(np.arange(10), mask=True))
-    line2p.set_data(np.ma.array(np.arange(10), mask=True), np.ma.array(np.arange(10), mask=True))
-    line2n.set_data(np.ma.array(np.arange(10), mask=True), np.ma.array(np.arange(10), mask=True))
-    #line1max.set_data(np.ma.array(np.arange(10), mask=True), np.ma.array(np.arange(10), mask=True))
-    # line = [line1p, line1n, line1max, line2p, line2n]
-    line = [line1p, line1n, line2p, line2n]
-    return line
-
-def save_object(obj, filename):
-    with open(filename, 'wb') as output:  # Overwrites any existing file.
-        pickle.dump(obj, output, pickle.HIGHEST_PROTOCOL)
 
 
-datafile = '/Users/rattie/Data/SDO/HMI/EARs/AR11105_2010_09_02_Aimee/mtrack_20100901_120034_TAI_20100902_120034_TAI_LambertCylindrical_magnetogram.fits'
+datadir = '/Users/rattie/Data/Lars/'
+datafiles = sorted(glob.glob(os.path.join(datadir, '10degree*.npz')))
 
-fname = '/Users/rattie/Data/SDO/HMI/EARs/AR11105_2010_09_02_Aimee/mbt_pn2.pkl'
 
-# Restore
-with open(fname, 'rb') as input:
-    mbt_p, mbt_n = pickle.load(input)
+mbt_dict = {"nt":2,
+            "rs":8,
+            "am":0.5,
+            "dp":0.3,
+            "td":0.5,
+            "ballspacing":8,
+            "intsteps":20,
+            "mag_thresh":100,
+            "mag_thresh_sunspots":800, # not used at the moment
+            "noise_level":25,
+            "track_emergence":False,
+            "emergence_box":10,
+            "datafiles":datafiles}
 
-# Restore flux extraction by markers-based watershed
-ws_fname = '/Users/rattie/Data/SDO/HMI/EARs/AR11105_2010_09_02_Aimee/watershed_arrays2.npz'
-# np.savez(fname,
-#          ws_list_p=ws_list_p, markers_list_p=markers_list_p, borders_list_p=borders_list_p,
-#          ws_list_n=ws_list_n, markers_list_n=markers_list_n, borders_list_n=borders_list_n)
+
+### Start processing
+
+start_time = datetime.now()
+
+mbt_p, mbt_n = mblt.mballtrack_main(**mbt_dict)
+
+elapsed_time1 = datetime.now() - start_time
+print("Tracking time: %d s"%elapsed_time1.total_seconds())
+
+fname = '/Users/rattie/Data/SDO/HMI/EARs/AR11105_2010_09_02/mbt_pn2.pkl'
+save_object([mbt_p, mbt_n], fname)
+
+# Flux extraction by markers-based watershed
+start_time = datetime.now()
+
+ws_list_p, markers_list_p, borders_list_p = mblt.watershed_series(mbt_dict['datafiles'], mbt_dict['nt'], mbt_dict['noise_level'], 1, mbt_p.ballpos.astype(np.int32))
+ws_list_n, markers_list_n, borders_list_n = mblt.watershed_series(mbt_dict['datafiles'], mbt_dict['nt'], mbt_dict['noise_level'], -1, mbt_n.ballpos.astype(np.int32))
+
+elapsed_time2 = datetime.now() - start_time
+print("Segmentation time: %d s"%elapsed_time2.total_seconds())
+print("total time: %d s"%(elapsed_time1 + elapsed_time2).total_seconds())
+
+fname = '/Users/rattie/Data/SDO/HMI/EARs/AR11105_2010_09_02/watershed_arrays2.npz'
+np.savez(fname,
+         ws_list_p=ws_list_p, markers_list_p=markers_list_p, borders_list_p=borders_list_p,
+         ws_list_n=ws_list_n, markers_list_n=markers_list_n, borders_list_n=borders_list_n)
 
 # load above saved file as:
 # npzfile = np.load(fname)
 # List content with: npzfile.files
 # Get a specific array named 'a' with:
 # a = npzfile['a']
-npzfile = np.load(ws_fname)
-ws_list_p, borders_list_p  = npzfile['ws_list_p'], npzfile['borders_list_p']
-ws_list_n, borders_list_n  = npzfile['ws_list_n'], npzfile['borders_list_n']
+
+# TODO: Watershed can be marked further with the local minima, which are appended to the balls positions, and removed afterwards.
+
 
 
 ### Get a sample
@@ -187,22 +200,6 @@ ax3.set_ylabel('Lambert cyl. Y')
 ax3.set_title('Tracked fragments with ball-based color labeling')
 fig.tight_layout()
 
-# # Create iterable for funcAnimation(). It must contain the series
+
 # i = 1816
 # update_fig(i)
-
-
-# Animation
-
-
-frames = range(0, 1900, 10)
-interval = 80
-ani = animation.FuncAnimation(fig, update_fig, interval=interval, frames=frames, blit=True, repeat=False, init_func=init)
-fps = 40
-codec = 'libx264'
-ani.save('/Users/rattie/Data/SDO/HMI/EARs/AR11105_2010_09_02/movie_anim_interval%d_fps%d_segmentation_codec_%s.mp4'%(interval, fps, codec), fps=fps, extra_args=['-vcodec', codec])
-
-# #
-# #
-# # # TODO: investigate shape_index to reject some local maxima that should be rejected
-# # # TODO: or see usage of removing the small area, filling the hole, and relabel?
