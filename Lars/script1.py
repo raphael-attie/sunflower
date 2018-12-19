@@ -19,6 +19,20 @@ def save_object(obj, filename):
         pickle.dump(obj, output, pickle.HIGHEST_PROTOCOL)
 
 
+def prep_function(datajz):
+    '''
+    Turn the current jz image into a trackable surface. Mean normalization, then shift upward so that the minimum is at
+    the zero surface level, then invert and shift upward so that the max is at zero surface level.
+    :param datajz:
+    :return:
+    '''
+
+    datajzn = (datajz - datajz.mean()) / datajz.std()
+    datajzn2 = datajzn + datajzn.min()
+    datajzn2 = - datajzn2 + datajzn2.max()
+
+    return datajzn2
+
 
 def custom_cmap(nballs):
 
@@ -112,8 +126,6 @@ datadir = '/Users/rattie/Data/Lars/'
 datafiles = sorted(glob.glob(os.path.join(datadir, '10degree*.npz')))
 outputdir = os.path.join(datadir, 'mballtrack')
 
-prep_function = partial(mblt.prep_data, sqrt_scale=False, invert=False, absolute=True)
-
 mbt_dict = {"nt":2,
             "rs":8,
             "am":0.5,
@@ -136,13 +148,12 @@ mbt_p, mbt_n = mblt.mballtrack_main(**mbt_dict)
 fname = os.path.join(outputdir,'mbt_pn.pkl')
 save_object([mbt_p, mbt_n], fname)
 # Flux extraction by markers-based watershed
-ws_list_p, markers_list_p, borders_list_p = mblt.watershed_series(mbt_dict['datafiles'], mbt_dict['nt'], mbt_dict['noise_level'], 1, mbt_p.ballpos.astype(np.int32))
-ws_list_n, markers_list_n, borders_list_n = mblt.watershed_series(mbt_dict['datafiles'], mbt_dict['nt'], mbt_dict['noise_level'], -1, mbt_n.ballpos.astype(np.int32))
+ws_list_p, markers_list_p, borders_list_p = mblt.watershed_series(mbt_dict['datafiles'], mbt_dict['nt'], mbt_dict['noise_level'], 1, mbt_p.ballpos.astype(np.int32),
+                                                                  prep_function=prep_function, invert=False)
 
 fname = os.path.join(outputdir, 'watershed_arrays2.npz')
 np.savez(fname,
-         ws_list_p=ws_list_p, markers_list_p=markers_list_p, borders_list_p=borders_list_p,
-         ws_list_n=ws_list_n, markers_list_n=markers_list_n, borders_list_n=borders_list_n)
+         ws_list_p=ws_list_p, markers_list_p=markers_list_p, borders_list_p=borders_list_p)
 
 # load above saved file as:
 # npzfile = np.load(fname)

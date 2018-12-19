@@ -346,23 +346,11 @@ def get_local_extrema_ar(image, surface, polarity, min_distance, threshold, thre
 #     return labels
 
 
-def prep_data(image, sqrt_scale=True, invert=True, absolute=True):
+def prep_data(image):
 
-    if sqrt_scale:
-        image2 = np.sqrt(np.abs(image))
-    else:
-        image2 = image
-
-    if invert:
-        image3 = image2.max() - image2
-    else:
-        image3 = image2
-
+    image2 = np.sqrt(np.abs(image))
+    image3 = image2.max() - image2
     surface = (image3 - image3.mean())/image3.std()
-
-    if absolute:
-        surface = np.abs(surface)
-
     return surface.copy(order='C').astype(DTYPE)
 
 
@@ -472,24 +460,32 @@ def label_from_pos(x, y, dims):
 
     return label_map
 
-def marker_watershed(data, x, y, threshold, polarity):
+def marker_watershed(data, x, y, threshold, polarity, invert=True):
 
     markers = label_from_pos(x, y, data.shape)
     if polarity >=0:
         mask_ws = data > threshold
     else:
         mask_ws = data < -threshold
-    labels = watershed(-np.abs(data), markers, mask=mask_ws)
+
+    wdata = np.abs(data)
+    # For magnetograms, need to invert the absolute value so the fragment intensity decreases toward centroid
+    if invert:
+        wdata -= wdata
+
+    labels = watershed(wdata, markers, mask=mask_ws)
     borders = find_boundaries(labels)
     # Subtract 1 to align with the ball number series. E.g: watershed label 0 corresponds to ball #0
     labels -=1
     return labels, markers, borders
 
-def watershed_series(datafile, nframes, threshold, polarity, ballpos, verbose=False):
+def watershed_series(datafile, nframes, threshold, polarity, ballpos, verbose=False, prep_function=None, invert=True):
 
     # Load a sample to determine shape
     #data = fitstools.fitsread(datafile, tslice=0)
     data = load_data(datafile, 0)
+    if prep_function is not None:
+        data = prep_function(data)
 
     ws_series = np.empty([nframes-7, data.shape[1], data.shape[0]], dtype=np.int32)
     markers_series = np.empty([nframes-7, data.shape[1], data.shape[0]], dtype=np.int32)
@@ -504,7 +500,7 @@ def watershed_series(datafile, nframes, threshold, polarity, ballpos, verbose=Fa
         # Get a view of (x,y) coords at frame #i (use slice instead of fancy insteading). Either with slice(0,1) or 0:2
         # I'll use slice for clarity
         # positions = ballpos[slice(0,1),:,n]
-        labels_ws, markers, borders = marker_watershed(data, ballpos[0,:,n], ballpos[1,:,n], threshold, polarity)
+        labels_ws, markers, borders = marker_watershed(data, ballpos[0,:,n], ballpos[1,:,n], threshold, polarity, invert=invert)
         ws_series[n,...] = labels_ws
         markers_series[n,...] = markers
         borders_series[n,...] = borders
