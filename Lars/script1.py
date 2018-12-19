@@ -19,17 +19,23 @@ def save_object(obj, filename):
         pickle.dump(obj, output, pickle.HIGHEST_PROTOCOL)
 
 
+def preprep_function(datajz):
+    datajzn = (datajz - datajz.mean()) / datajz.std()
+    datajzn *= 100
+    return datajzn
+
+
 def prep_function(datajz):
-    '''
+    """
     Turn the current jz image into a trackable surface. Mean normalization, then shift upward so that the minimum is at
     the zero surface level, then invert and shift upward so that the max is at zero surface level.
     :param datajz:
     :return:
-    '''
+    """
 
     datajzn = (datajz - datajz.mean()) / datajz.std()
-    datajzn2 = datajzn + datajzn.min()
-    datajzn2 = - datajzn2 + datajzn2.max()
+    datajzn *= 100
+    datajzn2 = np.abs(datajzn)
 
     return datajzn2
 
@@ -134,26 +140,26 @@ mbt_dict = {"nt":2,
             "prep_function":prep_function,
             "ballspacing":8,
             "intsteps":20,
-            "mag_thresh":100,
-            "mag_thresh_sunspots":800, # not used at the moment
-            "noise_level":25,
+            "local_min":True,
+            "mag_thresh":[0, 30],
+            "noise_level":0,
             "track_emergence":False,
             "emergence_box":10,
             "datafiles":datafiles}
 
 
 ### Start processing
-mbt_p, mbt_n = mblt.mballtrack_main(**mbt_dict)
+mbt_p = mblt.mballtrack_main_positive(**mbt_dict)
 # Save results of tracking
-fname = os.path.join(outputdir,'mbt_pn.pkl')
-save_object([mbt_p, mbt_n], fname)
+# fname = os.path.join(outputdir,'mbt_pn.pkl')
+# save_object(mbt_p, fname)
 # Flux extraction by markers-based watershed
-ws_list_p, markers_list_p, borders_list_p = mblt.watershed_series(mbt_dict['datafiles'], mbt_dict['nt'], mbt_dict['noise_level'], 1, mbt_p.ballpos.astype(np.int32),
-                                                                  prep_function=prep_function, invert=False)
-
-fname = os.path.join(outputdir, 'watershed_arrays2.npz')
-np.savez(fname,
-         ws_list_p=ws_list_p, markers_list_p=markers_list_p, borders_list_p=borders_list_p)
+# ws_list_p, markers_list_p, borders_list_p = mblt.watershed_series(mbt_dict['datafiles'], mbt_dict['nt'], mbt_dict['noise_level'], 1, mbt_p.ballpos.astype(np.int32),
+#                                                                   prep_function=prep_function, invert=False)
+#
+# fname = os.path.join(outputdir, 'watershed_arrays2.npz')
+# np.savez(fname,
+#          ws_list_p=ws_list_p, markers_list_p=markers_list_p, borders_list_p=borders_list_p)
 
 # load above saved file as:
 # npzfile = np.load(fname)
@@ -165,12 +171,34 @@ np.savez(fname,
 
 #
 # ### Get a sample
-# # data = fitstools.fitsread(datafile, tslice=0).astype(DTYPE)
-# data = mblt.load_data(datafiles, 0)
-# range_minmax = (-200,200)
-#
-# ### Visualize
-#
+image = mblt.load_data(datafiles, 0)
+data = prep_function(image)
+
+dmax = data.max()
+dmin = 0
+fac = 1
+
+### Visualize
+pos = mbt_p.ballpos[...,0]
+maskp = pos[0, :] > 0
+
+fig = plt.figure(figsize=(8, 8))
+
+ax1 = plt.subplot(111)
+im1 = ax1.imshow(data, vmin=fac*dmin, vmax=fac*dmax, cmap='gray', origin='lower', interpolation='nearest')
+plt.plot(mbt_p.xstart, mbt_p.ystart, marker='.', ms=2, color='red', ls='none')
+plt.plot(pos[0, :, ])
+
+ax1.set_xlabel('X')
+ax1.set_ylabel('Y')
+ax1.set_title('Tracked local extrema at frame 0')
+
+fig.tight_layout()
+
+
+
+
+
 # fig = plt.figure(figsize=(18, 8))
 #
 # ax1 = plt.subplot(131)

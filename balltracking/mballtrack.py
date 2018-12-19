@@ -16,7 +16,7 @@ DTYPE = np.float32
 class MBT:
     def __init__(self, nt=1, rs =2, am=1, dp=0.3, td=5, zdamping=1,
                  ballspacing=10, intsteps=15, mag_thresh=30, mag_thresh_sunspots=400, noise_level=20, polarity=1,
-                 track_emergence=False, emergence_box=10, datafiles=None, data=None, prep_function=None):
+                 track_emergence=False, emergence_box=10, datafiles=None, data=None, prep_function=None, local_min=False):
 
         self.datafiles = datafiles
         self.data = data
@@ -26,6 +26,7 @@ class MBT:
         self.dp = dp
         # data prep parameters
         self.prep_function = prep_function
+        self.local_min = local_min
         # Ballspacing is the minimum initial distance between the balls.
         self.ballspacing = ballspacing
         self.polarity=polarity
@@ -91,9 +92,14 @@ class MBT:
         self.emergence_box = emergence_box
 
         # Initialization of ball positions
-        self.surface = prep_data(self.image)
-        #self.xstart, self.ystart = get_local_extrema_ar(self.image, self.surface, self.polarity, self.ballspacing, self.mag_thresh, self.mag_thresh_sunspots)
-        self.xstart, self.ystart = get_local_extrema(self.image, self.surface, self.polarity, self.ballspacing, self.mag_thresh)
+        if prep_function is not None:
+            self.surface = prep_function(self.image)
+            self.image = self.surface
+        else:
+            self.surface = prep_data(self.image)
+
+        #self.xstart, self.ystart = get_local_extrema_ar(self.image, self.surface, self.polarity, self.ballspacing, self.mag_thresh, self.mag_thresh_sunspots, local_min=self.local_min)
+        self.xstart, self.ystart = get_local_extrema(self.image, self.polarity, self.ballspacing, self.mag_thresh, local_min=self.local_min)
         self.nballs = self.xstart.size
         self.zstart = blt.put_balls_on_surface(self.surface, self.xstart, self.ystart, self.rs, self.dp)
 
@@ -108,13 +114,14 @@ class MBT:
 
     def track_all_frames(self):
 
-        for n in range(0, self.nt-7):
+        for n in range(0, self.nt):
 
             #print('Frame n=%d'%n)
 
             self.image = load_data(self.datafiles, n)
             if self.prep_function is not None:
                 self.surface = self.prep_function(self.image)
+                self.image = self.surface
             else:
                 self.surface = prep_data(self.image)
 
@@ -186,7 +193,7 @@ class MBT:
 
         #flux_posx, flux_posy = get_local_extrema_ar(self.image, self.surface, self.polarity, self.ballspacing, self.mag_thresh, self.mag_thresh_sunspots)
         flux_posx, flux_posy = get_local_extrema(self.image, self.surface, self.polarity, self.ballspacing,
-                                                    self.mag_thresh)
+                                                    self.mag_thresh, local_min=self.local_min)
 
         # TODO: Consider profiling this for optimization
         # Consider getting a view by using tuples of indices...
@@ -230,6 +237,21 @@ class MBT:
             self.nballs += newposx.size
 
 
+def mballtrack_main_positive(**kwargs):
+
+    mbt_p = MBT(polarity=1, **kwargs)
+    mbt_p.track_all_frames()
+
+    return mbt_p
+
+
+def mballtrack_main_negative(**kwargs):
+
+    mbt_n = MBT(polarity=-1, **kwargs)
+    mbt_n.track_all_frames()
+
+    return mbt_n
+
 
 def mballtrack_main(**kwargs):
 
@@ -266,29 +288,48 @@ def load_fits(datafiles, n):
     return image
 
 
-def get_local_extrema(image, surface, polarity, min_distance, threshold):
+def get_local_extrema(image, polarity, min_distance, threshold, local_min=False):
+    """
+    Default to finding only local maxima. local_min = True will look only for local minima
+
+    :param image: 2D frame displaying the features to track.
+    :param polarity: if data signed (e.g magnetograms), set which polarity is tracked
+    :param min_distance: minimum distance to search between local extrema
+    :param threshold: values setting the limit for searching for local extrema. Can be a signed value or range of 2 values
+    :param local_min: if True, will look for local minima instead of local maxima
+    :return: list of x- and y- coordinates of the local extrema
+    """
 
     # Get a mask of where to look for local maxima.
-    if polarity >= 0:
-        mask_maxi = image >= threshold
+    if len(threshold) == 1:
+        if polarity >= 0:
+            mask_thresh = image >= threshold
+        else:
+            mask_thresh = image <= -threshold
     else:
-        mask_maxi = image <= -threshold
+            mask_thresh = (image > min(threshold)) & (image < max(threshold))
+
 
     # Look for local maxima, get a list of coordinates. Use a geater grid size for sunspot.
     # Outside sunspot
     #surface_sm = -gaussian_filter(surface, sigma=3)
     #surface_sm2 = surface_sm + np.abs(surface_sm.min())
 
-    se = disk(round(min_distance/2))
-    #se = np.ones([min_distance, min_distance])
-    #ystart, xstart = np.array( peak_local_max(np.abs(image), indices=True, footprint=se,labels=mask_maxi)).T
-    ystart, xstart = np.array(peak_local_max(np.abs(image), indices=True, min_distance=min_distance, labels=mask_maxi)).T
+    if local_min:
+        # reverse the scale of the image so the local min are searched as local max
+        image2 = image.max() - image
+        ystart, xstart = np.array(
+        peak_local_max(np.abs(image2), indices=True, min_distance=min_distance, labels=mask_thresh)).T
+    else:
+        #se = disk(round(min_distance/2))
+        #ystart, xstart = np.array( peak_local_max(np.abs(image), indices=True, footprint=se,labels=mask_maxi)).T
+        ystart, xstart = np.array(peak_local_max(np.abs(image), indices=True, min_distance=min_distance, labels=mask_thresh)).T
 
     # Because transpose only creates a view, and this is eventually given to a C function, it needs to be copied as C-ordered
     return xstart.copy(order='C'), ystart.copy(order='C')
 
 
-def get_local_extrema_ar(image, surface, polarity, min_distance, threshold, threshold2):
+def get_local_extrema_ar(image, polarity, min_distance, threshold, threshold2, local_min=False):
     """
     Find the coordinates of local extrema with special treatment of Active Regions.
     Similar to get_local_extrema() but uses a grid size (min_distance) 3x greater
@@ -302,7 +343,7 @@ def get_local_extrema_ar(image, surface, polarity, min_distance, threshold, thre
     :return: arrays of coordinates of local extrema
     """
 
-    xstart, ystart = get_local_extrema(image, surface, polarity, min_distance, threshold)
+    xstart, ystart = get_local_extrema(image, polarity, min_distance, threshold, local_min=local_min)
     # Get the intensity at these locations
     data_int = image[ystart, xstart]
     # Build a distance-based matrix for coordinates of pixel whose intensity is above threshold2, and keep the maximum
