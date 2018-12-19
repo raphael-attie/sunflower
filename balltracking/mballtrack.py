@@ -16,7 +16,7 @@ DTYPE = np.float32
 class MBT:
     def __init__(self, nt=1, rs =2, am=1, dp=0.3, td=5, zdamping=1,
                  ballspacing=10, intsteps=15, mag_thresh=30, mag_thresh_sunspots=400, noise_level=20, polarity=1,
-                 track_emergence=False, emergence_box=10, datafiles=None, data=None):
+                 track_emergence=False, emergence_box=10, datafiles=None, data=None, prep_function=None):
 
         self.datafiles = datafiles
         self.data = data
@@ -24,12 +24,15 @@ class MBT:
         self.intsteps = intsteps
         self.rs = rs
         self.dp = dp
+        # data prep parameters
+        self.prep_function = prep_function
         # Ballspacing is the minimum initial distance between the balls.
         self.ballspacing = ballspacing
         self.polarity=polarity
 
         # Load 1st image
         self.image = load_data(self.datafiles, 0)
+
         self.nx = self.image.shape[1]
         self.ny = self.image.shape[0]
         # Contrary to the Matlab implementation, and given the new way of initialization with locating the local extrema,
@@ -110,7 +113,10 @@ class MBT:
             #print('Frame n=%d'%n)
 
             self.image = load_data(self.datafiles, n)
-            self.surface = prep_data(self.image)
+            if self.prep_function is not None:
+                self.surface = self.prep_function(self.image)
+            else:
+                self.surface = prep_data(self.image)
 
             if self.track_emergence and n > 0:
                 self.populate_emergence()
@@ -236,7 +242,7 @@ def mballtrack_main(**kwargs):
 
 
 def load_data(datafiles, n):
-    _, ext = os.path.splitext(datafiles)
+    _, ext = os.path.splitext(datafiles[0])
     if ext == '.fits':
         image = load_fits(datafiles, n)
         return image
@@ -256,7 +262,7 @@ def load_npz(datafiles, n):
 def load_fits(datafiles, n):
     #image = fitstools.fitsread(mbt.datafiles, tslice=n).astype(DTYPE)
     image = fitstools.fitsread(datafiles, tslice=slice(n,n+1)).astype(DTYPE)
-    image = np.median(image, 2)
+    #image = np.median(image, 2)
     return image
 
 
@@ -340,12 +346,22 @@ def get_local_extrema_ar(image, surface, polarity, min_distance, threshold, thre
 #     return labels
 
 
-def prep_data(image):
+def prep_data(image, sqrt_scale=True, invert=True, absolute=True):
 
-    image2 = np.sqrt(np.abs(image))
-    #image2 = np.abs(image)**0.3
-    image3 = image2.max() - image2
+    if sqrt_scale:
+        image2 = np.sqrt(np.abs(image))
+    else:
+        image2 = image
+
+    if invert:
+        image3 = image2.max() - image2
+    else:
+        image3 = image2
+
     surface = (image3 - image3.mean())/image3.std()
+
+    if absolute:
+        surface = np.abs(surface)
 
     return surface.copy(order='C').astype(DTYPE)
 
@@ -472,7 +488,8 @@ def marker_watershed(data, x, y, threshold, polarity):
 def watershed_series(datafile, nframes, threshold, polarity, ballpos, verbose=False):
 
     # Load a sample to determine shape
-    data = fitstools.fitsread(datafile, tslice=0)
+    #data = fitstools.fitsread(datafile, tslice=0)
+    data = load_data(datafile, 0)
 
     ws_series = np.empty([nframes-7, data.shape[1], data.shape[0]], dtype=np.int32)
     markers_series = np.empty([nframes-7, data.shape[1], data.shape[0]], dtype=np.int32)

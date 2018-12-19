@@ -9,6 +9,7 @@ import balltracking.mballtrack as mblt
 from skimage.exposure import rescale_intensity
 from datetime import datetime
 import pickle
+from functools import partial
 
 DTYPE = np.float32
 
@@ -54,68 +55,71 @@ def make_data_borders_rgb(data, borders, in_range):
 
 
 
-def update_fig(i):
-    #global mbt_p, mbt_n, ws_list_n, borders_list_n, borders_list_p, borders_list_n
-
-    # Visualize tracking results at different time indices
-    pos_p = mbt_p.ballpos[..., i]
-    pos_n = mbt_n.ballpos[..., i]
-    maskp = pos_p[0, :] > 0
-    maskn = pos_n[0, :] > 0
-
-    labels_p = ws_list_p[i]
-    borders_p = borders_list_p[i].astype(np.bool)
-    # borders_p = thin(borders_p)
-
-    labels_n = ws_list_n[i]
-    borders_n = borders_list_n[i]
-    # borders_n = thin(borders_n)
-
-    # Merge watershed labels and borders.
-    ws_labels, borders = mblt.merge_watershed(labels_p, borders_p, mbt_p.nballs, labels_n, borders_n)
-    ws_labels[0, 0] = mbt_p.nballs + mbt_n.nballs
-    #data = fitstools.fitsread(datafile, tslice=i).astype(DTYPE)
-    data = mblt.load_data(datafiles, i)
-    im1.set_array(data)
-
-
-    line1p.set_data(pos_p[0, maskp], pos_p[1, maskp])
-    line1n.set_data(pos_n[0, maskn], pos_n[1, maskn])
-    # xmaxp, ymaxp = mblt.get_local_extrema_ar(data, mblt.prep_data(data), 1, mbt_p.ballspacing, mbt_p.mag_thresh, mbt_p.mag_thresh_sunspots)
-    # xmaxn, ymaxn = mblt.get_local_extrema_ar(data, mblt.prep_data(data), -1, mbt_p.ballspacing, mbt_p.mag_thresh, mbt_p.mag_thresh_sunspots)
-    # xmax = np.concatenate((xmaxp, xmaxn))
-    # ymax = np.concatenate((ymaxp, ymaxn))
-    # line1max.set_data(xmax, ymax)
-
-    data_borders_rgb = make_data_borders_rgb(data, borders, range_minmax)
-
-    im2.set_array(data_borders_rgb)
-    line2p.set_data(pos_p[0, maskp], pos_p[1, maskp])
-    line2n.set_data(pos_n[0, maskn], pos_n[1, maskn])
-
-    im3.set_array(ws_labels)
-
-    ax1.set_title('Tracked local extrema at frame %d'%i)
-
-    #i+=1
-
-    # plt.savefig('/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/mballtrack/frame_%02d.png' % i)
-    # plt.close()
-    #line = [line1p, line1n, line1max, line2p, line2n]
-    line = [line1p, line1n, line2p, line2n]
-    return line
+# def update_fig(i):
+#     #global mbt_p, mbt_n, ws_list_n, borders_list_n, borders_list_p, borders_list_n
+#
+#     # Visualize tracking results at different time indices
+#     pos_p = mbt_p.ballpos[..., i]
+#     pos_n = mbt_n.ballpos[..., i]
+#     maskp = pos_p[0, :] > 0
+#     maskn = pos_n[0, :] > 0
+#
+#     labels_p = ws_list_p[i]
+#     borders_p = borders_list_p[i].astype(np.bool)
+#     # borders_p = thin(borders_p)
+#
+#     labels_n = ws_list_n[i]
+#     borders_n = borders_list_n[i]
+#     # borders_n = thin(borders_n)
+#
+#     # Merge watershed labels and borders.
+#     ws_labels, borders = mblt.merge_watershed(labels_p, borders_p, mbt_p.nballs, labels_n, borders_n)
+#     ws_labels[0, 0] = mbt_p.nballs + mbt_n.nballs
+#     #data = fitstools.fitsread(datafile, tslice=i).astype(DTYPE)
+#     data = mblt.load_data(datafiles, i)
+#     im1.set_array(data)
+#
+#
+#     line1p.set_data(pos_p[0, maskp], pos_p[1, maskp])
+#     line1n.set_data(pos_n[0, maskn], pos_n[1, maskn])
+#     # xmaxp, ymaxp = mblt.get_local_extrema_ar(data, mblt.prep_data(data), 1, mbt_p.ballspacing, mbt_p.mag_thresh, mbt_p.mag_thresh_sunspots)
+#     # xmaxn, ymaxn = mblt.get_local_extrema_ar(data, mblt.prep_data(data), -1, mbt_p.ballspacing, mbt_p.mag_thresh, mbt_p.mag_thresh_sunspots)
+#     # xmax = np.concatenate((xmaxp, xmaxn))
+#     # ymax = np.concatenate((ymaxp, ymaxn))
+#     # line1max.set_data(xmax, ymax)
+#
+#     data_borders_rgb = make_data_borders_rgb(data, borders, range_minmax)
+#
+#     im2.set_array(data_borders_rgb)
+#     line2p.set_data(pos_p[0, maskp], pos_p[1, maskp])
+#     line2n.set_data(pos_n[0, maskn], pos_n[1, maskn])
+#
+#     im3.set_array(ws_labels)
+#
+#     ax1.set_title('Tracked local extrema at frame %d'%i)
+#
+#     #i+=1
+#
+#     # plt.savefig('/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/mballtrack/frame_%02d.png' % i)
+#     # plt.close()
+#     #line = [line1p, line1n, line1max, line2p, line2n]
+#     line = [line1p, line1n, line2p, line2n]
+#     return line
 
 
 
 datadir = '/Users/rattie/Data/Lars/'
 datafiles = sorted(glob.glob(os.path.join(datadir, '10degree*.npz')))
+outputdir = os.path.join(datadir, 'mballtrack')
 
+prep_function = partial(mblt.prep_data, sqrt_scale=False, invert=False, absolute=True)
 
 mbt_dict = {"nt":2,
             "rs":8,
             "am":0.5,
             "dp":0.3,
             "td":0.5,
+            "prep_function":prep_function,
             "ballspacing":8,
             "intsteps":20,
             "mag_thresh":100,
@@ -127,28 +131,15 @@ mbt_dict = {"nt":2,
 
 
 ### Start processing
-
-start_time = datetime.now()
-
 mbt_p, mbt_n = mblt.mballtrack_main(**mbt_dict)
-
-elapsed_time1 = datetime.now() - start_time
-print("Tracking time: %d s"%elapsed_time1.total_seconds())
-
-fname = '/Users/rattie/Data/SDO/HMI/EARs/AR11105_2010_09_02/mbt_pn2.pkl'
+# Save results of tracking
+fname = os.path.join(outputdir,'mbt_pn.pkl')
 save_object([mbt_p, mbt_n], fname)
-
 # Flux extraction by markers-based watershed
-start_time = datetime.now()
-
 ws_list_p, markers_list_p, borders_list_p = mblt.watershed_series(mbt_dict['datafiles'], mbt_dict['nt'], mbt_dict['noise_level'], 1, mbt_p.ballpos.astype(np.int32))
 ws_list_n, markers_list_n, borders_list_n = mblt.watershed_series(mbt_dict['datafiles'], mbt_dict['nt'], mbt_dict['noise_level'], -1, mbt_n.ballpos.astype(np.int32))
 
-elapsed_time2 = datetime.now() - start_time
-print("Segmentation time: %d s"%elapsed_time2.total_seconds())
-print("total time: %d s"%(elapsed_time1 + elapsed_time2).total_seconds())
-
-fname = '/Users/rattie/Data/SDO/HMI/EARs/AR11105_2010_09_02/watershed_arrays2.npz'
+fname = os.path.join(outputdir, 'watershed_arrays2.npz')
 np.savez(fname,
          ws_list_p=ws_list_p, markers_list_p=markers_list_p, borders_list_p=borders_list_p,
          ws_list_n=ws_list_n, markers_list_n=markers_list_n, borders_list_n=borders_list_n)
@@ -161,45 +152,44 @@ np.savez(fname,
 
 # TODO: Watershed can be marked further with the local minima, which are appended to the balls positions, and removed afterwards.
 
-
-
-### Get a sample
-# data = fitstools.fitsread(datafile, tslice=0).astype(DTYPE)
-data = mblt.load_data(datafile, 0)
-range_minmax = (-200,200)
-
-### Visualize
-
-fig = plt.figure(figsize=(18, 8))
-
-ax1 = plt.subplot(131)
-im1 = ax1.imshow(data, vmin=range_minmax[0], vmax=range_minmax[1], cmap='gray', origin='lower', interpolation='nearest')
-line1p, = plt.plot(mbt_p.xstart, mbt_p.ystart, marker='.', ms=2, color='red', ls='none')
-line1n, = plt.plot(mbt_n.xstart, mbt_n.ystart, marker='.', ms=2, color='cyan', ls='none')
-
-ax1.set_xlabel('Lambert cyl. X')
-ax1.set_ylabel('Lambert cyl. Y')
-ax1.set_title('Tracked local extrema at frame 0')
-
-ax2 = plt.subplot(132)
-#im2 = plt.imshow(data_borders_rgb, origin='lower', interpolation='nearest')
-im2 = plt.imshow(np.zeros([*data.shape, 3]), origin='lower', interpolation='nearest')
-line2p, = plt.plot([], [], marker='.', ms=2, color='red', ls='none')
-line2n, = plt.plot([], [], marker='.', ms=2, color='cyan', ls='none')
-ax2.set_xlabel('Lambert cyl. X')
-ax2.set_ylabel('Lambert cyl. Y')
-ax2.set_title('Boundaries of tracked fragments')
-
-ax3 = plt.subplot(133)
-cmap = custom_cmap(mbt_p.nballs + mbt_n.nballs)
-#im3 = plt.imshow(ws_labels, cmap=cmap, vmin=-1, vmax=mbt_p.nballs + mbt_n.nballs, interpolation='nearest', origin='lower')
-im3 = plt.imshow(np.zeros(data.shape), cmap=cmap, vmin=-1, vmax=mbt_p.nballs + mbt_n.nballs, interpolation='nearest', origin='lower')
-
-ax3.set_xlabel('Lambert cyl. X')
-ax3.set_ylabel('Lambert cyl. Y')
-ax3.set_title('Tracked fragments with ball-based color labeling')
-fig.tight_layout()
-
-
-# i = 1816
-# update_fig(i)
+#
+# ### Get a sample
+# # data = fitstools.fitsread(datafile, tslice=0).astype(DTYPE)
+# data = mblt.load_data(datafiles, 0)
+# range_minmax = (-200,200)
+#
+# ### Visualize
+#
+# fig = plt.figure(figsize=(18, 8))
+#
+# ax1 = plt.subplot(131)
+# im1 = ax1.imshow(data, vmin=range_minmax[0], vmax=range_minmax[1], cmap='gray', origin='lower', interpolation='nearest')
+# line1p, = plt.plot(mbt_p.xstart, mbt_p.ystart, marker='.', ms=2, color='red', ls='none')
+# line1n, = plt.plot(mbt_n.xstart, mbt_n.ystart, marker='.', ms=2, color='cyan', ls='none')
+#
+# ax1.set_xlabel('Lambert cyl. X')
+# ax1.set_ylabel('Lambert cyl. Y')
+# ax1.set_title('Tracked local extrema at frame 0')
+#
+# ax2 = plt.subplot(132)
+# #im2 = plt.imshow(data_borders_rgb, origin='lower', interpolation='nearest')
+# im2 = plt.imshow(np.zeros([*data.shape, 3]), origin='lower', interpolation='nearest')
+# line2p, = plt.plot([], [], marker='.', ms=2, color='red', ls='none')
+# line2n, = plt.plot([], [], marker='.', ms=2, color='cyan', ls='none')
+# ax2.set_xlabel('Lambert cyl. X')
+# ax2.set_ylabel('Lambert cyl. Y')
+# ax2.set_title('Boundaries of tracked fragments')
+#
+# ax3 = plt.subplot(133)
+# cmap = custom_cmap(mbt_p.nballs + mbt_n.nballs)
+# #im3 = plt.imshow(ws_labels, cmap=cmap, vmin=-1, vmax=mbt_p.nballs + mbt_n.nballs, interpolation='nearest', origin='lower')
+# im3 = plt.imshow(np.zeros(data.shape), cmap=cmap, vmin=-1, vmax=mbt_p.nballs + mbt_n.nballs, interpolation='nearest', origin='lower')
+#
+# ax3.set_xlabel('Lambert cyl. X')
+# ax3.set_ylabel('Lambert cyl. Y')
+# ax3.set_title('Tracked fragments with ball-based color labeling')
+# fig.tight_layout()
+#
+#
+# # i = 1816
+# # update_fig(i)
