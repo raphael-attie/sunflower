@@ -115,7 +115,7 @@ def ffilter_image(image, fourier_filter, dx=0, dy=0):
 def phase_shift(fimage, dx, dy):
 
     dims = fimage.shape
-    x, y = np.meshgrid(np.arange(-dims[1] / 2, dims[1] / 2), np.arange(-dims[0] / 2, dims[1] / 2))
+    x, y = np.meshgrid(np.arange(-dims[1] / 2, dims[1] / 2), np.arange(-dims[0] / 2, dims[0] / 2))
 
     kx = -1j * 2 * np.pi * x / dims[1]
     ky = -1j * 2 * np.pi * y / dims[0]

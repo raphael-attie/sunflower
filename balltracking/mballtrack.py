@@ -30,7 +30,6 @@ class MBT:
         # Ballspacing is the minimum initial distance between the balls.
         self.ballspacing = ballspacing
         self.polarity=polarity
-
         # Load 1st image
         self.image = load_data(self.datafiles, 0)
 
