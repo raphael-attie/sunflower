@@ -1248,11 +1248,12 @@ def fit_calibration(ballpos_list, shift_rates, trange, fwhm, dims, fov_slices, r
     p = np.polyfit(shift_rates, vxmeans, 1)
     a = 1 / p[0]
     vxfit = a * (vxmeans - p[1])
+    residuals = np.abs(vxfit - shift_rates)
 
     if return_flow_maps:
-        return a, vxfit, vxmeans, vxs, vys
+        return a, vxfit, vxmeans, residuals, vxs, vys
     else:
-        return a, vxfit, vxmeans
+        return a, vxfit, vxmeans, residuals
 
 
 
