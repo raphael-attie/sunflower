@@ -55,8 +55,8 @@ if __name__ == '__main__':
     fwhm = 15
 
     xrates = np.array(drift_rates)[:,0]
-    a_top, vxfit_top, vxmeans_top = blt.fit_calibration(ballpos_top_list, xrates, trange, fwhm, images.shape[0:2], fov_slices)
-    a_bottom, vxfit_bottom, vxmeans_bottom = blt.fit_calibration(ballpos_bottom_list, xrates, trange, fwhm, images.shape[0:2], fov_slices)
+    a_top, vxfit_top, vxmeans_top, residuals_top = blt.fit_calibration(ballpos_top_list, xrates, trange, fwhm, images.shape[0:2], fov_slices)
+    a_bottom, vxfit_bottom, vxmeans_bottom, residuals_bottom = blt.fit_calibration(ballpos_bottom_list, xrates, trange, fwhm, images.shape[0:2], fov_slices)
 
     plt.figure(0)
     plt.plot(vxmeans_top, vx_rates, 'r.', label='data top', zorder=3)
