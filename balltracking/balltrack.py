@@ -1243,7 +1243,7 @@ def fit_calibration(ballpos_list, shift_rates, trange, fwhm, dims, fov_slices, r
     vxmeans /= len(fov_slices)
 
     # Subtract the means when there is no drift.
-    vxmeans -= vxmeans[4]
+    #vxmeans -= vxmeans[4]
 
     p = np.polyfit(shift_rates, vxmeans, 1)
     a = 1 / p[0]

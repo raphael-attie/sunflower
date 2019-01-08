@@ -1,5 +1,3 @@
-import matplotlib
-matplotlib.use('agg')
 import os, glob
 import numpy as np
 import fitstools
@@ -16,12 +14,13 @@ def run_balltrack(args):
                                   'intsteps_{:d}_dp_{:0.1f}_sigmaf_{:0.2f}'.format(intsteps, dp, sigma_factor))
 
     drift_rates = np.stack((vx_rates, np.zeros(len(vx_rates))), axis=1).tolist()
+
     cal = blt.Calibrator(images2, drift_rates, nframes, rs, dp, sigma_factor, outputdir,
                          outputdir2=outputdir_args,
                          intsteps=intsteps,
                          output_prep_data=False,
                          use_existing=use_existing,
-                         nthreads=5)
+                         nthreads=4)
 
     cal.balltrack_all_rates(return_ballpos=False)
 
@@ -35,28 +34,28 @@ def run_calibration(args, fwhm, outputdir, vx_rates, trange, imshape, fov_slices
     print('Processing data in {:s}'.format(outputdir_args))
 
     ballpos_top_list = np.load(os.path.join(outputdir_args, 'ballpos_top_list.npy'))
-    ballpos_bottom_list = np.load(os.path.join(outputdir_args, 'ballpos_top_list.npy'))
+    ballpos_bottom_list = np.load(os.path.join(outputdir_args, 'ballpos_bottom_list.npy'))
 
 
     drift_rates = np.stack((vx_rates, np.zeros(len(vx_rates))), axis=1).tolist()
     xrates = np.array(drift_rates)[:, 0]
-    a_top, vxfit_top, vxmeans_top = blt.fit_calibration(ballpos_top_list, xrates, trange, fwhm,
+    a_top, vxfit_top, vxmeans_top, residuals_top = blt.fit_calibration(ballpos_top_list, xrates, trange, fwhm,
                                                         imshape, fov_slices,
                                                         return_flow_maps=False)
-    a_bottom, vxfit_bottom, vxmeans_bottom = blt.fit_calibration(ballpos_bottom_list, xrates, trange, fwhm,
+    a_bottom, vxfit_bottom, vxmeans_bottom, residuals_bottom = blt.fit_calibration(ballpos_bottom_list, xrates, trange, fwhm,
                                                                  imshape, fov_slices,
                                                                  return_flow_maps=False)
     # Fit the averaged calibrated balltrack velocity
-    vxmeans = (vxmeans_top * a_top + vxmeans_bottom * a_bottom) / 2
-    vxmeans -= vxmeans[4]
+    vxmeans = (vxfit_top + vxfit_bottom) / 2
     p = np.polyfit(vx_rates, vxmeans, 1)
     a_avg = 1 / p[0]
     vxfit_avg = a_avg * (vxmeans - p[1])
     # Calculate residuals
-    residuals = np.abs(vxmeans - vxfit_avg)
+    residuals = np.abs(vxmeans - vx_rates)
 
     np.savez(os.path.join(outputdir_args, 'results_fwhm_{:d}.npz'.format(fwhm)),
-             vxmeans=vxmeans, a_avg=a_avg, vxfit_avg=vxfit_avg, residuals=residuals)
+             vxmeans=vxmeans, a_avg=a_avg, vxfit_avg=vxfit_avg, residuals=residuals,
+             residuals_top=residuals_top, residuals_bottom=residuals_bottom)
 
     print('Saved data in {:s}'.format(outputdir_args))
 
@@ -71,8 +70,6 @@ if __name__ == '__main__':
 
     # Set if we run balltrack, or just the flow map creation
     process_balltrack = False
-    # Set if we balltrack again or use previous results
-    reprocess_bt = True
     # Set if we use existing drifted images
     use_existing = True
 
@@ -123,8 +120,10 @@ if __name__ == '__main__':
     args_list = [list(a) for a in zip(intsteps_ravel, dp_ravel, sigmaf_ravel)]
 
     if process_balltrack:
+        # Test on the 1st triplet of the series
         #ballpos_top_list, ballpos_bottom_list = run_balltrack(args_list[0])
-        for args in args_list[65:]:
+        # Run on all triplets
+        for args in args_list:
             run_balltrack(args)
 
 
@@ -137,7 +136,6 @@ if __name__ == '__main__':
     # At FWHM 7
     fwhm = 7
 
-    #calibrate_partial = partial(run_calibration, fwhm=fwhm, outputdir=outputdir, drift_rates=drift_rates)
     calibrate_partial = partial(run_calibration, fwhm=fwhm, outputdir=outputdir, vx_rates=vx_rates, trange=trange, imshape=imshape, fov_slices=fov_slices)
 
     pool = Pool(processes=4)
