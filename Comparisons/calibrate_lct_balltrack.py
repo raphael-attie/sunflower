@@ -80,9 +80,9 @@ def average_calibration(vxfit_top, vxfit_bottom):
 
 if __name__ == '__main__':
 
-    reprocess_lct = True
+    reprocess_lct = False
     # Set if we balltrack again or use previous results
-    reprocess_bt = True
+    reprocess_bt = False
     # Set if we use existing drifted images
     use_existing = True
 
@@ -240,6 +240,7 @@ if __name__ == '__main__':
     axs[0].set_title('FWHM = 15 px (unfiltered)')
     axs[1].set_title('FWHM = 7 px (unfiltered)')
 
+    # Consider only the unfiltered ones (the filtered ones do not work). range from 0 to 5 incl.
     for i in range(6):
         k = int(i/3)
         axs[k].plot(vxmeansu[plotseq[i], :], vx_ratesu, marker=markers[i % 3], color=colors[i % 3], ls='none',
@@ -319,7 +320,7 @@ if __name__ == '__main__':
     colors = ['black', 'red', 'blue']
 
     alphas = [1, 0.8, 0.6]
-    for i in range(6):
+    for i in range(6): # Consider only the unfiltered ones (the filtered ones do not work). range from 0 to 5 incl.
         k = int(i / 3)
         axs[k].bar(vx_ratesu, lct_residualsu[plotseq[i], :],
                    width=widths[i%3] * unit, color=colors[i%3], tick_label=bar_labels, label=labels[i%3])
