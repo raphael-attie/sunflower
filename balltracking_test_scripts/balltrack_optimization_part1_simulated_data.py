@@ -144,7 +144,7 @@ if __name__ == '__main__':
     pool.join()
 
     vxmeans_la, a_avg_la, vxfit_avg_la, residuals_la = np.array(vxmeans_l), np.array(a_avg_l), np.array(vxfit_avg_l), np.array(residuals_l)
-    np.savez(os.path.join(outputdir, 'all_results_fwhm_{:d}'.format(fwhm)),
+    np.savez(os.path.join(outputdir, 'all_results_fwhm_{:d}_simulation'.format(fwhm)),
              vxmeans_la=vxmeans_la, a_avg_la=a_avg_la, vxfit_avg_la=vxfit_avg_la, residuals_la=residuals_la)
 
 

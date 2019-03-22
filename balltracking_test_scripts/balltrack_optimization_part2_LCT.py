@@ -117,67 +117,80 @@ vmax = 10
 # Make 3 slices, each slice for each int. steps parameter (3,4,5)
 slices = [slice(i*25,(i+1)*25) for i in range(3)]
 
+
+##### Balltracking mean residuals #####
+ims = []
+plt.close('all')
+fig, axs = plt.subplots(1,3, figsize=(16,4))
+for i in range(3):
+    ims.append(
+        axs[i].imshow(residuals_means_u[slices[i]].reshape([5, 5]), origin='lower', extent=extent, vmin=vmin, vmax=vmax, cmap='magma'))
+    axs[i].set_xlabel('sigma_factor')
+    axs[i].set_xticks(sigma_factor_l)
+    axs[i].set_yticks(dp_l)
+    axs[i].set_title('int. steps: {:d}'.format(intsteps_l[i]))
+
+axs[0].set_ylabel('dp')
+
+fig.subplots_adjust(left=0.05, bottom=0, top=0.95, right=0.98, hspace=0.1, wspace=0.1)
+cbar_ax = fig.add_axes([0.1, 1, 0.7, 0.05])
+ip = InsetPosition(axs[0], [0, 1.3, 3.2, 0.05])
+cbar_ax.set_axes_locator(ip)
+cb = fig.colorbar(ims[0], cax=cbar_ax, ax=[axs[0], axs[1], axs[2]], orientation='horizontal')
+cb.ax.tick_params(labelsize=10)
+cbar_ax.set_title('Balltrack residuals {:s}'.format(unit_str), fontsize=10)
+
+plt.show()
+
+plt.savefig(os.path.join(DATADIR, 'balltrack_mean_residuals.png'), dpi=dpi)
+
+#### Comparison with LCT ######
+
 res_bt_lct = residuals_means_u[slices[0]].reshape([5, 5]) - lct_selected_res_u
 vmin2 = - np.abs(res_bt_lct).max()
 vmax2 = np.abs(res_bt_lct).max()
 
-
-ims = []
 ims2 = []
 ims3 = []
 plt.close('all')
-fig, axs = plt.subplots(3,3, figsize=(16,10))
+fig, axs = plt.subplots(2,3, figsize=(16,7))
 for i in range(3):
-    ims.append(
-        axs[0, i].imshow(residuals_means_u[slices[i]].reshape([5, 5]), origin='lower', extent=extent, vmin=vmin, vmax=vmax, cmap='magma'))
+    # Difference with LCT
+    res_bt_lct = residuals_means_u[slices[i]].reshape([5, 5]) - lct_selected_res_u
+    ims2.append(
+        axs[0, i].imshow(res_bt_lct, origin='lower', extent=extent, vmin=vmin2, vmax=vmax2, cmap='RdGy'))
     axs[0, i].set_xlabel('sigma_factor')
     axs[0, i].set_xticks(sigma_factor_l)
     axs[0, i].set_yticks(dp_l)
     axs[0, i].set_title('int. steps: {:d}'.format(intsteps_l[i]))
 
-    # Difference with LCT
-    res_bt_lct = residuals_means_u[slices[i]].reshape([5, 5]) - lct_selected_res_u
-    ims2.append(
-        axs[1, i].imshow(res_bt_lct, origin='lower', extent=extent, vmin=vmin2, vmax=vmax2, cmap='RdGy'))
+    # Sigma (standard deviation)
+    diff_sigma = residuals_sigma_u[slices[i]].reshape([5, 5]) - lct_selected_sigma_u
+    ims3.append(
+        axs[1, i].imshow(diff_sigma, origin='lower', extent=extent, vmin=vmin2, vmax=vmax2, cmap='RdGy'))
     axs[1, i].set_xlabel('sigma_factor')
     axs[1, i].set_xticks(sigma_factor_l)
     axs[1, i].set_yticks(dp_l)
     axs[1, i].set_title('int. steps: {:d}'.format(intsteps_l[i]))
 
-    # Sigma (standard deviation)
-    diff_sigma = residuals_sigma_u[slices[i]].reshape([5, 5]) - lct_selected_sigma_u
-    ims3.append(
-        axs[2, i].imshow(diff_sigma, origin='lower', extent=extent, vmin=vmin2, vmax=vmax2, cmap='RdGy'))
-    axs[2, i].set_xlabel('sigma_factor')
-    axs[2, i].set_xticks(sigma_factor_l)
-    axs[2, i].set_yticks(dp_l)
-    axs[2, i].set_title('int. steps: {:d}'.format(intsteps_l[i]))
-
 axs[0, 0].set_ylabel('dp')
 axs[1, 0].set_ylabel('dp')
-axs[2, 0].set_ylabel('dp')
 
+### Colorbars
 fig.subplots_adjust(left=0.05, bottom=0, top=0.95, right=0.98, hspace=0.1, wspace=0.1)
-cbar_ax = fig.add_axes([0.1, 1, 0.7, 0.05])
-ip = InsetPosition(axs[0, 0], [0, 1.3, 3.2, 0.05])
-cbar_ax.set_axes_locator(ip)
-cb = fig.colorbar(ims[0], cax=cbar_ax, ax=[axs[0, 0], axs[0, 1], axs[0, 2]], orientation='horizontal')
-cb.ax.tick_params(labelsize=10)
-cbar_ax.set_title('Balltrack residuals {:s}'.format(unit_str), fontsize=10)
-
 # LCT colorbar
-cbar_ax2 = fig.add_axes([0.1, 0.6, 0.7, 0.05])
-ip2 = InsetPosition(axs[1, 0], [0, 1.3, 3.2, 0.05])
+cbar_ax2 = fig.add_axes([0.1, 1, 0.7, 0.05])
+ip2 = InsetPosition(axs[0, 0], [0, 1.3, 3.2, 0.05])
 cbar_ax2.set_axes_locator(ip2)
-cb2 = fig.colorbar(ims2[0], cax=cbar_ax2, ax=[axs[1, 0], axs[1, 1], axs[1, 2]], orientation='horizontal')
+cb2 = fig.colorbar(ims2[0], cax=cbar_ax2, ax=[axs[0, 0], axs[0, 1], axs[0, 2]], orientation='horizontal')
 cb2.ax.tick_params(labelsize=10)
 cbar_ax2.set_title('BT - LCT residuals {:s}'.format(unit_str), fontsize=10)
 
 # # sigma colorbar
-cbar_ax3 = fig.add_axes([0.1, 0.3, 0.7, 0.05])
-ip3 = InsetPosition(axs[2, 0], [0, 1.3, 3.2, 0.05])
+cbar_ax3 = fig.add_axes([0.1, 0.6, 0.7, 0.05])
+ip3 = InsetPosition(axs[1, 0], [0, 1.3, 3.2, 0.05])
 cbar_ax3.set_axes_locator(ip3)
-cb3 = fig.colorbar(ims3[0], cax=cbar_ax3, ax=[axs[2, 0], axs[2, 1], axs[2, 2]], orientation='horizontal')
+cb3 = fig.colorbar(ims3[0], cax=cbar_ax3, ax=[axs[1, 0], axs[1, 1], axs[1, 2]], orientation='horizontal')
 cb3.ax.tick_params(labelsize=10)
 cbar_ax3.set_title(r'$\sigma_B - \sigma_L$ {:s}'.format(unit_str), fontsize=10)
 

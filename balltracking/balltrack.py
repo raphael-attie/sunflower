@@ -2,7 +2,6 @@
 This module hosts all the necessary functions to run balltracking.
 A main program should execute "balltrack_all()".
 """
-
 import sys, os
 import numpy as np
 import numpy.ma as ma
@@ -13,11 +12,9 @@ import cython_modules.interp as cinterp
 import filters
 import fitsio
 import fitstools
-import multiprocessing
 from multiprocessing import Pool
 from functools import partial
 from pathlib import Path
-from datetime import datetime
 from scipy.misc import bytescale, imsave
 import graphics
 
@@ -463,7 +460,7 @@ def filter_image(image):
     :param image: input image e.g continuum intensity from SDO/HMI (2D array)
     :return: fdata: filtered data (2D array)
     """
-
+    #TODO: the filter parameters below are hard-coded. Consider putting that as parameters and document the default.
     ffilter_hpf = filters.han2d_bandpass(image.shape[0], 0, 5)
     fdata = filters.ffilter_image(image, ffilter_hpf)
 
@@ -1050,7 +1047,9 @@ def integrate_motion0(pos, vel, bt, surface):
 ##############################################################################################################
 class Calibrator:
 
-    def __init__(self, images, drift_rates, nframes, rs, dp, sigma_factor, outputdir, intsteps=3, outputdir2 = None, output_prep_data=False, use_existing=False, nthreads=1):
+    def __init__(self, images, drift_rates, nframes, rs, dp, sigma_factor, outputdir, intsteps=3,
+                 outputdir2 = None, output_prep_data=False, use_existing=False, tracking=True, normalization = True,
+                 filter_function=None, subdirs=None, nthreads=1):
 
         self.images = images
         self.nfiles = self.images.shape[2]
@@ -1064,9 +1063,14 @@ class Calibrator:
         self.outputdir2 = outputdir2
         self.output_prep_data = output_prep_data
         self.use_existing = use_existing
+        self.tracking = tracking
+        self.normalization = normalization
+        self.filter_function = filter_function
         self.nthreads = nthreads
-
-        self.subdirs = [os.path.join(outputdir, 'drift_{:01d}'.format(i)) for i in range(len(drift_rates))]
+        if subdirs is None:
+            self.subdirs = [os.path.join(outputdir, 'drift_{:01d}'.format(i)) for i in range(len(drift_rates))]
+        else:
+            self.subdirs = subdirs
 
         if self.outputdir2 is not None:
             if not os.path.exists(self.outputdir2):
@@ -1093,18 +1097,30 @@ class Calibrator:
                 os.makedirs(self.subdirs[rate_idx])
 
             print("Creating drift images at rate: [{:.2f}, {:.2f}] px/frame".format(self.drift_rates[rate_idx][0], self.drift_rates[rate_idx][1]))
-            drift_images = create_drift_series(self.images, self.drift_rates[rate_idx], filepaths)
+            drift_images = create_drift_series(self.images, self.drift_rates[rate_idx], filepaths, filter_function=self.filter_function)
 
-        return drift_images
+        if self.tracking:
+            return drift_images
+
+
+    def drift_all_rates(self):
+        rate_idx_list = range(len(self.drift_rates))
+        for idx in rate_idx_list:
+             self.drift_series(idx)
 
 
     def balltrack_rate(self, rate_idx):
+        """
+        Balltrack the drifted images at a given drift rate index.
+
+        :param rate_idx: index in the list of drift rates
+        :return: if no_tracking is False (default), export ball position from top-side and bottom-side tracking
+        """
 
         drift_images = self.drift_series(rate_idx)
 
         ballpos_top, ballpos_bottom = balltrack_all(self.nframes, self.rs, self.dp, self.sigma_factor, self.subdirs[rate_idx],
                                                     intsteps=self.intsteps, data=drift_images, output_prep_data=self.output_prep_data, ncores=1)
-
         return ballpos_top, ballpos_bottom
 
 
@@ -1112,6 +1128,7 @@ class Calibrator:
         """
         Balltrack the different series of drifting images. Each series drift at a different drift velocity or "drift rate".
         results saved in 2 different files. One for top-side tracking, one for bottom-side tracking
+
         :return: list of ballpos arrays for top-side and bottom side tracking at all drift rates.
         """
 
@@ -1132,11 +1149,8 @@ class Calibrator:
             np.save(os.path.join(self.outputdir2, 'ballpos_top_list.npy'), ballpos_top_list)
             np.save(os.path.join(self.outputdir2, 'ballpos_bottom_list.npy'), ballpos_bottom_list)
 
-        if return_ballpos:
-            return ballpos_top_list, ballpos_bottom_list
-
-
-
+            if return_ballpos:
+                return ballpos_top_list, ballpos_bottom_list
 
 
 def process_calibration_series(rotation_rate, nt, rs, dp, sigma_factor, samples, outputdir=None, use_existing=None):
@@ -1202,14 +1216,28 @@ def drift_series(images, drift_rate, subdir, use_existing=True):
     return drift_images
 
 
-def create_drift_series(images, drift_rate, filepaths=None):
+def create_drift_series(images, drift_rate, filepaths=None, filter_function=None):
+    """
+    Drift the image series by translating a moving reference by an input 2D velocity vector.
+    The drift operates by shifting the phase of the Fourier transform that also circularly shifts the escaping pixels
+    back to the other edge.
 
+    :param images: data cube to drift
+    :param drift_rate: list of [vx,vy] signed velocity values.
+    :param filepaths: paths where the output files are written.
+    :param filter_function: optional filter to apply to the image
+    :return: drifted images
+    """
     drift_images = np.zeros(images.shape)
 
     for i in range(images.shape[2]):
         dx = -drift_rate[0] * float(i)
         dy = -drift_rate[1] * i
         drift_images[:, :, i] = filters.translate_by_phase_shift(images[:, :, i], dx, dy)
+
+        if filter_function is not None:
+            drift_images[:, :, i] = filter_function(drift_images[:,:,i])
+
         if filepaths is not None:
             fitstools.writefits(drift_images[:, :, i], filepaths[i])
 

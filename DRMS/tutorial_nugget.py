@@ -6,7 +6,6 @@ Testing some custom function that parses the drms query string to write more int
 import time
 import drms
 from astropy.io import fits
-import matplotlib.pyplot as plt
 
 
 def r_qurls(drms_client, query):

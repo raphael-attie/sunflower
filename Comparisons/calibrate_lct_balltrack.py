@@ -37,8 +37,17 @@ def lct_analysis(lctfiles):
     return vxmeans, a_lct, vxfit, lct_residuals0, lct_residuals
 
 
-def balltrack_calibration(fwhm, intsteps):
-    trange = [0, nframes]
+def balltrack_calibration(datafiles, fwhm, intsteps, fov_slices):
+
+    # Select only a subset of nframes files
+    selected_files = datafiles[0:nframes]
+    # Load the nt images
+    images = fitstools.fitsread(selected_files)
+    # Must make even dimensions for the fast fourier transform
+    images2 = np.zeros([264, 264, images.shape[2]])
+    images2[0:263, 0:263, :] = images.copy()
+    images2[263, :] = images.mean()
+    images2[:, 263] = images.mean()
 
     if reprocess_bt:
         cal = blt.Calibrator(images2, drift_rates, nframes, rs, dp, sigma_factor, outputdir,
@@ -52,6 +61,7 @@ def balltrack_calibration(fwhm, intsteps):
         ballpos_top_list = np.load(os.path.join(outputdir, 'ballpos_top_list.npy'))
         ballpos_bottom_list = np.load(os.path.join(outputdir, 'ballpos_bottom_list.npy'))
 
+    trange = [0, nframes]
     xrates = np.array(drift_rates)[:, 0]
     a_top, vxfit_top, vxmeans_top, residuals_top = blt.fit_calibration(ballpos_top_list, xrates, trange, fwhm,
                                                         images.shape[0:2], fov_slices,
@@ -102,6 +112,7 @@ if __name__ == '__main__':
     imsize = 263 # actual size is 264 but original size was 263 then padded to 264 to make it even for the Fourier transform
     vx_rates = np.linspace(-0.2, 0.2, npts)
     drift_rates = np.stack((vx_rates, np.zeros(len(vx_rates))), axis=1).tolist()
+    # Select a subfield excluding edge effects
     trim = int(vx_rates.max() * nframes + fwhms[0] + 2)
     fov_slices = np.s_[trim:imsize - trim, trim:imsize-trim]
 
@@ -125,7 +136,6 @@ if __name__ == '__main__':
     ################## Balltracking ###########################
     ###########################################################
 
-
     # input data, list of files
     # glob.glob does not order numbered files by defaultl, the order is as appeared in the file system.
     datafiles = sorted(glob.glob('/Users/rattie/Data/Ben/SteinSDO/SDO_int*.fits'))
@@ -146,31 +156,19 @@ if __name__ == '__main__':
     # Plot figure file name suffix
     fig_suffix = 'intsteps_{:d}_dp_{:0.2f}_sigma_factor_{:0.2f}'.format(intsteps, dp, sigma_factor)
     dpi = 300
-
-
-    # Select only a subset of nframes files
-    selected_files = datafiles[0:nframes]
-
-    # Load the nt images
-    images = fitstools.fitsread(selected_files)
-    # Must make even dimensions for the fast fourier transform
-    images2 = np.zeros([264, 264, images.shape[2]])
-    images2[0:263, 0:263, :] = images.copy()
-    images2[263, :] = images.mean()
-    images2[:, 263] = images.mean()
-
-    fov_slices = [np.s_[trim:imsize - trim, trim:imsize - trim], ]
+    # Select a subfield excluding edge effects
+    fov_slices_bt = [fov_slices, ]
     ##########################################
     ######  Smoothing at FWHM = 7 px #########
     fwhm = 7
-    a_top1, vxfit_top1, vxmeans_top1, res_top1, a_bot1, vxfit_bot1, vxmeans_bot1, res_bot1 = balltrack_calibration(fwhm, intsteps)
+    a_top1, vxfit_top1, vxmeans_top1, res_top1, a_bot1, vxfit_bot1, vxmeans_bot1, res_bot1 = balltrack_calibration(datafiles, fwhm, intsteps, fov_slices_bt)
     vxmeans_bt1, a_avg1, vxfit_avg1, bt_residuals1 = average_calibration(vxfit_top1, vxfit_bot1)
 
 
     ##########################################
     ######  Smoothing at FWHM = 15 px #########
     fwhm = 15
-    a_top2, vxfit_top2, vxmeans_top2, res_top2, a_bot2, vxfit_bot2, vxmeans_bot2, res_bot2 = balltrack_calibration(fwhm, intsteps)
+    a_top2, vxfit_top2, vxmeans_top2, res_top2, a_bot2, vxfit_bot2, vxmeans_bot2, res_bot2 = balltrack_calibration(datafiles, fwhm, intsteps, fov_slices_bt)
     vxmeans_bt2, a_avg2, vxfit_avg2, bt_residuals2 = average_calibration(vxfit_top2, vxfit_bot2)
     ################################################
     ################ Plot results ##################
@@ -228,28 +226,26 @@ if __name__ == '__main__':
     #############################################################################################
     ######## Unfiltered. Indices are  [0, 1, 2, 3, 4, 5] ########################################
     #############################################################################################
-
+    # List of indices to get LCT results from unfiltered
     plotseq = [0, 1, 2, 3, 4, 5]
-
+    data_type = 'unfiltered'
+    # Max velocity in the axis of the linear fits.
     maxv = 0.3 * unit
 
-    fig, axs = plt.subplots(nrows = 1, ncols = 2, figsize=(18, 10))
-
-    axs[0].plot(vx_ratesu, vx_ratesu, marker='.', ms=8, ls='--', color='gray', label='1:1')
-    axs[1].plot(vx_ratesu, vx_ratesu, marker='.', ms=8, ls='--', color='gray', label='1:1')
-    axs[0].set_title('FWHM = 15 px (unfiltered)')
-    axs[1].set_title('FWHM = 7 px (unfiltered)')
+    fig, axs = plt.subplots(nrows = 1, ncols = 2, figsize=(16, 8))
+    axs[0].set_title('FWHM = 7 px ({:s})'.format(data_type))
+    axs[1].set_title('FWHM = 15 px ({:s})'.format(data_type))
 
     # Consider only the unfiltered ones (the filtered ones do not work). range from 0 to 5 incl.
     for i in range(6):
-        k = int(i/3)
+        k = 1 - int(i/3) # LCT 7 px must be on the 0th axis (left-hand side)
         axs[k].plot(vxmeansu[plotseq[i], :], vx_ratesu, marker=markers[i % 3], color=colors[i % 3], ls='none',
                     label=labels[i%3])
         axs[k].plot(vxmeansu[plotseq[i]], vxfitsu[plotseq[i]], color=colors[i%3],
                     label=r'$\alpha_{:s}$ ={:0.2f}'.format(labels[i%3][5:6], a_lcts[plotseq[i]]))
 
-    axs[0].plot(vxmeans_bt2 * unit, vx_ratesu, marker='o', markerfacecolor='none', ls='-.', color='purple', label='balltracking')
-    axs[1].plot(vxmeans_bt1 * unit, vx_ratesu, marker='o', markerfacecolor='none', ls='-.', color='purple', label='balltracking')
+    axs[0].plot(vxmeans_bt1 * unit, vx_ratesu, marker='o', markerfacecolor='none', ls='-.', color='green', label=r'$\alpha_B = {:0.2f}$'.format(a_avg1))
+    axs[1].plot(vxmeans_bt2 * unit, vx_ratesu, marker='o', markerfacecolor='none', ls='-.', color='green', label=r'$\alpha_B = {:0.2f}$'.format(a_avg2))
 
     axs[0].axis([-maxv, maxv, -maxv, maxv])
     axs[1].axis([-maxv, maxv, -maxv, maxv])
@@ -266,52 +262,17 @@ if __name__ == '__main__':
 
     plt.tight_layout()
     plt.show()
-    plt.savefig(os.path.join(DATADIR, 'unfiltered_linear_fit_{:s}.png'.format(fig_suffix)), dpi=dpi)
+    plt.savefig(os.path.join(DATADIR, '{:s}_linear_fit_{:s}.png'.format(data_type, fig_suffix)), dpi=dpi)
 
 
     ##################################################################################################################
-    ### Residuals
+    ### Residuals uncorrected
     ##################################################################################################################
-    # max_resid15 = 100#0.1 * unit
-    # max_resid7 = 100# 0.17 * unit
-    #
-    # fig, axs = plt.subplots(nrows=1, ncols=2, figsize=(18, 10))
-    # axs[0].set_title('FWHM = 15 px (unfiltered)')
-    # axs[1].set_title('FWHM = 7 px (unfiltered)')
-    # axs[0].set_xlabel('True velocity {:s}'.format(unit_str))
-    # axs[1].set_xlabel('True velocity {:s}'.format(unit_str))
-    # axs[0].set_ylabel('Residuals {:s}'.format(unit_str))
-    # axs[1].set_ylabel('Residuals {:s}'.format(unit_str))
-    # bar_labels = ['{:0.0f}'.format(vxrate) for vxrate in vx_ratesu]
-    # colors = ['black', 'red', 'blue']
-    #
-    #
-    # alphas = [1, 0.8, 0.6]
-    # for i in range(6):
-    #     k = int(i / 3)
-    #     axs[k].bar(vx_ratesu, lct_residuals0u[plotseq[i], :],
-    #                width=widths[i%3] * unit, color=colors[i%3], tick_label=bar_labels, label=labels[i%3])
-    #
-    # axs[0].bar(vx_ratesu, residuals_bt2 * unit, width=widths[2]*0.7 * unit, color='green', tick_label=None, label='balltracking')
-    # axs[1].bar(vx_ratesu, residuals_bt1 * unit, width=widths[2]*0.7 * unit, color='green', tick_label=None, label='balltracking')
-    #
-    # axs[0].set_ylim([0, max_resid15])
-    # axs[1].set_ylim([0, max_resid7])
-    # axs[0].legend()
-    # axs[1].legend()
-    # axs[0].grid(True)
-    # axs[1].grid(True)
-    # plt.tight_layout()
-    # plt.savefig(os.path.join(DATADIR, 'unfiltered_residuals_{:s}.png'.format(fig_suffix)), dpi=dpi)
-
-    ######################################
-    ##### Residuals with linear correction
-    ######################################
-    max_resid = 40 #0.01 * unit / 2
+    max_resid_uncorrected = 1000#0.1 * unit
 
     fig, axs = plt.subplots(nrows=1, ncols=2, figsize=(18, 10))
-    axs[0].set_title('FWHM = 15 px (unfiltered, linear factor applied)')
-    axs[1].set_title('FWHM = 7 px (unfiltered, linear factor applied)')
+    axs[0].set_title('FWHM = 7 px ({:s})'.format(data_type))
+    axs[1].set_title('FWHM = 15 px ({:s})'.format(data_type))
     axs[0].set_xlabel('True velocity {:s}'.format(unit_str))
     axs[1].set_xlabel('True velocity {:s}'.format(unit_str))
     axs[0].set_ylabel('Residuals {:s}'.format(unit_str))
@@ -319,38 +280,50 @@ if __name__ == '__main__':
     bar_labels = ['{:0.0f}'.format(vxrate) for vxrate in vx_ratesu]
     colors = ['black', 'red', 'blue']
 
-    alphas = [1, 0.8, 0.6]
+
+    for i in range(6):
+        k = 1 - int(i / 3)  # LCT 7 px must be on the 0th axis (left-hand side)
+        axs[k].bar(vx_ratesu, lct_residuals0u[plotseq[i], :],
+                   width=widths[i%3] * unit, color=colors[i%3], tick_label=bar_labels, label=labels[i%3])
+
+    axs[0].bar(vx_ratesu, bt_residuals1 * unit, width=widths[2]*0.7 * unit, color='green', tick_label=None, label='balltracking')
+    axs[1].bar(vx_ratesu, bt_residuals2 * unit, width=widths[2]*0.7 * unit, color='green', tick_label=None, label='balltracking')
+
+    axs[0].set_ylim([0, max_resid_uncorrected])
+    axs[1].set_ylim([0, max_resid_uncorrected])
+    axs[0].legend()
+    axs[1].legend()
+    axs[0].grid(True)
+    axs[1].grid(True)
+    plt.tight_layout()
+    plt.show()
+
+    plt.savefig(os.path.join(DATADIR, '{:s}_residuals_uncorrected_{:s}.png'.format(data_type, fig_suffix)), dpi=dpi)
+
+    ######################################
+    ##### Residuals with linear correction
+    ######################################
+    max_resid = 85 #0.01 * unit / 2
+
+    fig, axs = plt.subplots(nrows=1, ncols=2, figsize=(18, 10))
+    axs[0].set_title('FWHM = 7 px ({:s}, linearly corrected)'.format(data_type))
+    axs[1].set_title('FWHM = 15 px ({:s}, linear corrected)'.format(data_type))
+    axs[0].set_xlabel('True velocity {:s}'.format(unit_str))
+    axs[1].set_xlabel('True velocity {:s}'.format(unit_str))
+    axs[0].set_ylabel('Residuals {:s}'.format(unit_str))
+    axs[1].set_ylabel('Residuals {:s}'.format(unit_str))
+    bar_labels = ['{:0.0f}'.format(vxrate) for vxrate in vx_ratesu]
+    colors = ['black', 'red', 'blue']
+
+
     for i in range(6): # Consider only the unfiltered ones (the filtered ones do not work). range from 0 to 5 incl.
-        k = int(i / 3)
+        k = 1 - int(i / 3) # LCT 7 px must be on the 0th axis (left-hand side)
         axs[k].bar(vx_ratesu, lct_residualsu[plotseq[i], :],
                    width=widths[i%3] * unit, color=colors[i%3], tick_label=bar_labels, label=labels[i%3])
 
-    axs[0].bar(vx_ratesu, bt_residuals2 * unit, width=widths[2] * 0.7 * unit, color='green', tick_label=bar_labels,
+    axs[0].bar(vx_ratesu, bt_residuals1 * unit, width=widths[2] * 0.7 * unit, color='green', tick_label=bar_labels,
                label='balltracking')
-    axs[1].bar(vx_ratesu, bt_residuals1 * unit, width=widths[2]*0.7 * unit, color='green', tick_label=bar_labels, label='balltracking')
-
-    lct_mean_res1 = lct_residualsu[1, :].mean()
-    lct_mean_sigma1 = lct_residualsu[1, :].std()
-    lct_mean_res2 = lct_residualsu[4, :].mean()
-    lct_mean_sigma2 = lct_residualsu[4, :].std()
-    bt_res_mean1 = bt_residuals1.mean() * unit
-    bt_res_sigma1 = bt_residuals1.std() * unit
-    bt_res_mean2 = bt_residuals2.mean() * unit
-    bt_res_sigma2 = bt_residuals2.std() * unit
-
-    axs[0].axhline(y = lct_mean_res1, color='red')
-    axs[1].axhline(y= lct_mean_res2, color='red')
-    axs[0].axhline(y=lct_mean_res1 + lct_mean_sigma1, color='red', ls=':')
-    axs[0].axhline(y=lct_mean_res1 - lct_mean_sigma1, color='red', ls=':')
-    axs[1].axhline(y=lct_mean_res2 + lct_mean_sigma2, color='red', ls=':')
-    axs[1].axhline(y=lct_mean_res2 - lct_mean_sigma2, color='red', ls=':')
-
-    axs[0].axhline(y=bt_res_mean2, color='green')
-    axs[1].axhline(y=bt_res_mean1, color='green')
-    axs[0].axhline(y=bt_res_mean2 + bt_res_sigma2, color='green', ls='-.')
-    axs[0].axhline(y=bt_res_mean2 - bt_res_sigma2, color='green', ls='-.')
-    axs[1].axhline(y=bt_res_mean1 + bt_res_sigma1, color='green', ls='-.')
-    axs[1].axhline(y=bt_res_mean1 - bt_res_sigma1, color='green', ls='-.')
+    axs[1].bar(vx_ratesu, bt_residuals2 * unit, width=widths[2]*0.7 * unit, color='green', tick_label=bar_labels, label='balltracking')
 
 
     axs[0].set_ylim([0, max_resid])
@@ -362,101 +335,125 @@ if __name__ == '__main__':
 
     plt.tight_layout()
     plt.show()
-    plt.savefig(os.path.join(DATADIR, 'unfiltered_residuals_corrected_{:s}.png'.format(fig_suffix)), dpi=dpi)
+
+    plt.savefig(os.path.join(DATADIR, '{:s}_residuals_corrected_{:s}.png'.format(data_type, fig_suffix)), dpi=dpi)
+
+
 
     #############################################################################################
     ######## Filtered. Indices are  [6, 7, 8, 9, 10, 11] #############################################
     #############################################################################################
 
-    # plotseq = [6, 7, 8, 9, 10, 11]
-    #
-    # fig, axs = plt.subplots(nrows=1, ncols=2, figsize=(18, 10))
-    #
-    # axs[0].plot(vx_ratesu, vx_ratesu, ls='--', color='gray', label='1:1')
-    # axs[1].plot(vx_ratesu, vx_ratesu, ls='--', color='gray', label='1:1')
-    # axs[0].set_title('FWHM = 15 px (filtered)')
-    # axs[1].set_title('FWHM = 7 px (filtered)')
-    #
-    # for i in range(6):
-    #     k = int(i / 3)
-    #     axs[k].plot(vxmeansu[plotseq[i], :], vx_ratesu, marker=markers[i % 3], color=colors[i % 3], ls='none',
-    #                 label=labels[i % 3])
-    #     axs[k].plot(vxmeansu[plotseq[i]], vxfitsu[plotseq[i]], color=colors[i % 3],
-    #                 label=r'$\alpha_{:s}$ ={:0.2f}'.format(labels[i % 3][5:6], a_lcts[plotseq[i]]))
-    #
-    # axs[0].axis([-maxv, maxv, -maxv, maxv])
-    # axs[1].axis([-maxv, maxv, -maxv, maxv])
-    # axs[0].set_xlabel('Measured velocity {:s}'.format(unit_str), fontsize=fs)
-    # axs[0].set_ylabel('True velocity {:s}'.format(unit_str), fontsize=fs)
-    # axs[1].set_xlabel('Measured velocity {:s}'.format(unit_str), fontsize=fs)
-    # axs[1].set_ylabel('True velocity {:s}'.format(unit_str), fontsize=fs)
-    # axs[0].legend(loc=legend_loc)
-    # axs[0].grid(True)
-    # axs[0].set_aspect('equal')
-    # axs[1].legend(loc=legend_loc)
-    # axs[1].grid(True)
-    # axs[1].set_aspect('equal')
-    #
-    # plt.tight_layout()
-    # plt.show()
-    # plt.savefig(os.path.join(DATADIR, 'filtered_linear_fit_{:s}.png'.format(fig_suffix)), dpi=dpi)
-    #
-    # fig, axs = plt.subplots(nrows=1, ncols=2, figsize=(18, 10))
-    # axs[0].set_title('FWHM = 15 px (filtered)')
-    # axs[1].set_title('FWHM = 7 px (filtered)')
-    # axs[0].set_xlabel('True velocity {:s}'.format(unit_str))
-    # axs[1].set_xlabel('True velocity {:s}'.format(unit_str))
-    # axs[0].set_ylabel('Residuals {:s}'.format(unit_str))
-    # axs[1].set_ylabel('Residuals {:s}'.format(unit_str))
-    # bar_labels = ['{:0.0f}'.format(vxrate) for vxrate in vx_ratesu]
-    # colors = ['black', 'red', 'blue']
-    # widths = [0.02, 0.015, 0.01]
-    # alphas = [1, 0.8, 0.6]
-    # for i in range(6):
-    #     k = int(i / 3)
-    #     axs[k].bar(vx_ratesu, lct_residuals0u[plotseq[i], :],
-    #                width=widths[i % 3] * unit, color=colors[i % 3], tick_label=bar_labels, label=labels[i % 3])
-    #     # axs[k].bar(vx_ratesu, lct_residualsu[plotseq[i], :], width=0.01*unit, color='black', tick_label=bar_labels, label='LCT (corrected)')
-    #     # axs[k].bar(vx_ratesu, bt_residualsu, width=0.015*unit, color='red', tick_label=bar_labels, alpha=0.7, label='Balltracking (calibrated)')
-    #
-    # axs[0].set_ylim([0, max_resid])
-    # axs[1].set_ylim([0, max_resid])
-    # axs[0].legend()
-    # axs[1].legend()
-    # axs[0].grid(True)
-    # axs[1].grid(True)
-    # plt.tight_layout()
-    #
-    # plt.savefig(os.path.join(DATADIR, 'filtered_residuals_{:s}.png'.format(fig_suffix)), dpi=dpi)
-    #
-    # ######################################
-    # ##### Residuals with linear correction
-    # ######################################
-    #
-    # fig, axs = plt.subplots(nrows=1, ncols=2, figsize=(18, 10))
-    # axs[0].set_title('FWHM = 15 px (filtered, linear factor applied)')
-    # axs[1].set_title('FWHM = 7 px (filtered,  linear factor applied)' )
-    # axs[0].set_xlabel('True velocity {:s}'.format(unit_str))
-    # axs[1].set_xlabel('True velocity {:s}'.format(unit_str))
-    # axs[0].set_ylabel('Residuals {:s}'.format(unit_str))
-    # axs[1].set_ylabel('Residuals {:s}'.format(unit_str))
-    # bar_labels = ['{:0.0f}'.format(vxrate) for vxrate in vx_ratesu]
-    # colors = ['black', 'red', 'blue']
-    # widths = [0.02, 0.015, 0.01]
-    # alphas = [1, 0.8, 0.6]
-    # for i in range(6):
-    #     k = int(i / 3)
-    #     axs[k].bar(vx_ratesu, lct_residualsu[plotseq[i], :],
-    #                width=widths[i % 3] * unit, color=colors[i % 3], tick_label=bar_labels, label=labels[i % 3])
-    #     # axs[k].bar(vx_ratesu, lct_residualsu[plotseq[i], :], width=0.01*unit, color='black', tick_label=bar_labels, label='LCT (corrected)')
-    #     # axs[k].bar(vx_ratesu, bt_residualsu, width=0.015*unit, color='red', tick_label=bar_labels, alpha=0.7, label='Balltracking (calibrated)')
-    #
-    # axs[0].set_ylim([0, max_resid])
-    # axs[1].set_ylim([0, max_resid])
-    # axs[0].legend()
-    # axs[1].legend()
-    # axs[0].grid(True)
-    # axs[1].grid(True)
-    # plt.tight_layout()
-    #
-    # plt.savefig(os.path.join(DATADIR, 'filtered_residuals_corrected_{:s}.png'.format(fig_suffix)), dpi=dpi)
+    plotseq = [6, 7, 8, 9, 10, 11]
+    data_type = 'filtered'
+
+    fig, axs = plt.subplots(nrows=1, ncols=2, figsize=(16, 8))
+
+    axs[0].set_title('FWHM = 7 px ({:s})'.format(data_type))
+    axs[1].set_title('FWHM = 15 px ({:s})'.format(data_type))
+
+    # Consider only the unfiltered ones (the filtered ones do not work). range from 0 to 5 incl.
+    for i in range(6):
+        k = 1 - int(i / 3)  # LCT 7 px must be on the 0th axis (left-hand side)
+        axs[k].plot(vxmeansu[plotseq[i], :], vx_ratesu, marker=markers[i % 3], color=colors[i % 3], ls='none',
+                    label=labels[i % 3])
+        axs[k].plot(vxmeansu[plotseq[i]], vxfitsu[plotseq[i]], color=colors[i % 3],
+                    label=r'$\alpha_{:s}$ ={:0.2f}'.format(labels[i % 3][5:6], a_lcts[plotseq[i]]))
+
+    axs[0].plot(vxmeans_bt1 * unit, vx_ratesu, marker='o', markerfacecolor='none', ls='-.', color='green',
+                label=r'$\alpha_B = {:0.2f}$'.format(a_avg1))
+    axs[1].plot(vxmeans_bt2 * unit, vx_ratesu, marker='o', markerfacecolor='none', ls='-.', color='green',
+                label=r'$\alpha_B = {:0.2f}$'.format(a_avg2))
+
+    axs[0].axis([-maxv, maxv, -maxv, maxv])
+    axs[1].axis([-maxv, maxv, -maxv, maxv])
+    axs[0].set_xlabel('Measured velocity {:s}'.format(unit_str), fontsize=fs)
+    axs[0].set_ylabel('True velocity {:s}'.format(unit_str), fontsize=fs)
+    axs[1].set_xlabel('Measured velocity {:s}'.format(unit_str), fontsize=fs)
+    axs[1].set_ylabel('True velocity {:s}'.format(unit_str), fontsize=fs)
+    axs[0].legend(loc=legend_loc)
+    axs[0].grid(True)
+    axs[0].set_aspect('equal')
+    axs[1].legend(loc=legend_loc)
+    axs[1].grid(True)
+    axs[1].set_aspect('equal')
+
+    plt.tight_layout()
+    plt.show()
+    plt.savefig(os.path.join(DATADIR, '{:s}_linear_fit_{:s}.png'.format(data_type,fig_suffix)), dpi=dpi)
+
+    ##################################################################################################################
+    ### Residuals uncorrected
+    ##################################################################################################################
+    max_resid_uncorrected = 1000  # 0.1 * unit
+
+    fig, axs = plt.subplots(nrows=1, ncols=2, figsize=(18, 10))
+    axs[0].set_title('FWHM = 7 px ({:s})'.format(data_type))
+    axs[1].set_title('FWHM = 15 px ({:s})'.format(data_type))
+    axs[0].set_xlabel('True velocity {:s}'.format(unit_str))
+    axs[1].set_xlabel('True velocity {:s}'.format(unit_str))
+    axs[0].set_ylabel('Residuals {:s}'.format(unit_str))
+    axs[1].set_ylabel('Residuals {:s}'.format(unit_str))
+    bar_labels = ['{:0.0f}'.format(vxrate) for vxrate in vx_ratesu]
+    colors = ['black', 'red', 'blue']
+
+    for i in range(6):
+        k = 1 - int(i / 3)  # LCT 7 px must be on the 0th axis (left-hand side)
+        axs[k].bar(vx_ratesu, lct_residuals0u[plotseq[i], :],
+                   width=widths[i % 3] * unit, color=colors[i % 3], tick_label=bar_labels, label=labels[i % 3])
+
+    axs[0].bar(vx_ratesu, bt_residuals1 * unit, width=widths[2] * 0.7 * unit, color='green', tick_label=None,
+               label='balltracking')
+    axs[1].bar(vx_ratesu, bt_residuals2 * unit, width=widths[2] * 0.7 * unit, color='green', tick_label=None,
+               label='balltracking')
+
+    axs[0].set_ylim([0, max_resid_uncorrected])
+    axs[1].set_ylim([0, max_resid_uncorrected])
+    axs[0].legend()
+    axs[1].legend()
+    axs[0].grid(True)
+    axs[1].grid(True)
+    plt.tight_layout()
+    plt.show()
+
+    plt.savefig(os.path.join(DATADIR, '{:s}_residuals_uncorrected_{:s}.png'.format(data_type, fig_suffix)), dpi=dpi)
+
+    ######################################
+    ##### Residuals with linear correction
+    ######################################
+    max_resid = 85  # 0.01 * unit / 2
+
+    fig, axs = plt.subplots(nrows=1, ncols=2, figsize=(18, 10))
+    axs[0].set_title('FWHM = 7 px ({:s}, linearly corrected)'.format(data_type))
+    axs[1].set_title('FWHM = 15 px ({:s}, linearly corrected)'.format(data_type))
+    axs[0].set_xlabel('True velocity {:s}'.format(unit_str))
+    axs[1].set_xlabel('True velocity {:s}'.format(unit_str))
+    axs[0].set_ylabel('Residuals {:s}'.format(unit_str))
+    axs[1].set_ylabel('Residuals {:s}'.format(unit_str))
+    bar_labels = ['{:0.0f}'.format(vxrate) for vxrate in vx_ratesu]
+    colors = ['black', 'red', 'blue']
+
+    for i in range(6):  # Consider only the unfiltered ones (the filtered ones do not work). range from 0 to 5 incl.
+        k = 1 - int(i / 3)  # LCT 7 px must be on the 0th axis (left-hand side)
+        axs[k].bar(vx_ratesu, lct_residualsu[plotseq[i], :],
+                   width=widths[i % 3] * unit, color=colors[i % 3], tick_label=bar_labels, label=labels[i % 3])
+
+    axs[0].bar(vx_ratesu, bt_residuals1 * unit, width=widths[2] * 0.7 * unit, color='green', tick_label=bar_labels,
+               label='balltracking')
+    axs[1].bar(vx_ratesu, bt_residuals2 * unit, width=widths[2] * 0.7 * unit, color='green', tick_label=bar_labels,
+               label='balltracking')
+
+    axs[0].set_ylim([0, max_resid])
+    axs[1].set_ylim([0, max_resid])
+    axs[0].legend()
+    axs[1].legend()
+    axs[0].grid(True, axis='y')
+    axs[1].grid(True, axis='y')
+
+    plt.tight_layout()
+    plt.show()
+
+    plt.savefig(os.path.join(DATADIR, '{:s}_residuals_corrected_{:s}.png'.format(data_type, fig_suffix)), dpi=dpi)
+
+
+
