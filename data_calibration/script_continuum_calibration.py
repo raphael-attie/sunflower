@@ -124,61 +124,61 @@ plt.legend(loc='best')
 plt.axis([0, 0.1, 1e2, 1e7])
 plt.tight_layout()
 plt.show()
-plt.savefig(os.path.join(savedir, 'power_spectrum_15days'))
+#plt.savefig(os.path.join(savedir, 'power_spectrum_15days'))
 
 
 
-# Make a high pass filter, removing periodicities of 8 hr and above, i.e remove low frequencies < 1 / 8hr
-lowcut = 1 / 4 / 3600
-periods = np.array([24, 12, 8, 6, 4])*3600
-fcuts = 1 / periods
-lowcuts = 1/(periods+10/60*3600)
-highcuts = 1/(periods-10/60*3600)
-fs = 1/time_step
-for low, high in zip(lowcuts, highcuts):
-    print('low={:f} high={:f} (mHz)'.format(low*1000,high*1000))
+# # Make a high pass filter, removing periodicities of 8 hr and above, i.e remove low frequencies < 1 / 8hr
+# lowcut = 1 / 4 / 3600
+# periods = np.array([24, 12, 8, 6, 4])*3600
+# fcuts = 1 / periods
+# lowcuts = 1/(periods+10/60*3600)
+# highcuts = 1/(periods-10/60*3600)
+# fs = 1/time_step
+# for low, high in zip(lowcuts, highcuts):
+#     print('low={:f} high={:f} (mHz)'.format(low*1000,high*1000))
+#
+# butter_filters = [butter_bandpass(low, high, fs, order=3) for low, high in zip((lowcuts, highcuts))]
+#
+# ## Look at the high pass filter
+# plt.figure(figsize=(10,6))
+#
+# b, a = butter_highpass(lowcut, fs, order=5)
+# w, h = freqz(b, a, worN=2000)
+# plt.plot((fs * 0.5 / np.pi) * w, abs(h), label="order = 3" )
+# plt.axvline(lowcut, color='black', ls='--')
+# plt.xlabel('Frequency (mHz)')
+# plt.grid(True)
+# plt.tight_layout()
+# plt.show()
 
-butter_filters = [butter_bandpass(low, high, fs, order=3) for low, high in zip((lowcuts, highcuts))]
-
-## Look at the high pass filter
-plt.figure(figsize=(10,6))
-
-b, a = butter_highpass(lowcut, fs, order=5)
-w, h = freqz(b, a, worN=2000)
-plt.plot((fs * 0.5 / np.pi) * w, abs(h), label="order = 3" )
-plt.axvline(lowcut, color='black', ls='--')
-plt.xlabel('Frequency (mHz)')
-plt.grid(True)
-plt.tight_layout()
-plt.show()
-
-# Try notch filters
-
-f0 = fcuts[0]
-Q = 30.0
-b, a = iirnotch(f0, Q, fs=fs)
-filtered_data = filtfilt(b, a, data)
-
-# Filter the data
-datafft1 = fftpack.fft(data)
-sample_freqs = fftpack.fftfreq(data.size, d=time_step)
-# With butterworth
-filtered_data1 = butter_highpass_filter(data, lowcut, fs, order=6)
-# or straight cut
-datafft1[np.abs(sample_freqs) <= lowcut] = 0
-filtered_data2 = np.real(fftpack.ifft(datafft1))
-
-tstart = np.min(np.where(time_vec_hr > 48)[0])
-tend = np.max(np.where(time_vec_hr < 48 + 3*24)[0])
-tslice = slice(tstart, tend)
-
-plt.figure(figsize=(10,5))
-plt.plot(time_vec_hr[tslice]/24, data[tslice], 'k-', label = 'original data')
-plt.plot(time_vec_hr[tslice]/24, filtered_data1[tslice] + data.mean(), 'b-', label = 'filtered data (butterworth high-pass)')
-plt.plot(time_vec_hr[tslice]/24, filtered_data2[tslice] + data.mean(), 'r-', alpha=0.6, label = 'filtered data (straight high-pass)')
-plt.xlabel('Time (days)')
-plt.legend(loc='best')
-plt.grid(True)
-plt.tight_layout()
-plt.show()
-
+# # Try notch filters
+#
+# f0 = fcuts[0]
+# Q = 30.0
+# b, a = iirnotch(f0, Q, fs=fs)
+# filtered_data = filtfilt(b, a, data)
+#
+# # Filter the data
+# datafft1 = fftpack.fft(data)
+# sample_freqs = fftpack.fftfreq(data.size, d=time_step)
+# # With butterworth
+# filtered_data1 = butter_highpass_filter(data, lowcut, fs, order=6)
+# # or straight cut
+# datafft1[np.abs(sample_freqs) <= lowcut] = 0
+# filtered_data2 = np.real(fftpack.ifft(datafft1))
+#
+# tstart = np.min(np.where(time_vec_hr > 48)[0])
+# tend = np.max(np.where(time_vec_hr < 48 + 3*24)[0])
+# tslice = slice(tstart, tend)
+#
+# plt.figure(figsize=(10,5))
+# plt.plot(time_vec_hr[tslice]/24, data[tslice], 'k-', label = 'original data')
+# plt.plot(time_vec_hr[tslice]/24, filtered_data1[tslice] + data.mean(), 'b-', label = 'filtered data (butterworth high-pass)')
+# plt.plot(time_vec_hr[tslice]/24, filtered_data2[tslice] + data.mean(), 'r-', alpha=0.6, label = 'filtered data (straight high-pass)')
+# plt.xlabel('Time (days)')
+# plt.legend(loc='best')
+# plt.grid(True)
+# plt.tight_layout()
+# plt.show()
+#
