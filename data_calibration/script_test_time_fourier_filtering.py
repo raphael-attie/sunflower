@@ -2,7 +2,6 @@ import numpy as np
 import matplotlib
 matplotlib.use('TKagg')
 import matplotlib.pyplot as plt
-from functools import partial
 plt.ion()
 
 
@@ -66,7 +65,6 @@ duration = 30 * 24 * 3600
 # Generate reference signal
 time_vec = np.arange(0, duration, ts)
 time_vec_hr = time_vec/3600
-Nfft = len(time_vec)
 sigs = [100*w*np.sin(2*np.pi * f * time_vec) for f, w in zip(freqs, weights)]
 # Generate noise
 noise_min = 1
@@ -76,8 +74,9 @@ sig = sigs[0] + sigs[1] + sigs[2] + sigs[3] + sigs[4] + noise
 win = np.hamming(len(sig)) #np.kaiser(len(data), 5)
 
 # Create the filter
-fw = 0.001e-3
+fw = 0.002e-3
 fsig = np.fft.fft(sig)
+Nfft = len(time_vec)
 ffilters, lft1s, lft2s = zip(*[fourier_filter(Nfft, duration, f, fw, 'keep', gaussian) for f in freqs])
 # Combined filter
 comb_filter = (1-ffilters[0]) * (1-ffilters[1]) * (1-ffilters[2]) * (1-ffilters[3]) * (1-ffilters[4])
@@ -86,7 +85,6 @@ fsigf = fsig * comb_filter
 filtered_sig = np.real(np.fft.ifft(fsigf))
 
 # Get frequencies associated with the FFT and power spectrum
-
 df = fs/Nfft
 ffreqs = np.arange(0, Nfft) * df
 ffreqs_m = ffreqs*1000
@@ -135,7 +133,7 @@ ax3.plot(time_vec_hr, noise, 'k-', label='reference signal (noise-free)')
 ax3.plot(time_vec_hr, filtered_sig, 'r-', alpha=0.6, label='filtered signal (gaussian)')
 #plt.plot(t, filtered_y2, 'g--', alpha=1, label='filtered signal (butterworth')
 ax3.set_xlim([70, 100])
-#ax3.set_ylim([0, 0.4])
+ax3.set_ylim([-10, 220])
 ax3.grid(True)
 ax3.legend(loc = 'upper left')
 ax3.set_xlabel('Time (hr)')
@@ -147,7 +145,7 @@ ax3R.legend(loc = 'upper right')
 
 plt.tight_layout()
 
-plt.savefig('/Users/rattie/Data/SDO/TSI/filter_synthetic_sdo_data_{:0.0f}days.png'.format(duration / (24*3600)))
+plt.savefig('/Users/rattie/Data/SDO/TSI/filter_synthetic_sdo_data_{:0.0f}days_fw{:0.0f}em6.png'.format(duration / (24*3600), fw*1e6))
 
 bins1 = np.arange(-50, 50, 0.5)
 bins2 = np.arange(0, 11, 0.1)
@@ -173,3 +171,6 @@ ax3R.set_ylim([0.4, 1.1])
 ax3R.set_xlim([0,10])
 ax3R.grid(True)
 plt.tight_layout()
+
+plt.savefig('/Users/rattie/Data/SDO/TSI/filter_error_distributions_{:0.0f}days_fw{:0.0f}em6.png'.format(duration / (24*3600), fw*1e6))
+
