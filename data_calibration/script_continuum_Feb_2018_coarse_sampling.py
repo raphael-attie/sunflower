@@ -8,6 +8,7 @@ from sunpy.time import parse_time
 import datetime
 from datetime import timedelta
 import numpy as np
+from scipy.signal import detrend
 plt.ion()
 
 
@@ -62,13 +63,14 @@ def process_cal(df):
     df_cal2 = df_cal2.resample('12H').fillna('nearest')
     df_cal3 = df_cal2.copy()
     df_cal3 = df_cal3.resample('24H').mean()
+    df_cal_24h = df_cal3.copy()
     df_cal2['DSUN_OBS'] = df_cal2['DSUN_OBS']/au
     df_cal3['DSUN_OBS'] = df_cal3['DSUN_OBS']/au
     df_cal2['dmod_datamean'] = df_cal2[data_key] * df_cal2['DSUN_OBS'] ** 2
     df_cal3['dmod_datamean'] = df_cal3[data_key] * df_cal3['DSUN_OBS'] ** 2
     df_cal3.rename(columns={'dmod_datamean': 'dmod_mean_binned'}, inplace=True)
 
-    return df_cal2, df_cal3
+    return df_cal2, df_cal3, df_cal_24h
 
 
 savedir = '/Users/rattie/Data/SDO/TSI/'
@@ -93,27 +95,30 @@ df_data2['dmod_datamean'] = df_data2[data_key] * df_data2['DSUN_OBS2']
 # Calibration data
 pickled_file2 = os.path.join(savedir, 'df_cal_2016_2019.pkl')
 df_cal = pd.read_pickle(pickled_file2)
-df_cal2, df_cal3 = process_cal(df_cal)
+df_cal2, df_cal3, df_cal_24h = process_cal(df_cal)
 
-combined_index = df_data2.index.union( df_cal2.index )
 
+#combined_index = df_data2.index.union( df_cal2.index )
+
+# TODO: need to synchronize df_data2 and df_cal and divide df_data by df_cal to flat-field it.
+
+df_cal_sync, df_data_sync = df_cal_24h.align(df_data2)
+df_data_sync['dmod_datamean2'] = df_data_sync['DATAMEAN']/df_cal_sync['DATAMEAN']
+
+
+# Synchronize df_data2 and df_cal
 
 fig = plt.figure(figsize=(18,11))
-ax1 = plt.subplot(2,1,1)
+ax1 = plt.subplot(3,1,1)
 df_data2.plot(ax=ax1, y=[data_key, 'dmod_datamean'], xlim=[datetime.date(2018, 2, 1), datetime.date(2018, 2, 28)],
               style='-', grid=True)
 ax1.set_xlabel('Date')
 ax1.legend(['DATAMEAN', r'DATAMEAN x DSUN_OBS$^2$'], loc='best')
 
-# if data_key == 'DATAMEAN':
-#     #ax1.set_ylim([46600, 47050])
-# elif data_key == 'DATAMEDN':
-#     ax1.set_ylim([48000, 48450])
-
 ax1.grid(True)
 ax1.set_title('{:s}'.format(data_key))
 
-ax2 = plt.subplot(2,1,2)
+ax2 = plt.subplot(3,1,2)
 df_cal2.plot(ax=ax2, y=[data_key, 'dmod_datamean'], style='.', xlim=[datetime.date(2018, 2, 1), datetime.date(2018, 2, 28)], grid=True)
 df_cal3.plot(ax=ax2, y=[data_key, 'dmod_mean_binned'], style=[':', '-.'], color='black', xlim=[datetime.date(2018, 2, 1), datetime.date(2018, 2, 28)], grid=True)
 ax2.set_ylim([38000, 39500])
@@ -122,10 +127,50 @@ df_data2.plot(ax=ax3, y=['DSUN_OBS2'], style='--', color='green', xlim=[datetime
 ax2.set_title('Calibration DATAMEAN (hmi.lev1_cal[][][?FID=5117?]) ')
 ax2.legend(['cal DATAMEAN', r'cal DATAMEAN x DSUN_OBS$^2$', 'cal DATAMEAN (averaged)', r'cal DATAMEAN (averaged)x DSUN_OBS$^2$'], loc='center left')
 ax3.legend([r'DSUN_OBS$^2$'])
+
+
+ax3 = plt.subplot(3,1,3)
+df_data_sync.plot(ax=ax3, y=['dmod_datamean2'], xlim=[datetime.date(2018, 2, 1), datetime.date(2018, 2, 28)], ylim=[1.19, 1.21],
+              style='-', grid=True)
+
+ax3.set_xlabel('Date')
+ax3.legend(['dmod_datamean2 (~DATAMEAN detrented)'], loc='best')
+
 plt.tight_layout()
+
 
 plt.savefig(os.path.join(savedir, 'frames_datamean_with_calibration_Feb_2018.png'))
 
 # ndays = round(duration / (3600 * 24))
 # tsuffix = parse_time(datetimes_arr[0]).strftime('%Y-%m-%d')
 #plt.savefig('/Users/rattie/Data/SDO/TSI/filter_true_sdo_data_{:0.0f}days_@24hr_{:s}_{:d}d_{:s}.png'.format(duration / (24*3600), tsuffix, ndays, data_key))
+
+
+# ignore the calibration data and work again on the true DATAMEAN, extract to numpy and detrend it.
+dmean = df_data2['dmod_datamean'].values
+# Detrend
+dmean_detrended = detrend(dmean, type='linear')
+df_data2['DATAMEAN_DETRENDED'] = dmean_detrended + abs(dmean_detrended.min())
+mask = (df_data2.index >= np.datetime64('2018-02-01')) & (df_data2.index <= np.datetime64('2018-02-28'))
+
+df_datamean_detrended = df_data2['DATAMEAN_DETRENDED'].copy().loc[mask]
+
+
+df_datamean_detrended.to_csv(os.path.join(savedir, 'intensity_mean_detrended.csv'))
+
+
+fig = plt.figure(figsize=(18,11))
+ax1 = plt.subplot(1,1,1)
+df_data2.plot(ax=ax1, y=['DATAMEAN_DETRENDED'], xlim=[datetime.date(2018, 2, 1), datetime.date(2018, 2, 28)],
+              style='-', grid=True, ylim=[0,60])
+ax1.set_xlabel('Date')
+ax1.legend(['DATAMEAN_DETRENDED'], loc='best')
+
+ax1.grid(True)
+ax1.set_title('{:s}'.format(data_key))
+
+plt.tight_layout()
+
+plt.savefig(os.path.join(savedir, 'datamean_demodulated_detrended_Feb_2018.png'))
+
+
