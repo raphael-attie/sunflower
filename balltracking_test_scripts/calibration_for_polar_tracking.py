@@ -1,7 +1,7 @@
-import sys
 import os
-sys.path.append(os.path.dirname(os.path.realpath(__file__)))
 import numpy as np
+import matplotlib
+matplotlib.use('agg')
 import matplotlib.pyplot as plt
 import balltracking.balltrack as blt
 import fitstools
@@ -9,9 +9,9 @@ from datetime import datetime
 
 
 # input data
-datafile = '/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/mtrack_20170901_000000_TAI20170905_235959_LambertCylindrical_continuum.fits'
+datafile = '/Users/rattie/Data/SDO/HMI/continuum/Lat_0/mtrack_20110627_200034_TAI_20110628_000033_TAI_Postel_060.4_00.0_continuum.fits'
 # output directory for the drifting images
-outputdir = '/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/calibration/'
+outputdir = '/Users/rattie/Data/SDO/HMI/continuum/Lat_0/'
 ### Ball parameters
 # Use 80 frames (1 hr)
 nframes = 80
@@ -43,7 +43,7 @@ if __name__ == '__main__':
 
     startTime = datetime.now()
 
-    cal = blt.Calibrator(images, drift_rates, nframes, rs, dp, sigma_factor, outputdir, use_existing=False, nthreads=4)
+    cal = blt.Calibrator(images, drift_rates, nframes, rs, dp, sigma_factor, outputdir, use_existing=True, output_prep_data=True, nthreads=4)
 
     ballpos_top_list, ballpos_bottom_list = cal.balltrack_all_rates()
 
@@ -68,8 +68,6 @@ if __name__ == '__main__':
     plt.ylabel('Drift <Vx> (px/frame)')
     plt.grid('on')
     plt.legend()
-    plt.show()
-
 
     plt.savefig(os.path.join(outputdir,'calibration.png'))
 

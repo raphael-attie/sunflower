@@ -1124,7 +1124,7 @@ class Calibrator:
         return ballpos_top, ballpos_bottom
 
 
-    def balltrack_all_rates(self, return_ballpos=True):
+    def balltrack_all_rates(self):
         """
         Balltrack the different series of drifting images. Each series drift at a different drift velocity or "drift rate".
         results saved in 2 different files. One for top-side tracking, one for bottom-side tracking
@@ -1143,14 +1143,18 @@ class Calibrator:
             pool.join()
 
         if self.outputdir2 is None:
+            print('saving ballpos_top_list.npy and ballbpos_bottom_list.npy...')
             np.save(os.path.join(self.outputdir, 'ballpos_top_list.npy'), ballpos_top_list)
+            print('saved ballpos_top_list.npy in {:s}'.format(self.outputdir))
             np.save(os.path.join(self.outputdir, 'ballpos_bottom_list.npy'), ballpos_bottom_list)
+            print('saved ballpos_bottom_list.npy in {:s}'.format(self.outputdir))
+
         else:
             np.save(os.path.join(self.outputdir2, 'ballpos_top_list.npy'), ballpos_top_list)
             np.save(os.path.join(self.outputdir2, 'ballpos_bottom_list.npy'), ballpos_bottom_list)
 
-            if return_ballpos:
-                return ballpos_top_list, ballpos_bottom_list
+            # if return_ballpos:
+        return ballpos_top_list, ballpos_bottom_list
 
 
 def process_calibration_series(rotation_rate, nt, rs, dp, sigma_factor, samples, outputdir=None, use_existing=None):
