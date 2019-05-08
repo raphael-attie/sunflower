@@ -1357,6 +1357,14 @@ def make_euler_velocity_lanes(ballpos_top, ballpos_bottom, cal_top, cal_bottom, 
         vyl.append(vy)
         lanesl.append(lanes)
 
+        plt.figure(figsize=(10, 10))
+        plt.imshow(lanes, origin='lower', cmap='gray_r')
+        plt.xlabel('x [px]')
+        plt.ylabel('y [px]')
+        plt.title('Supergranular lanes at fwhm = %d px ; tavg = %d ; map # %03d'%(fwhm, tavg, i))
+        plt.tight_layout()
+        plt.savefig(os.path.join(outputdir, 'lanes_fwhm%d_tavg%d_%03d.png'%(fwhm, tavg, i)))
+
     return vxl, vyl, lanesl
 
 

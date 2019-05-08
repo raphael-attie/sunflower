@@ -1,5 +1,3 @@
-import os
-from importlib import reload
 import matplotlib
 matplotlib.use('agg')
 import numpy as np
@@ -7,20 +5,14 @@ import balltracking.balltrack as blt
 import fitstools
 from datetime import datetime
 import multiprocessing
-from multiprocessing import Pool
-import matplotlib.pyplot as plt
-from functools import partial
 
-datafile = '/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/mtrack_20170901_000000_TAI20170905_235959_LambertCylindrical_continuum.fits'
-outputdir = '/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/python_balltracking'
-# Go from 1st frame at Sep 1st 00:00:00 till ~ Sep 3 18:00:00
-nframes = int((3600*24*2 + 18*3600)/45) # 5280 frames
-#nframes = int(80 * 5)
 
+datafile = '/Users/rattie/Data/SDO/HMI/continuum/Lat_63/mtrack_20110627_200034_TAI_20110628_000033_TAI_Postel_060.4_63.0_continuum.fits'
+outputdir = '/Users/rattie/Data/SDO/HMI/continuum/Lat_63'
+nframes = 320
 # Load the series
 image = fitstools.fitsread(datafile, tslice=0).astype(np.float32)
 ### Ball parameters
-
 # Ball radius
 rs = 2
 # depth factor
@@ -39,5 +31,4 @@ if __name__ == '__main__':
 
     startTime = datetime.now()
     ballpos_top, ballpos_bottom = blt.balltrack_all(nframes, rs, dp, sigma_factor, outputdir, datafiles=datafile, ncores=4)
-
     print(" Time elapsed: %s " % (datetime.now() - startTime))

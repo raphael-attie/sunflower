@@ -39,11 +39,13 @@ dims = images.shape[0:2]
 fov_slices = [np.s_[10:200, 30:-30],
               np.s_[350:500, 30:-30]]
 
+unit = 368000/45
+
 if __name__ == '__main__':
 
     startTime = datetime.now()
 
-    cal = blt.Calibrator(images, drift_rates, nframes, rs, dp, sigma_factor, outputdir, use_existing=True, output_prep_data=True, nthreads=4)
+    cal = blt.Calibrator(images, drift_rates, nframes, rs, dp, sigma_factor, outputdir, use_existing=False, output_prep_data=False, nthreads=4)
 
     ballpos_top_list, ballpos_bottom_list = cal.balltrack_all_rates()
 
@@ -71,6 +73,18 @@ if __name__ == '__main__':
 
     plt.savefig(os.path.join(outputdir,'calibration.png'))
 
+    plt.close('all')
+    plt.figure(1)
+    width = 150
+    plt.bar(vx_rates * unit, residuals_top * unit, width = width, color='black', label='top-side tracking')
+    plt.bar(vx_rates * unit + width, residuals_bottom * unit, width=width, color='gray', label='bottom-side tracking')
+    plt.xlabel('Drift <Vx> (m/s)')
+    plt.ylabel('Absolute residual error on <Vx> (m/s)')
+    plt.ylim([0, 10])
+    plt.grid(True, ls=':')
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(os.path.join(outputdir, 'residuals_top_bottom.png'), dpi=180)
 
 
 
