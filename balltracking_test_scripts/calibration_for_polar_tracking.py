@@ -9,9 +9,9 @@ from datetime import datetime
 
 
 # input data
-datafile = '/Users/rattie/Data/SDO/HMI/continuum/Lat_0/mtrack_20110627_200034_TAI_20110628_000033_TAI_Postel_060.4_00.0_continuum.fits'
+datafile = '/Users/rattie/Data/SDO/HMI/continuum/Lat_63/mtrack_20110627_200034_TAI_20110628_000033_TAI_Postel_060.4_63.0_continuum.fits'
 # output directory for the drifting images
-outputdir = '/Users/rattie/Data/SDO/HMI/continuum/Lat_0/'
+outputdir = '/Users/rattie/Data/SDO/HMI/continuum/Lat_63/'
 ### Ball parameters
 # Use 80 frames (1 hr)
 nframes = 80

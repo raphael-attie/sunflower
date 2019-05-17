@@ -6,54 +6,9 @@ matplotlib.use('TKagg')
 import matplotlib.pyplot as plt
 from sunpy.time import parse_time
 import datetime
-from datetime import timedelta
 import numpy as np
 from scipy.signal import detrend
 plt.ion()
-
-
-def gaussian(x, pos, wid):
-    g = np.exp(-((x-pos)/(0.6005615*wid))**2)
-    return g
-
-
-def butterworth(x, pos, wid, norder):
-    btwf = 1. / (1 + ((x-pos) / wid)**(2 * norder))
-    return btwf
-
-
-def fourier_filter(signal_length, duration, f0, fw, mode, ffunction):
-
-    """
-    From https://terpconnect.umd.edu/~toh/spectrum/FouFilter.m with a correction of how to build the filter,
-    adapted from Matlab to Python
-
-    :param signal_length: number of samples in the signal
-    :param duration: total duration of the signal in physical units
-    :param f0: center frequency in Hz
-    :param fw: frequency width in Hz
-    :param mode: whether we 'keep' (or 1) or 'reject' (or 0) the selected frequency band
-    :return: filtered signal
-    """
-
-    assert(mode is 'keep' or mode is 'reject'), "fourier_filter mode argument not recognized. Must be 'keep' or 'reject'"
-
-    center = f0 * duration
-    width = fw * duration
-
-    lft1 = np.arange(0, np.floor(signal_length / 2))
-    lft2 = np.arange(np.floor((signal_length / 2)), signal_length)
-    # computer filter shape
-    ffilter1 = ffunction(lft1, center, width)
-    ffilter2 = ffunction(lft2, signal_length - center, width)
-    # Concatenate the filters
-    ffilter = np.concatenate((ffilter1, ffilter2))
-
-    if mode is 'reject':
-        ffilter = 1 - ffilter
-
-
-    return ffilter, lft1, lft2
 
 
 def process_cal(df):
@@ -141,11 +96,6 @@ plt.tight_layout()
 
 plt.savefig(os.path.join(savedir, 'frames_datamean_with_calibration_Feb_2018.png'))
 
-# ndays = round(duration / (3600 * 24))
-# tsuffix = parse_time(datetimes_arr[0]).strftime('%Y-%m-%d')
-#plt.savefig('/Users/rattie/Data/SDO/TSI/filter_true_sdo_data_{:0.0f}days_@24hr_{:s}_{:d}d_{:s}.png'.format(duration / (24*3600), tsuffix, ndays, data_key))
-
-
 # ignore the calibration data and work again on the true DATAMEAN, extract to numpy and detrend it.
 dmean = df_data2['dmod_datamean'].values
 # Detrend
@@ -173,4 +123,8 @@ plt.tight_layout()
 
 plt.savefig(os.path.join(savedir, 'datamean_demodulated_detrended_Feb_2018.png'))
 
+df_data2_feb_2018= df_data2.loc[mask]
+del df_data2_feb_2018['CAMERA']
+del df_data2_feb_2018['DSUN_OBS2']
+df_data2_feb_2018.to_csv(os.path.join(savedir, 'intensity_mean_demodulated_detrended_feb_2018.csv'), header=True)
 
