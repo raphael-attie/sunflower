@@ -1,4 +1,4 @@
-import os, glob
+import os
 import numpy as np
 import matplotlib
 matplotlib.use('TKagg')
