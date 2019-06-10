@@ -1047,10 +1047,29 @@ def integrate_motion0(pos, vel, bt, surface):
 ##############################################################################################################
 class Calibrator:
 
-    def __init__(self, images, drift_rates, nframes, rs, dp, sigma_factor, outputdir, intsteps=3,
+    def __init__(self, images, drift_rates, nframes, rs=2, dp=0.3, sigma_factor=1, outputdir=None , intsteps=3,
                  outputdir2 = None, output_prep_data=False, use_existing=False, tracking=True, normalization = True,
                  filter_function=None, subdirs=None, nthreads=1):
 
+        """
+
+        :param images: path to original images. Only used if use_existing = False.
+        :param drift_rates:
+        :param nframes:
+        :param rs:
+        :param dp:
+        :param sigma_factor:
+        :param outputdir:
+        :param intsteps:
+        :param outputdir2:
+        :param output_prep_data:
+        :param use_existing:
+        :param tracking:
+        :param normalization:
+        :param filter_function:
+        :param subdirs:
+        :param nthreads:
+        """
         self.images = images
         self.nfiles = self.images.shape[2]
         self.drift_rates = drift_rates
@@ -1063,14 +1082,16 @@ class Calibrator:
         self.outputdir2 = outputdir2
         self.output_prep_data = output_prep_data
         self.use_existing = use_existing
-        self.tracking = tracking
         self.normalization = normalization
         self.filter_function = filter_function
         self.nthreads = nthreads
         if subdirs is None:
-            self.subdirs = [os.path.join(outputdir, 'drift_{:01d}'.format(i)) for i in range(len(drift_rates))]
+            self.subdirs = [os.path.join(outputdir, 'drift_{:02d}'.format(i)) for i in range(len(drift_rates))]
         else:
             self.subdirs = subdirs
+
+        if not os.path.exists(self.outputdir):
+            os.makedirs(self.outputdir)
 
         if self.outputdir2 is not None:
             if not os.path.exists(self.outputdir2):
@@ -1089,7 +1110,9 @@ class Calibrator:
                 "Reading existing drift images at rate: [{:.2f}, {:.2f}] px/frame"
                     .format(self.drift_rates[rate_idx][0], self.drift_rates[rate_idx][1]))
 
-            drift_images = np.zeros(self.images.shape)
+            # Get a sample for the size
+            sample = fitsio.read(str(filepaths[0]))
+            drift_images = np.zeros(sample.shape)
             for i in range(self.nfiles):
                 drift_images[:, :, i] = fitsio.read(str(filepaths[i]))
         else:
@@ -1098,9 +1121,6 @@ class Calibrator:
 
             print("Creating drift images at rate: [{:.2f}, {:.2f}] px/frame".format(self.drift_rates[rate_idx][0], self.drift_rates[rate_idx][1]))
             drift_images = create_drift_series(self.images, self.drift_rates[rate_idx], filepaths, filter_function=self.filter_function)
-
-        if self.tracking:
-            return drift_images
 
 
     def drift_all_rates(self):
@@ -1235,9 +1255,12 @@ def create_drift_series(images, drift_rate, filepaths=None, filter_function=None
     drift_images = np.zeros(images.shape)
 
     for i in range(images.shape[2]):
-        dx = -drift_rate[0] * float(i)
-        dy = -drift_rate[1] * i
-        drift_images[:, :, i] = filters.translate_by_phase_shift(images[:, :, i], dx, dy)
+        if drift_rate[0] == 0 and drift_rate[1]==0:
+            drift_images[:, :, i] = images[:, :, i]
+        else:
+            dx = -drift_rate[0] * float(i)
+            dy = -drift_rate[1] * i
+            drift_images[:, :, i] = filters.translate_by_phase_shift(images[:, :, i], dx, dy)
 
         if filter_function is not None:
             drift_images[:, :, i] = filter_function(drift_images[:,:,i])
