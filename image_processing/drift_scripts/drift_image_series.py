@@ -51,7 +51,7 @@ ndrifts = len(vx_rates)
 # Drift on x-axis only, i.e., zero on the y-axis.
 drift_rates = np.stack((vx_rates, np.zeros(ndrifts)), axis=1).tolist()
 # Define the sub-directories where each drift series will be saved
-subdirs = [os.path.join(outputdir, 'drift_{:01d}'.format(i)) for i in range(len(drift_rates))]
+subdirs = [os.path.join(outputdir, 'drift_{:01d}'.format(i)) for i in range(ndrifts)]
 # Instantiate the calibrator object.
 cal = blt.Calibrator(images2, drift_rates, nframes, outputdir=outputdir,
                      output_prep_data=False, use_existing=False, tracking=False, normalization=False,
