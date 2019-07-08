@@ -17,10 +17,13 @@ def fitsread(file, xslice=slice(None), yslice=slice(None), tslice=slice(None)):
         # Load sample to get dimensions
         sample = fitsio.read(file[0])
         # Initialize list of empty arrays of expected size, as many as we have files.
-        data = np.empty([*sample.shape, len(file)], np.float32)
-        for i, datafile in enumerate(file):
-              data[:,:,i] = fitsio.read(datafile)
-
+        fitsfiles = file[tslice]
+        if len(fitsfiles) == 1:
+            data = fitsio.read(fitsfiles[0])
+        else:
+            data = np.empty([*sample.shape, len(fitsfiles)], np.float32)
+            for i, datafile in enumerate(file):
+                  data[:,:,i] = fitsio.read(datafile)
     return data
 
 

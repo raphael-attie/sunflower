@@ -32,11 +32,11 @@ selected_files = datafiles[0:nframes]
 
 # Load the nt images
 images = fitstools.fitsread(selected_files)
-# Must make even dimensions for the fast fourier transform
+# Must make even dimensions for the fast fouri'er transform
 images2 = np.zeros([264, 264, images.shape[2]])
 images2[0:263, 0:263, :] = images.copy()
-images2[263, :] = images.mean()
-images2[:, 263] = images.mean()
+images2[263, :, :] = images.mean()
+images2[:, 263, :] = images.mean()
 
 ## Calibration parameters
 # Set npts drift rates
