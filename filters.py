@@ -135,6 +135,8 @@ def translate_by_phase_shift(image, dx, dy):
 
     return shifted_image
 
+
+
 def matrix_ffilter_image(image, small_scales, large_scales):
 
     # image size
