@@ -1,63 +1,43 @@
+"""
+Create series of shifted images for sanity-checking FLCT
+
+Translate an image by different decimal amount from ~ 0.1 to 2 px. The different image has an increasing time-gap with
+respect to the reference image (from 1 to 9 frames). There is one series of space-shifted images per value of time gap.
+"""
+
 import os, glob
 import numpy as np
+import filters
+import fitsio
 import fitstools
-import balltracking.balltrack as blt
 
-
-def filter_function(image):
-    fimage = blt.filter_image(image)
-    return fimage
-
-
-if __name__ == '__main__':
-    # input data, list of files
-    # glob.glob does not order numbered files by defaultl, the order is as appeared in the file system.
-    datafiles = sorted(glob.glob('/Users/rattie/Data/Ben/SteinSDO/SDO_int*.fits'))
-    ### Ball parameters
-    # Use 80 frames (1 hr)
+def shift_series(images, outputdir):
+    # Velocity offset. Will be applied to both x and y axis
     nframes = 80
-    # Ball radius
-    rs = 2
-    # depth factor
-    dp = 0.3  # 0.2
-    # Multiplier to the standard deviation.
-    sigma_factor = 1  # 1#2
-    # Select only a subset of nframes files
-    selected_files = datafiles[0:nframes]
-    # Load the nt images
-    images = fitstools.fitsread(selected_files)
-    # Must make even dimensions for the fast fourier transform
-    images2 = np.zeros([264, 264, images.shape[2]])
-    images2[0:263, 0:263, :] = images.copy()
-    images2[263, :] = images.mean()
-    images2[:, 263] = images.mean()
-
-
-
-    dv = 0.02
-    vx_rates = np.arange(-0.2, 0.2+dv, dv)
+    dv = 0.04
+    vx_rates = np.arange(-0.2, 0.21, dv)
     vx_rates[int(len(vx_rates)/2)] = 0
-    ndrifts = len(vx_rates)
-    # The drift can optionnally be on both direction, not just on the x-axis
-    drift_rates = np.stack((vx_rates, np.zeros(ndrifts)), axis=1).tolist()
+    for i, rate in enumerate(vx_rates):
+        outputdir_dt = os.path.join(outputdir, 'drift_{:02d}'.format(i))
+        if not os.path.exists(outputdir_dt):
+            os.makedirs(outputdir_dt)
+        for n in range(nframes):
+            image = images[...,n]
+            shifted_image = filters.translate_by_phase_shift(image, n*rate, 0)
+            filename = os.path.join(outputdir_dt, 'im_shifted_{:02d}.fits'.format(n))
+            fitsio.write(filename, shifted_image)
 
 
-    # output directory for the drifting images
-    outputdir = '/Users/rattie/Data/Ben/SteinSDO/calibration2/unfiltered'
-    subdirs = [os.path.join(outputdir, 'drift_{:02d}'.format(i)) for i in range(len(drift_rates))]
-    cal = blt.Calibrator(images2, drift_rates, nframes, rs, dp, sigma_factor, outputdir,
-                         output_prep_data=False, use_existing=False, tracking=False, normalization=False,
-                         filter_function=None, subdirs=subdirs,
-                         nthreads=5)
+# Create series of translated simulated HMI-like continuum images
+outputdir = '/Users/rattie/Data/sanity_check/simulation_series/'
+files = sorted(glob.glob('/Users/rattie/Data/Ben/SteinSDO/SDO_int*.fits'))
+images_sim = np.moveaxis(np.array([fitstools.fitsread(f, cube=False) for f in files]), 0, -1)
+shift_series(images_sim, outputdir)
 
-    cal.drift_all_rates()
+# Create series of translated real HMI continuum images
+filepath = '/Users/rattie/Data/SDO/HMI/continuum/Lat_0/mtrack_20110627_200034_TAI_20110628_000033_TAI_Postel_060.4_00.0_continuum.fits'
+outputdir = '/Users/rattie/Data/sanity_check/hmi_series/'
+images_hmi = fitstools.fitsread(filepath)
+shift_series(images_hmi, outputdir)
 
-    # output directory for the drifting images
-    outputdir = '/Users/rattie/Data/Ben/SteinSDO/calibration2/filtered'
-    subdirs_filtered = [os.path.join(outputdir, 'drift_{:02d}'.format(i)) for i in range(len(drift_rates))]
-    cal_filtered = blt.Calibrator(images2, drift_rates, nframes, rs, dp, sigma_factor, outputdir,
-                         output_prep_data=False, use_existing=False, tracking=False, normalization=False,
-                         filter_function=filter_function, subdirs=subdirs_filtered,
-                         nthreads=5)
-
-    cal_filtered.drift_all_rates()
+#TODO: check for discrepancies between first cropping by integer amount and shifting by remaining fractional amount

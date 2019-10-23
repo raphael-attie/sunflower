@@ -126,10 +126,12 @@ def phase_shift(fimage, dx, dy):
 
 def translate_by_phase_shift(image, dx, dy):
 
+    if dx==0 and dy==0:
+        return image
     # Get the fourier transform
     fimage = np.fft.fftshift(np.fft.fftn(image))
     # Phase shift
-    shifted_fimage = phase_shift(fimage, dx, dy)
+    shifted_fimage = phase_shift(fimage, -dx, -dy)
     # Inverse transform -> translated image
     shifted_image = np.real(np.fft.ifftn(np.fft.ifftshift(shifted_fimage)))
 

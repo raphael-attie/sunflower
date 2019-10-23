@@ -26,7 +26,7 @@ dy = 0
 # Shift the image
 
 for i in range(2):
-    image1 = filters.translate_by_phase_shift(image1, -dx, -dy)
+    image1 = filters.translate_by_phase_shift(image1, dx, dy)
     image2 = sci_interp.shift(image2, (dy, dx), order=3, mode='wrap')
     dx *= -1
     dx1 *= -1
@@ -49,7 +49,7 @@ plt.axis([200, 400, 150, 350])
 plt.title('Interpolation 2x [MAD = %0.1f]'%mad2)
 
 for i in range(100):
-    image1 = filters.translate_by_phase_shift(image1, -dx, -dy)
+    image1 = filters.translate_by_phase_shift(image1, dx, dy)
     image2 = sci_interp.shift(image2, (dy, dx), order=3, mode='wrap')
     dx *= -1
     dx1 *= -1
@@ -73,7 +73,7 @@ plt.tight_layout()
 image3  = image.copy()
 
 for i in range(2):
-    image3 = filters.translate_by_phase_shift(image3, -dx1, -dy)
+    image3 = filters.translate_by_phase_shift(image3, dx1, dy)
     dx1 *= -1
 
 mad3 = np.abs(image - image3)[150:350, 200:400].mean()
@@ -90,7 +90,7 @@ plt.axis([200, 400, 150, 350])
 plt.title('Original [MAD = %0.1f]'%mad3)
 
 for i in range(100):
-    image3 = filters.translate_by_phase_shift(image3, -dx1, -dy)
+    image3 = filters.translate_by_phase_shift(image3, dx1, dy)
     dx1 *= -1
 
 mad3 = np.abs(image - image3)[150:350, 200:400].mean()
