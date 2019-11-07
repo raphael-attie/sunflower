@@ -1565,6 +1565,38 @@ def make_lanes_visualization(vx, vy, nsteps, maxstep):
     return lanes_series, [xtracks.reshape([nsteps+1, *dims]), ytracks.reshape([nsteps+1, *dims])]
 
 
+def balltrack_calibration(drift_rates, filter_radius, ballspacing, fwhm, intsteps, fov_slices, kernel, reprocess_bt, use_existing, outputdir):
+    # Load the nt images
+    dims = [264, 264]
+
+    if reprocess_bt:
+        cal = Calibrator(None, drift_rates, nframes, rs, dp, sigma_factor,
+                             filter_radius=filter_radius, ballspacing=ballspacing,
+                             outputdir=outputdir,
+                             intsteps=intsteps,
+                             output_prep_data=False, use_existing=use_existing,
+                             nthreads=5)
+
+        ballpos_top_list, ballpos_bottom_list = cal.balltrack_all_rates()
+
+    else:
+        print('Load existing tracked data at all rates')
+        ballpos_top_list = np.load(os.path.join(outputdir, 'ballpos_top_list.npy'))
+        ballpos_bottom_list = np.load(os.path.join(outputdir, 'ballpos_bottom_list.npy'))
+
+
+    trange = [0, nframes]
+    xrates = np.array(drift_rates)[:, 0]
+    a_top, vxfit_top, vxmeans_top, residuals_top = fit_calibration(ballpos_top_list, xrates, trange, fwhm,
+                                                                       dims, fov_slices, kernel,
+                                                                       return_flow_maps=False)
+    a_bottom, vxfit_bottom, vxmeans_bottom, residuals_bottom = fit_calibration(ballpos_bottom_list, xrates, trange,
+                                                                                   fwhm,
+                                                                                   dims, fov_slices, kernel,
+                                                                                   return_flow_maps=False)
+
+    return a_top, vxfit_top, vxmeans_top, residuals_top, a_bottom, vxfit_bottom, vxmeans_bottom, residuals_bottom
+
 
 
 

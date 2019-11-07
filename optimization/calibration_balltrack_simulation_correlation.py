@@ -5,7 +5,6 @@ import balltracking.balltrack as blt
 import multiprocessing
 from multiprocessing import Pool
 from functools import partial
-
 import time
 
 def balltrack_calibration(drift_rates, filter_radius, ballspacing, fwhm, intsteps, fov_slices, kernel, reprocess_bt, use_existing, outputdir):
