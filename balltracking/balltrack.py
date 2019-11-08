@@ -22,7 +22,7 @@ import graphics
 DTYPE = np.float32
 class BT:
 
-    def __init__(self, nt, rs, dp, intsteps=3, ballspacing=4, sigma_factor=1, fourier_radius=0, mode='top', direction='forward', datafiles=None, data=None,
+    def __init__(self, nt, rs, ballspacing, dp, intsteps=3, sigma_factor=1, fourier_radius=0, mode='top', direction='forward', datafiles=None, data=None,
                  output_prep_data=False, outputdir='', verbose=False):
 
         """
@@ -1065,12 +1065,12 @@ def integrate_motion0(pos, vel, bt, surface):
 class Calibrator:
 
     def __init__(self, images, drift_rates, nframes, rs, dp, sigma_factor, filter_radius=None, ballspacing=4, outputdir=None , intsteps=3,
-                 outputdir2 = None, output_prep_data=False, use_existing=False, normalization = True,
+                 outputdir2 = None, output_prep_data=False, normalization = True,
                  filter_function=None, subdirs=None, nthreads=1):
 
         """
 
-        :param images: path to original images. Only used if use_existing = False.
+        :param images: if None, will use the one already on disk
         :param drift_rates:
         :param nframes:
         :param rs:
@@ -1082,7 +1082,6 @@ class Calibrator:
         :param intsteps:
         :param outputdir2:
         :param output_prep_data:
-        :param use_existing:
         :param normalization:
         :param filter_function:
         :param subdirs:
@@ -1098,7 +1097,6 @@ class Calibrator:
         self.outputdir = outputdir
         self.outputdir2 = outputdir2
         self.output_prep_data = output_prep_data
-        self.use_existing = use_existing
         self.normalization = normalization
         self.filter_function = filter_function
         self.filter_radius = filter_radius
@@ -1122,7 +1120,7 @@ class Calibrator:
         # Files supposed to be created or to be read if already exist.
         filepaths = [Path(os.path.join(self.subdirs[rate_idx], 'drift_{:03d}.fits'.format(i))) for i in range(self.nframes)]
 
-        if self.use_existing and check_file_series(filepaths):
+        if self.images is None and check_file_series(filepaths):
             # does not save much time compared to the total time of balltracking,
             # but it significantly reduces disk usage compared to creating the images all over again.
             print(
@@ -1132,8 +1130,8 @@ class Calibrator:
             # Get a sample for the size
             sample = fitsio.read(str(filepaths[0]))
             drift_images = np.zeros([sample.shape[0], sample.shape[1], self.nframes])
-            for i in range(self.nframes):
-                drift_images[:, :, i] = fitsio.read(str(filepaths[i]))
+            for i, f in enumerate(filepaths):
+                drift_images[:, :, i] = fitsio.read(str(f))
         else:
             if not os.path.exists(self.subdirs[rate_idx]):
                 os.makedirs(self.subdirs[rate_idx])
@@ -1565,27 +1563,22 @@ def make_lanes_visualization(vx, vy, nsteps, maxstep):
     return lanes_series, [xtracks.reshape([nsteps+1, *dims]), ytracks.reshape([nsteps+1, *dims])]
 
 
-def balltrack_calibration(drift_rates, filter_radius, ballspacing, fwhm, intsteps, fov_slices, kernel, reprocess_bt, use_existing, outputdir):
-    # Load the nt images
-    dims = [264, 264]
+def balltrack_calibration(bt_params, drift_rates, trange, fov_slices, reprocess_bt, outputdir, kernel, fwhm, dims):
 
     if reprocess_bt:
-        cal = Calibrator(None, drift_rates, nframes, rs, dp, sigma_factor,
-                             filter_radius=filter_radius, ballspacing=ballspacing,
-                             outputdir=outputdir,
-                             intsteps=intsteps,
-                             output_prep_data=False, use_existing=use_existing,
-                             nthreads=5)
+        cal = Calibrator(None, drift_rates, trange, bt_params['rs'], bt_params['ballspacing'], bt_params['dp'], bt_params['sigma_factor'],
+                         filter_radius=bt_params['filter_radius'],
+                         intsteps=bt_params['intsteps'],
+                         outputdir=outputdir,
+                         output_prep_data=False,
+                         nthreads=1)
 
         ballpos_top_list, ballpos_bottom_list = cal.balltrack_all_rates()
-
     else:
-        print('Load existing tracked data at all rates')
         ballpos_top_list = np.load(os.path.join(outputdir, 'ballpos_top_list.npy'))
         ballpos_bottom_list = np.load(os.path.join(outputdir, 'ballpos_bottom_list.npy'))
 
 
-    trange = [0, nframes]
     xrates = np.array(drift_rates)[:, 0]
     a_top, vxfit_top, vxmeans_top, residuals_top = fit_calibration(ballpos_top_list, xrates, trange, fwhm,
                                                                        dims, fov_slices, kernel,
@@ -1599,6 +1592,25 @@ def balltrack_calibration(drift_rates, filter_radius, ballspacing, fwhm, intstep
 
 
 
+def meshgrid_params_to_list(args):
+    mesh = np.meshgrid(*args, indexing='ij')
+    list_ravel = []
+    for elem in mesh:
+        list_ravel.append(np.ravel(elem))
+    args_list = [list(a) for a in zip(*list_ravel)]
+    return args_list
 
+
+def get_bt_params_list(bt_params, param_names, param_lists):
+
+    param_mesh_list = meshgrid_params_to_list(param_lists)
+    bt_params_list = []
+    bt_params2 = bt_params.copy()
+    for i, p_list in enumerate(param_mesh_list):
+        for n, name in enumerate(param_names):
+            bt_params2[name] = p_list[n]
+        bt_params_list.append(bt_params2)
+        bt_params2 = bt_params.copy()
+    return bt_params_list
 
 
