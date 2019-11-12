@@ -35,7 +35,6 @@ if __name__ == '__main__':
 
     df = pd.DataFrame(bt_params_list)
 
-
     ### Velocity smoothing
     fwhm = 7
     kernel = 'boxcar'
@@ -52,28 +51,23 @@ if __name__ == '__main__':
     trim = int(vx_rates.max() * nframes + fwhm + 2)
     fov_slices = np.s_[trim:imsize - trim, trim:imsize - trim]
 
-    a_top_l = []
-    a_bot_l = []
     dims = [imsize, imsize]
-    for bt_params in bt_params_list:
-        a_top, vxfit_top, vxmeans_top, residuals_top, a_bottom, vxfit_bottom, vxmeans_bottom, residuals_bottom = \
-            blt.balltrack_calibration(drift_rates, trange, fov_slices, reprocess_bt, drift_parent_dir, bt_params, kernel, fwhm, dims)
 
-        a_top_l.append(a_top)
-        a_bot_l.append(a_bottom)
-
+    # Prepare partial function for parallel pool & map.
     calibrate_partial = partial(blt.balltrack_calibration, drift_rates=drift_rates, trange=trange, fov_slices=fov_slices,
-                                reprocess_bt=reprocess_bt, outputdir=drift_parent_dir, kernel=kernel, fwhm=fwhm, dims=dims)
+                                reprocess_bt=reprocess_bt, outputdir=drift_parent_dir, kernel=kernel, fwhm=fwhm, dims=dims, basename='im_shifted')
+
+    #a_top, vxfit_top, vxmeans_top, residuals_top, a_bottom, vxfit_bottom, vxmeans_bottom, residuals_bottom = calibrate_partial(bt_params_list[0])
+
+    #vxmeans_l, a_avg_l, vxfit_avg_l, residuals_l = zip(*map(calibrate_partial, bt_params_list[0:6]))
 
     pool = Pool(processes=nprocesses)
-    vxmeans_l, a_avg_l, vxfit_avg_l, residuals_l = zip(*pool.map(calibrate_partial, bt_params_list))
+    vxmeans_l, a_avg_l, vxfit_avg_l, residuals_l = zip(*pool.map(calibrate_partial, bt_params_list[0:6]))
     pool.close()
     pool.join()
 
     # Save the results in a dataframe
-    df['a_top'] = a_top_l
-    df['a_bot'] = a_bot_l
+    # df['a_top'] = a_top_l
+    # df['a_bot'] = a_bot_l
 
-    cal_factors = np.array([a_top_l, a_bot_l])
-    np.save(os.path.join(outputdir, 'cal_factors_parameter_sweep.npy'), cal_factors)
 
