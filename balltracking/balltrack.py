@@ -3,10 +3,13 @@ This module hosts all the necessary functions to run balltracking.
 A main program should execute "balltrack_all()".
 """
 import sys, os, glob
+from collections import OrderedDict
 import numpy as np
 import numpy.ma as ma
-import matplotlib.pyplot as plt
 from numpy import pi, cos, sin
+import pandas as pd
+import csv
+import matplotlib.pyplot as plt
 from scipy.ndimage.filters import gaussian_filter
 import cython_modules.interp as cinterp
 import filters
@@ -1055,28 +1058,31 @@ def integrate_motion0(pos, vel, bt, surface):
 ##############################################################################################################
 class Calibrator:
 
-    def __init__(self, images, drift_rates, trange, rs, ballspacing, dp, sigma_factor, filter_radius=None, outputdir=None , intsteps=3,
-                 outputdir2 = None, output_prep_data=False, normalization = True,
-                 filter_function=None, subdirs=None, basename=None, nthreads=1):
+    def __init__(self, images, drift_rates, trange, rs, ballspacing, dp, sigma_factor, filter_radius, intsteps, drift_dir,
+                 outputdir, output_prep_data=False, normalization = True,
+                 filter_function=None, subdirs=None, basename=None, write_ballpos_list=True, nthreads=1):
 
         """
 
         :param images: if None, will use the one already on disk
-        :param drift_rates:
-        :param trange:
-        :param rs:
-        :param dp:
-        :param sigma_factor:
-        :param filter_radius:
-        :param ballspacing:
-        :param outputdir:
-        :param intsteps:
-        :param outputdir2:
-        :param output_prep_data:
-        :param normalization:
-        :param filter_function:
-        :param subdirs:
-        :param nthreads:
+        :param drift_rates: rate at which the images are shifted (px/frame)
+        :param trange: list of 2 indices in the list of images for the start and end frame used to calibrate.
+        :param rs: ball radius
+        :param ballspacing: minimum spacing between the balls at any new frame, also exact spacing at initialization.
+        :param dp: characteristic depth.
+        :param sigma_factor: image intensity scaling factor
+        :param filter_radius: fourier k-filtering radius in pixels (will be converted in k-frequencies).
+        :param intsteps: number of integration steps between the images. as many interpolated frames gets created
+        :param drift_dir: parent directory hosting all the drift data subdirectories (one for each drift rate)
+        :param outputdir: directory for output calibration data
+        :param output_prep_data: [optional] output directory for the prepped filtered data
+        :param normalization: [optional] Enable/Disable image intensity mean-normalization (default is True)
+        :param filter_function: [optional] custom function for filtering before writing the drift images.
+        Reminder: Balltracking will still use its own filtering function (see param 'filter_radius')
+        :param subdirs: [optional] user can provide drift data subdirectories. default is drift_ under drift_dir.
+        :param basename: [optional] basename of the fits files in each subdirectory. They get appended by a 2-digit number.
+        :param write_ballpos_list = enable/disable writing the list of ballpos arrays for all drift rates.
+        :param nthreads: [optional] number of threads to use for parallelization. Default to 1.
         """
 
         self.images = images
@@ -1087,26 +1093,27 @@ class Calibrator:
         self.dp = dp
         self.intsteps = intsteps
         self.sigma_factor = sigma_factor
+        self.drift_dir = drift_dir
         self.outputdir = outputdir
-        self.outputdir2 = outputdir2
         self.output_prep_data = output_prep_data
         self.normalization = normalization
         self.filter_function = filter_function
         self.filter_radius = filter_radius
         self.ballspacing = ballspacing
         self.basename = basename
+        self.write_ballpos_list = write_ballpos_list
         self.nthreads = nthreads
+
+        if not os.path.exists(self.drift_dir):
+            os.makedirs(self.drift_dir)
+
         if subdirs is None:
-            self.subdirs = [os.path.join(outputdir, 'drift_{:02d}'.format(i)) for i in range(len(drift_rates))]
+            self.subdirs = [os.path.join(drift_dir, 'drift_{:02d}'.format(i)) for i in range(len(drift_rates))]
         else:
             self.subdirs = subdirs
 
         if not os.path.exists(self.outputdir):
             os.makedirs(self.outputdir)
-
-        if self.outputdir2 is not None:
-            if not os.path.exists(self.outputdir2):
-                os.makedirs(self.outputdir2)
 
 
     def drift_series(self, rate_idx):
@@ -1176,16 +1183,12 @@ class Calibrator:
             pool.close()
             pool.join()
 
-        if self.outputdir2 is None:
+        if self.write_ballpos_list:
             print('saving ballpos_top_list.npy and ballbpos_bottom_list.npy...')
             np.save(os.path.join(self.outputdir, 'ballpos_top_list.npy'), ballpos_top_list)
-            print('saved ballpos_top_list.npy in {:s}'.format(self.outputdir))
+            print('saved ballpos_top_list.npy in {:s}'.format(self.drift_dir))
             np.save(os.path.join(self.outputdir, 'ballpos_bottom_list.npy'), ballpos_bottom_list)
-            print('saved ballpos_bottom_list.npy in {:s}'.format(self.outputdir))
-
-        else:
-            np.save(os.path.join(self.outputdir2, 'ballpos_top_list.npy'), ballpos_top_list)
-            np.save(os.path.join(self.outputdir2, 'ballpos_bottom_list.npy'), ballpos_bottom_list)
+            print('saved ballpos_bottom_list.npy in {:s}'.format(self.drift_dir))
 
             # if return_ballpos:
         return ballpos_top_list, ballpos_bottom_list
@@ -1300,10 +1303,9 @@ def fit_calibration(ballpos_list, shift_rates, trange, fwhm, dims, fov_slices, k
     residuals = np.abs(vxfit - shift_rates)
 
     if return_flow_maps:
-        return a, vxfit, vxmeans, residuals, vxs, vys
+        return p, a, vxfit, vxmeans, residuals, vxs, vys
     else:
-        return a, vxfit, vxmeans, residuals
-
+        return p, a, vxfit, vxmeans, residuals
 
 
 def check_file_series(filepaths):
@@ -1518,15 +1520,21 @@ def make_lanes_visualization(vx, vy, nsteps, maxstep):
     return lanes_series, [xtracks.reshape([nsteps+1, *dims]), ytracks.reshape([nsteps+1, *dims])]
 
 
-def balltrack_calibration(bt_params, drift_rates, trange, fov_slices, reprocess_bt, outputdir, kernel, fwhm, dims, basename=None):
+def balltrack_calibration(bt_params, drift_rates, trange, fov_slices, reprocess_bt, drift_dir, outputdir, kernel, fwhm, dims,
+                          basename=None, write_ballpos_list=True):
+
+
 
     if reprocess_bt:
-        cal = Calibrator(None, drift_rates, trange, bt_params['rs'], bt_params['ballspacing'], bt_params['dp'], bt_params['sigma_factor'],
-                         filter_radius=bt_params['f_radius'],
-                         intsteps=bt_params['intsteps'],
-                         outputdir=outputdir,
+        cal = Calibrator(None, drift_rates, trange, bt_params['rs'], bt_params['ballspacing'], bt_params['dp'],
+                         bt_params['sigma_factor'],
+                         bt_params['f_radius'],
+                         bt_params['intsteps'],
+                         drift_dir,
+                         outputdir,
                          output_prep_data=False,
                          basename=basename,
+                         write_ballpos_list=write_ballpos_list,
                          nthreads=1)
 
         ballpos_top_list, ballpos_bottom_list = cal.balltrack_all_rates()
@@ -1536,15 +1544,39 @@ def balltrack_calibration(bt_params, drift_rates, trange, fov_slices, reprocess_
 
 
     xrates = np.array(drift_rates)[:, 0]
-    a_top, vxfit_top, vxmeans_top, residuals_top = fit_calibration(ballpos_top_list, xrates, trange, fwhm,
-                                                                       dims, fov_slices, kernel,
-                                                                       return_flow_maps=False)
-    a_bottom, vxfit_bottom, vxmeans_bottom, residuals_bottom = fit_calibration(ballpos_bottom_list, xrates, trange,
-                                                                                   fwhm,
-                                                                                   dims, fov_slices, kernel,
-                                                                                   return_flow_maps=False)
+    vx_headers_top = ['vx_top {:1.2f}'.format(vx[0]) for vx in drift_rates]
+    vx_headers_bottom = ['vx_bottom {:1.2f}'.format(vx[0]) for vx in drift_rates]
+    # Concatenate headers
+    vx_headers = vx_headers_top + vx_headers_bottom
 
-    return a_top, vxfit_top, vxmeans_top, residuals_top, a_bottom, vxfit_bottom, vxmeans_bottom, residuals_bottom
+    p_top, _, _, vxmeans_top, _ = fit_calibration(ballpos_top_list, xrates, trange, fwhm, dims, fov_slices, kernel)
+    p_bot, _, _, vxmeans_bot, _ = fit_calibration(ballpos_bottom_list, xrates, trange, fwhm, dims, fov_slices, kernel)
+
+    vxs_top, _, _ = zip(
+        *[make_velocity_from_tracks(ballpos, dims, trange, fwhm, kernel=kernel) for ballpos in ballpos_top_list])
+
+    vxs_bottom, vys_bottom, _ = zip(
+        *[make_velocity_from_tracks(ballpos, dims, trange, fwhm, kernel=kernel) for ballpos in ballpos_bottom_list])
+
+    vxmeans_top = [vx[fov_slices].mean() for vx in vxs_top]
+    vxmeans_bottom = [vx[fov_slices].mean() for vx in vxs_bottom]
+    # Concatenate above results in one single list and create a dictionnary with the concatenated keys
+    dict_vxmeans = OrderedDict(zip(vx_headers, vxmeans_top + vxmeans_bottom))
+
+    dict_results = bt_params.copy()
+    dict_results['p_top_0'] = p_top[0]
+    dict_results['p_top_1'] = p_top[1]
+    dict_results['p_bot_0'] = p_bot[0]
+    dict_results['p_bot_1'] = p_bot[1]
+    dict_results.update(dict_vxmeans)
+
+    csvfile = os.path.join(outputdir, 'param_sweep_{:d}.csv'.format(bt_params['index']))
+    with open(csvfile, 'w') as outfile:
+        csvwriter = csv.writer(outfile)
+        csvwriter.writerow(list(dict_results.keys()))
+        csvwriter.writerow(list(dict_results.values()))
+
+    return
 
 
 
@@ -1565,6 +1597,7 @@ def get_bt_params_list(bt_params, param_names, param_lists):
     for i, p_list in enumerate(param_mesh_list):
         for n, name in enumerate(param_names):
             bt_params2[name] = p_list[n]
+        bt_params2['index'] = i
         bt_params_list.append(bt_params2)
         bt_params2 = bt_params.copy()
     return bt_params_list

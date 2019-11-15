@@ -7,33 +7,40 @@ from multiprocessing import Pool
 from functools import partial
 import time
 import pandas as pd
+from collections import OrderedDict
 
-nprocesses = 6
 
 if __name__ == '__main__':
 
     # the multiprocessing start method can only bet set once.
     multiprocessing.set_start_method('spawn')
+    nprocesses = 4
     # directory hosting the drifted data (9 series)
-    drift_parent_dir = '/Users/rattie/Data/sanity_check/stein_series/'
+    drift_dir = '/Users/rattie/Data/sanity_check/stein_series/'
     # output directory for the drifting images
-    outputdir = '/Users/rattie/Data/sanity_check/stein_series/calibration/'
+    outputdir = os.path.join(drift_dir, 'calibration')
     reprocess_bt = True
-    nframes = 40
+    nframes = 30
     trange = [0, nframes]
 
     ### Ball parameters
-    bt_params = {'rs': 2}
+    bt_params = OrderedDict({'rs': 2})
     # Parameter sweep
     intsteps = [3,4,5]
     ballspacing = [1, 2, 3, 4]
-    dp_l = [0.1, 0.2, 0.3, 0.4, 0.5]
+    dp_l = [0.2, 0.3, 0.4, 0.5]
     sigma_factor_l = [1, 1.25, 1.5, 1.75, 2]
     ### Fourier filter radius
     f_radius_l = np.arange(0, 21)
     bt_params_list = blt.get_bt_params_list(bt_params, ('intsteps', 'ballspacing', 'dp', 'sigma_factor', 'f_radius'), (intsteps, ballspacing, dp_l, sigma_factor_l, f_radius_l))
+    # mydict = bt_params_list[0]
+    # file = '/Users/rattie/Data/sanity_check/stein_series/calibration/temp.csv'
+    # with open(file, 'w') as outfile:
+    #     csvwriter = csv.writer(outfile)
+    #     csvwriter.writerow(list(mydict.keys()))
+    #     csvwriter.writerow(list(mydict.values()))
 
-    df = pd.DataFrame(bt_params_list)
+    #bt_df = pd.DataFrame(bt_params_list)
 
     ### Velocity smoothing
     fwhm = 7
@@ -55,14 +62,16 @@ if __name__ == '__main__':
 
     # Prepare partial function for parallel pool & map.
     calibrate_partial = partial(blt.balltrack_calibration, drift_rates=drift_rates, trange=trange, fov_slices=fov_slices,
-                                reprocess_bt=reprocess_bt, outputdir=drift_parent_dir, kernel=kernel, fwhm=fwhm, dims=dims, basename='im_shifted')
+                                reprocess_bt=reprocess_bt, drift_dir=drift_dir, outputdir=outputdir, kernel=kernel, fwhm=fwhm, dims=dims,
+                                basename='im_shifted', write_ballpos_list=False)
 
-    #a_top, vxfit_top, vxmeans_top, residuals_top, a_bottom, vxfit_bottom, vxmeans_bottom, residuals_bottom = calibrate_partial(bt_params_list[0])
 
-    #vxmeans_l, a_avg_l, vxfit_avg_l, residuals_l = zip(*map(calibrate_partial, bt_params_list[0:6]))
+    # calibrate_partial(bt_params_list[0])
+
+    #map(calibrate_partial, bt_params_list[0:6])
 
     pool = Pool(processes=nprocesses)
-    vxmeans_l, a_avg_l, vxfit_avg_l, residuals_l = zip(*pool.map(calibrate_partial, bt_params_list[0:6]))
+    pool.map(calibrate_partial, bt_params_list[0:12])
     pool.close()
     pool.join()
 
