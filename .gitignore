@@ -1,4 +1,4 @@
 Lars/
 .DS_Store
 scratch_notebooks/
-
+__pycache__/
