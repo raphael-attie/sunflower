@@ -9,6 +9,8 @@ import numpy.ma as ma
 from numpy import pi, cos, sin
 import pandas as pd
 import csv
+import matplotlib
+matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 from scipy.ndimage.filters import gaussian_filter
 import cython_modules.interp as cinterp
@@ -1523,9 +1525,8 @@ def make_lanes_visualization(vx, vy, nsteps, maxstep):
 def balltrack_calibration(bt_params, drift_rates, trange, fov_slices, reprocess_bt, drift_dir, outputdir, kernel, fwhm, dims,
                           basename=None, write_ballpos_list=True):
 
-
-
     if reprocess_bt:
+
         cal = Calibrator(None, drift_rates, trange, bt_params['rs'], bt_params['ballspacing'], bt_params['dp'],
                          bt_params['sigma_factor'],
                          bt_params['f_radius'],
@@ -1537,7 +1538,10 @@ def balltrack_calibration(bt_params, drift_rates, trange, fov_slices, reprocess_
                          write_ballpos_list=write_ballpos_list,
                          nthreads=1)
 
+
+
         ballpos_top_list, ballpos_bottom_list = cal.balltrack_all_rates()
+
     else:
         ballpos_top_list = np.load(os.path.join(outputdir, 'ballpos_top_list.npy'))
         ballpos_bottom_list = np.load(os.path.join(outputdir, 'ballpos_bottom_list.npy'))

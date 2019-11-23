@@ -1,6 +1,7 @@
-import os, glob
+import os, sys
+# file_dir = os.path.dirname(__file__)
+# sys.path.append(file_dir)
 import numpy as np
-import fitstools
 import balltracking.balltrack as blt
 import multiprocessing
 from multiprocessing import Pool
@@ -11,6 +12,7 @@ from collections import OrderedDict
 
 
 if __name__ == '__main__':
+
 
     # the multiprocessing start method can only bet set once.
     multiprocessing.set_start_method('spawn')
@@ -66,17 +68,14 @@ if __name__ == '__main__':
                                 basename='im_shifted', write_ballpos_list=False)
 
 
-    # calibrate_partial(bt_params_list[0])
+    calibrate_partial(bt_params_list[0])
 
     #map(calibrate_partial, bt_params_list[0:6])
 
-    pool = Pool(processes=nprocesses)
-    pool.map(calibrate_partial, bt_params_list[0:12])
-    pool.close()
-    pool.join()
+    # pool = Pool(processes=nprocesses)
+    # pool.map(calibrate_partial, bt_params_list[0:12])
+    # pool.close()
+    # pool.join()
 
-    # Save the results in a dataframe
-    # df['a_top'] = a_top_l
-    # df['a_bot'] = a_bot_l
 
 
