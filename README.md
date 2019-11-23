@@ -17,16 +17,20 @@ Add conda-forge channel:
 
 ``conda config --append channels conda-forge``
 
-Then create a new virtual environment, give it whatever name you want (here, i call it ``new_environment``), and using the *requirements.txt* file,
-from a terminal, execute the following:
+You also need to install the following python packages with conda (with version number wherever relevant):
 
-``conda create -n new_environment --file requirements.txt``
+- fitsio
+- numpy
+- scipy=1.2.1
+- scikit-image=0.15.0
+- mahotas
+- matplotlib
 
-You also need to install the python package *fitsio* with:
+E.g to install the package ``fitsio``, you'll do:
 
-``pip install fitsio``
+`` conda install fitsio``
 
-Compile some binaries written in Cython:
+Compile my balltracking binaries written with Cython:
 
 - go to the *cython_modules* directory
 - execute ``python setup_cbinterp.py build_ext --inplace``
