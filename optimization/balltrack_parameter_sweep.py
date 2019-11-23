@@ -1,6 +1,4 @@
 import os, sys
-# file_dir = os.path.dirname(__file__)
-# sys.path.append(file_dir)
 import numpy as np
 import balltracking.balltrack as blt
 import multiprocessing
@@ -11,14 +9,14 @@ import pandas as pd
 from collections import OrderedDict
 
 
-if __name__ == '__main__':
+if __name__  == '__main__':
 
 
     # the multiprocessing start method can only bet set once.
     multiprocessing.set_start_method('spawn')
     nprocesses = 4
     # directory hosting the drifted data (9 series)
-    drift_dir = '/Users/rattie/Data/sanity_check/stein_series/'
+    drift_dir = os.path.expanduser('~/Data/sanity_check/stein_series/')
     # output directory for the drifting images
     outputdir = os.path.join(drift_dir, 'calibration')
     reprocess_bt = True

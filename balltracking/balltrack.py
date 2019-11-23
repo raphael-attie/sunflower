@@ -2,12 +2,11 @@
 This module hosts all the necessary functions to run balltracking.
 A main program should execute "balltrack_all()".
 """
-import sys, os, glob
+import sys, os
 from collections import OrderedDict
 import numpy as np
 import numpy.ma as ma
 from numpy import pi, cos, sin
-import pandas as pd
 import csv
 import matplotlib
 matplotlib.use('TkAgg')
@@ -1266,7 +1265,7 @@ def create_drift_series(images, drift_rate, filepaths=None, filter_function=None
     return drift_images
 
 
-def fit_calibration(ballpos_list, shift_rates, trange, fwhm, dims, fov_slices, kernel, return_flow_maps=False):
+def fit_calibration(ballpos_list, shift_rates, trange, fwhm, dims, fov_slices, kernel):
 
     """
     This fits linear calibration value by calculating the mean velocity for each drift rate.
@@ -1278,15 +1277,15 @@ def fit_calibration(ballpos_list, shift_rates, trange, fwhm, dims, fov_slices, k
     :param dims:
     :param fov_slices: 2d slices for selecting an area free of edge effects
     :param kernel: 2d smoothing kernel of the velocity field. Either 'gaussian' or 'boxcar'.
-    :param return_flow_maps: whether to return the flow map alongside the linear fit results or not.
     :return:
     """
 
     if not isinstance(fov_slices, list):
-        print('fov_slices is not a list. Converting into one-element list.')
-        fov_slices = [fov_slices,]
+        # print('fov_slices is not a list. Converting into one-element list.')
+        fov_slices = [fov_slices, ]
 
-    vxs, vys, wplanes = zip(*[make_velocity_from_tracks(ballpos, dims, trange, fwhm, kernel=kernel) for ballpos in ballpos_list])
+    vxs, vys, wplanes = zip(*[make_velocity_from_tracks(ballpos, dims, trange, fwhm, kernel=kernel)
+                              for ballpos in ballpos_list])
     # Select an ROI that contains valid data. At least one should exclude edges as wide as the ball radius.
     # This one also excludes the sunspot in the middle. Beware of bias due to differential rotation!
 
@@ -1296,18 +1295,12 @@ def fit_calibration(ballpos_list, shift_rates, trange, fwhm, dims, fov_slices, k
         vxmeans += np.array([vx[slices].mean() for vx in vxs])
     vxmeans /= len(fov_slices)
 
-    # Subtract the means when there is no drift.
-    #vxmeans -= vxmeans[4]
-
     p = np.polyfit(shift_rates, vxmeans, 1)
     a = 1 / p[0]
     vxfit = a * (vxmeans - p[1])
     residuals = np.abs(vxfit - shift_rates)
 
-    if return_flow_maps:
-        return p, a, vxfit, vxmeans, residuals, vxs, vys
-    else:
-        return p, a, vxfit, vxmeans, residuals
+    return p, a, vxfit, vxmeans, residuals, vxs, vys
 
 
 def check_file_series(filepaths):
@@ -1327,11 +1320,8 @@ def check_file_series(filepaths):
     else:
         return False
 
-
-
 ##############################################################################################################
 ##############################################################################################################
-
 
 def make_euler_velocity(ballpos_top, ballpos_bottom, cal_top, cal_bottom, dims, trange, fwhm):
 
@@ -1546,26 +1536,19 @@ def balltrack_calibration(bt_params, drift_rates, trange, fov_slices, reprocess_
         ballpos_top_list = np.load(os.path.join(outputdir, 'ballpos_top_list.npy'))
         ballpos_bottom_list = np.load(os.path.join(outputdir, 'ballpos_bottom_list.npy'))
 
-
     xrates = np.array(drift_rates)[:, 0]
+    # Index where xrates = 0. Used to save that specific velocity map
+    idx0 = np.where(xrates == 0)[0][0]
     vx_headers_top = ['vx_top {:1.2f}'.format(vx[0]) for vx in drift_rates]
     vx_headers_bottom = ['vx_bottom {:1.2f}'.format(vx[0]) for vx in drift_rates]
     # Concatenate headers
     vx_headers = vx_headers_top + vx_headers_bottom
 
-    p_top, _, _, vxmeans_top, _ = fit_calibration(ballpos_top_list, xrates, trange, fwhm, dims, fov_slices, kernel)
-    p_bot, _, _, vxmeans_bot, _ = fit_calibration(ballpos_bottom_list, xrates, trange, fwhm, dims, fov_slices, kernel)
+    p_top, _, _, vxmeans_top, _, vxs_top, vys_top = fit_calibration(ballpos_top_list, xrates, trange, fwhm, dims, fov_slices, kernel)
+    p_bot, _, _, vxmeans_bot, _, vxs_bot, vys_bot = fit_calibration(ballpos_bottom_list, xrates, trange, fwhm, dims, fov_slices, kernel)
 
-    vxs_top, _, _ = zip(
-        *[make_velocity_from_tracks(ballpos, dims, trange, fwhm, kernel=kernel) for ballpos in ballpos_top_list])
-
-    vxs_bottom, vys_bottom, _ = zip(
-        *[make_velocity_from_tracks(ballpos, dims, trange, fwhm, kernel=kernel) for ballpos in ballpos_bottom_list])
-
-    vxmeans_top = [vx[fov_slices].mean() for vx in vxs_top]
-    vxmeans_bottom = [vx[fov_slices].mean() for vx in vxs_bottom]
     # Concatenate above results in one single list and create a dictionnary with the concatenated keys
-    dict_vxmeans = OrderedDict(zip(vx_headers, vxmeans_top + vxmeans_bottom))
+    dict_vxmeans = OrderedDict(zip(vx_headers, vxmeans_top + vxmeans_bot))
 
     dict_results = bt_params.copy()
     dict_results['p_top_0'] = p_top[0]
@@ -1580,8 +1563,14 @@ def balltrack_calibration(bt_params, drift_rates, trange, fov_slices, reprocess_
         csvwriter.writerow(list(dict_results.keys()))
         csvwriter.writerow(list(dict_results.values()))
 
-    return
+    npzf = os.path.join(outputdir, 'mean_velocity_{:d}.npz'.format(bt_params['index']))
+    np.savez_compressed(npzf,
+                        vx_top=vxs_top[idx0],
+                        vy_top=vys_top[idx0],
+                        vx_bot=vxs_bot[idx0],
+                        vy_bot=vys_bot[idx0])
 
+    return
 
 
 def meshgrid_params_to_list(args):
