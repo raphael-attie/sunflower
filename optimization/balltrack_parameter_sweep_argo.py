@@ -7,6 +7,7 @@ import time
 
 if __name__ == '__main__':
 
+    os.chdir(os.path.expanduser('~/dev/sdo-tracking-framework'))
     # directory hosting the drifted data (9 series)
     drift_dir = os.path.join(os.environ['DATA'], 'sanity_check/stein_series/')
     # output directory for the drifting images
