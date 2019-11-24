@@ -405,8 +405,7 @@ def balltrack_all(nt, rs, dp, sigma_factor, intsteps, outputdir, fourier_radius=
     if (datafiles is None or not isinstance(datafiles, str)) and not isinstance(datafiles, list) and data is None:
         raise ValueError
     # Create outputdir if does not exist
-    if not os.path.exists(outputdir):
-        os.makedirs(outputdir)
+    os.makedirs(outputdir, exist_ok=True)
     # Get a BT instance with the above parameters
     mode_direction_list = (('top','forward'),
                            ('top', 'backward'),
@@ -1105,16 +1104,14 @@ class Calibrator:
         self.write_ballpos_list = write_ballpos_list
         self.nthreads = nthreads
 
-        if not os.path.exists(self.drift_dir):
-            os.makedirs(self.drift_dir)
+        os.makedirs(self.drift_dir, exist_ok=True)
+        os.makedirs(self.outputdir, exist_ok=True)
 
         if subdirs is None:
             self.subdirs = [os.path.join(drift_dir, 'drift_{:02d}'.format(i)) for i in range(len(drift_rates))]
         else:
             self.subdirs = subdirs
 
-        if not os.path.exists(self.outputdir):
-            os.makedirs(self.outputdir)
 
 
     def drift_series(self, rate_idx):
@@ -1135,8 +1132,7 @@ class Calibrator:
             for i, f in enumerate(filepaths):
                 drift_images[:, :, i] = fitsio.read(str(f))
         else:
-            if not os.path.exists(self.subdirs[rate_idx]):
-                os.makedirs(self.subdirs[rate_idx])
+            os.makedirs(self.subdirs[rate_idx], exist_ok=True)
 
             print("Creating drift images at rate: [{:.2f}, {:.2f}] px/frame".format(self.drift_rates[rate_idx][0], self.drift_rates[rate_idx][1]))
             drift_images = create_drift_series(self.images, self.drift_rates[rate_idx], filepaths, filter_function=self.filter_function)
@@ -1210,9 +1206,8 @@ def drift_series(images, drift_rate, subdir, use_existing=True):
     # else:
     #     drate1_str = 'rateb_p{:.2f}'.format(abs(drift_rate[1]))
 
-    if not os.path.exists(subdir):
-        os.makedirs(subdir)
-        # Create filenames "drift_[drift rate on x][drift rate on y]_[file number i].fits"
+    os.makedirs(subdir, exist_ok=True)
+    # Create filenames "drift_[drift rate on x][drift rate on y]_[file number i].fits"
     filepaths = [Path(os.path.join(subdir, 'drift_{:03d}.fits'.format(i))) for i in range(nfiles)]
 
     drift_images = np.zeros(images.shape)
