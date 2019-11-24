@@ -8,7 +8,7 @@ import time
 if __name__ == '__main__':
 
     # directory hosting the drifted data (9 series)
-    drift_dir = os.path.expanduser('~/Data/sanity_check/stein_series/')
+    drift_dir = os.path.join(os.environ['DATA'], 'sanity_check/stein_series/')
     # output directory for the drifting images
     outputdir = os.path.join(drift_dir, 'calibration')
     reprocess_bt = True
@@ -55,7 +55,7 @@ if __name__ == '__main__':
                                 basename='im_shifted',
                                 write_ballpos_list=False)
 
-    job_id = 1#int(os.environ["SLURM_ARRAY_TASK_ID"])
+    job_id = int(os.environ["SLURM_ARRAY_TASK_ID"])
 
     tstart = time.time()
     calibrate_partial(bt_params_list[job_id])
