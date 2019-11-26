@@ -15,6 +15,9 @@ def get_joblist(file):
 
 if __name__ == '__main__':
 
+    # file obtained on Argo with:
+    # sacct -X -S11/24 --format=JobID,state | grep -v COMPLETED > joblist.txt
+    # Do cat joblist.txt | wc -l  for the number of jobs left to run
     jobs_file = os.path.join(os.environ['HOME'], 'my_slurm_scripts/joblist.txt')
     jobs_list = get_joblist(jobs_file)
     os.chdir(os.path.expanduser('~/dev/sdo-tracking-framework'))
