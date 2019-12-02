@@ -3,3 +3,4 @@ Lars/
 scratch_notebooks/
 cython_modules/__pycache__/
 cython_modules/build/
+*.pyc
