@@ -196,7 +196,7 @@ class BT:
                     image = self.data[:, :, self.nt - 1 - n]
 
             # TODO: check the choice of prep_data regarding mean normalization with fixed mean or time-dependent one
-            #self.surface = prep_data(image, self.mean, self.sigma, sigma_factor=self.sigma_factor)
+            # self.surface = prep_data(image, self.mean, self.sigma, sigma_factor=self.sigma_factor)
             self.surface, _, _ = prep_data2(image, sigma_factor=self.sigma_factor, pixel_radius=self.fourier_radius)
             if self.mode == 'bottom':
                 self.surface = -self.surface
@@ -207,8 +207,8 @@ class BT:
 
                 filename_surface = os.path.join(self.outputdir, 'prep_data_{}_{}_{:05d}.fits'.format(self.direction, self.mode, n))
                 fitstools.writefits(self.surface, filename_surface)
-                #filename_png = os.path.join(self.outputdir, os.path.splitext(os.path.basename(filename))[0] + '.png')
-                #imsave(filename_png, bytescale(surface))
+                # filename_png = os.path.join(self.outputdir, os.path.splitext(os.path.basename(filename))[0] + '.png')
+                # imsave(filename_png, bytescale(surface))
                 graphics.fits_to_jpeg(filename_surface, self.outputdir)
 
 
@@ -372,7 +372,10 @@ def track_instance(mode_direction, nframes, rs, dp, sigma_factor, intsteps=3, fo
     return bt_instance.ballpos
 
 
-def balltrack_all(nt, rs, dp, sigma_factor, intsteps, outputdir, fourier_radius=0, ballspacing=4, datafiles=None, data=None, output_prep_data=False, write_ballpos=True, ncores=1, verbose=False):
+
+
+def balltrack_all(nframes, rs, dp, sigma_factor, intsteps, outputdir, fourier_radius=0, ballspacing=4, datafiles=None,
+                  data=None, output_prep_data=False, write_ballpos=True, ncores=1, verbose=False):
 
     """ Run the tracking on the 4 (mode, direction) pairs:
     (('top', 'forward'),
@@ -382,7 +385,7 @@ def balltrack_all(nt, rs, dp, sigma_factor, intsteps, outputdir, fourier_radius=
 
      Can be executed in a parallel pool of up to 4 processes.
 
-    :param nt: number of frames to track in the image series
+    :param nframes: number of frames to track in the image series
     :param rs: ball radius
     :param dp: charateristic depth
     :param sigma_factor: multiplier to the standard deviation
@@ -399,8 +402,8 @@ def balltrack_all(nt, rs, dp, sigma_factor, intsteps, outputdir, fourier_radius=
     :return: 2D arrays of ball positions for top-side and bottom-side tracking -> [ball #, coordinates]
     """
 
-    # Must enforce integer type for nt
-    nt = int(nt)
+    # Must enforce integer type for nframes
+    nframes = int(nframes)
     # Check user data input
     if (datafiles is None or not isinstance(datafiles, str)) and not isinstance(datafiles, list) and data is None:
         raise ValueError
@@ -412,11 +415,13 @@ def balltrack_all(nt, rs, dp, sigma_factor, intsteps, outputdir, fourier_radius=
                            ('bottom', 'forward'),
                            ('bottom', 'backward'))
     if datafiles is not None:
-        partial_track = partial(track_instance, nframes=nt, rs=rs, dp=dp, sigma_factor=sigma_factor, intsteps=intsteps,
-                                fourier_radius=fourier_radius, ballspacing=ballspacing, datafile=datafiles, output_prep_data=output_prep_data, outputdir=outputdir, verbose=verbose)
+        partial_track = partial(track_instance, nframes=nframes, rs=rs, dp=dp, sigma_factor=sigma_factor, intsteps=intsteps,
+                                fourier_radius=fourier_radius, ballspacing=ballspacing, datafile=datafiles,
+                                output_prep_data=output_prep_data, outputdir=outputdir, verbose=verbose)
     else:
-        partial_track = partial(track_instance, nframes=nt, rs=rs, dp=dp, sigma_factor=sigma_factor, intsteps=intsteps,
-                                fourier_radius=fourier_radius, ballspacing=ballspacing, data=data, output_prep_data=output_prep_data, outputdir=outputdir, verbose=verbose)
+        partial_track = partial(track_instance, nframes=nframes, rs=rs, dp=dp, sigma_factor=sigma_factor, intsteps=intsteps,
+                                fourier_radius=fourier_radius, ballspacing=ballspacing, data=data,
+                                output_prep_data=output_prep_data, outputdir=outputdir, verbose=verbose)
     # Only use 1 to 4 workers. 1 means no parallelization.
     ncores = max(min(ncores, 4), 1)
     if ncores == 1:
@@ -429,7 +434,7 @@ def balltrack_all(nt, rs, dp, sigma_factor, intsteps, outputdir, fourier_radius=
     ballpos_bottom = np.concatenate((ballpos_bf, ballpos_bb), axis=1)
 
     if write_ballpos:
-        np.save(os.path.join(outputdir,'ballpos_top.npy'), ballpos_top)
+        np.save(os.path.join(outputdir, 'ballpos_top.npy'), ballpos_top)
         np.save(os.path.join(outputdir, 'ballpos_bottom.npy'), ballpos_bottom)
         fitstools.writefits(ballpos_top, os.path.join(outputdir, 'ballpos_top.fits'))
         fitstools.writefits(ballpos_top, os.path.join(outputdir, 'ballpos_bottom.fits'))
@@ -456,13 +461,23 @@ def filter_image(image, pixel_radius=0):
     """
     Filter the image to enhance granulation signal
 
-    :param image: input image e.g continuum intensity from SDO/HMI (2D array)
+    :param image: input image e.g continuum intensity from SDO/HMI (2D array). IMAGE MUST HAVE NX = NY!
     :param pixel_radius: radius of the fourier filter converted in spatial domain units (pixels) instead of k-space.
     :return: fdata: filtered data (2D array)
     """
-    #TODO: the filter parameters below are hard-coded. Consider putting that as parameters and document the default.
-    ffilter_hpf = filters.han2d_bandpass(image.shape[0], 0, pixel_radius)
-    fdata = filters.ffilter_image(image, ffilter_hpf)
+
+    if image.shape[0] != image.shape[1]:
+        print('Image must have equal dimensions')
+        sys.exit(1)
+    # Make sure to filter on even dimensions
+    if image.shape[0] % 2 != 0:
+        image2 = np.zeros([image.shape[0]+1, image.shape[1]+1])
+        image2[0:image.shape[0], 0:image.shape[1]] = image
+    else:
+        image2 = image
+
+    ffilter_hpf = filters.han2d_bandpass(image2.shape[0], 0, pixel_radius)
+    fdata = filters.ffilter_image(image2, ffilter_hpf)
 
     return fdata
 
@@ -897,7 +912,7 @@ def make_velocity_from_tracks(ballpos, dims, trange, fwhm, kernel='gaussian'):
         vy_euler = gaussian_filter(vy_euler, sigma=sigma, order=0)
         wplane   = gaussian_filter(wplane, sigma=sigma, order=0)
     elif kernel == 'boxcar':
-        box = np.ones([fwhm, fwhm])
+        box = np.ones([fwhm, fwhm]) / fwhm**2
         vx_euler = convolve2d(vx_euler, box, mode='same')
         vy_euler = convolve2d(vy_euler, box, mode='same')
         wplane = convolve2d(wplane, box, mode='same')
@@ -1318,10 +1333,10 @@ def check_file_series(filepaths):
 ##############################################################################################################
 ##############################################################################################################
 
-def make_euler_velocity(ballpos_top, ballpos_bottom, cal_top, cal_bottom, dims, trange, fwhm):
+def make_euler_velocity(ballpos_top, ballpos_bottom, cal_top, cal_bottom, dims, trange, fwhm, kernel):
 
-    vx_top, vy_top, wplane_top = make_velocity_from_tracks(ballpos_top, dims, trange, fwhm)
-    vx_bottom, vy_bottom, wplane_bottom = make_velocity_from_tracks(ballpos_bottom, dims, trange, fwhm)
+    vx_top, vy_top, wplane_top = make_velocity_from_tracks(ballpos_top, dims, trange, fwhm, kernel)
+    vx_bottom, vy_bottom, wplane_bottom = make_velocity_from_tracks(ballpos_bottom, dims, trange, fwhm, kernel)
 
     vx_top *= cal_top
     vy_top *= cal_top

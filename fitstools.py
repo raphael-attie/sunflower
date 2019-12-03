@@ -11,23 +11,23 @@ def fitsread(file, xslice=slice(None), yslice=slice(None), tslice=slice(None), c
         if cube:
             with fitsio.FITS(file) as fitsfile:
                 if fitsfile[0].has_data():
-                    data = np.squeeze( np.moveaxis(fitsfile[0][tslice, yslice, xslice], 0, 2) )
+                    data = np.squeeze(np.moveaxis(fitsfile[0][tslice, yslice, xslice], 0, 2) )
                 else:
-                    data = np.squeeze( np.moveaxis(fitsfile[1][tslice, yslice, xslice], 0, 2))
+                    data = np.squeeze(np.moveaxis(fitsfile[1][tslice, yslice, xslice], 0, 2))
         else:
             #Load as single file and single image
             data = fitsio.read(file)
-    else: # Assume and read list of files
-        # Load sample to get dimensions
-        sample = fitsio.read(file[0])
-        # Initialize list of empty arrays of expected size, as many as we have files.
+    else:
+        # Assume and read list of files
         fitsfiles = file[tslice]
-        if len(fitsfiles) == 1:
-            data = fitsio.read(fitsfiles[0])
+        if isinstance(fitsfiles, str):
+            data = fitsio.read(fitsfiles)
         else:
+            # Load sample to get dimensions
+            sample = fitsio.read(file[0])
             data = np.empty([*sample.shape, len(fitsfiles)], np.float32)
-            for i, datafile in enumerate(file):
-                  data[:,:,i] = fitsio.read(datafile)
+            for i, datafile in enumerate(fitsfiles):
+                  data[:, :, i] = fitsio.read(datafile)
     return data
 
 

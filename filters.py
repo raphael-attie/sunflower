@@ -81,15 +81,14 @@ def han2d_lpf(n, rc):
 
     return hwindow
 
+
 def han2d_bandpass(n, small_scale, large_scale):
     # 2D hanning filter, assumes a square image size
-    # rc: filter radius
-    # n: length of array
 
-    hwindow1    = han2d_lpf(n, small_scale)
-    hwindow2    = han2d_hpf(n, large_scale)
+    hwindow1 = han2d_lpf(n, small_scale)
+    hwindow2 = han2d_hpf(n, large_scale)
 
-    hwindow     = hwindow1 * hwindow2
+    hwindow = hwindow1 * hwindow2
 
     return hwindow
 
