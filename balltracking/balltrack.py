@@ -1538,8 +1538,6 @@ def balltrack_calibration(bt_params, drift_rates, trange, fov_slices, reprocess_
                          write_ballpos_list=write_ballpos_list,
                          nthreads=1)
 
-
-
         ballpos_top_list, ballpos_bottom_list = cal.balltrack_all_rates()
 
     else:

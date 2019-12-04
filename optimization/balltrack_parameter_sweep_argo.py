@@ -20,10 +20,10 @@ if __name__ == '__main__':
     # Parameter sweep
     intsteps = [3,4,5]
     ballspacing = [1, 2, 3, 4]
-    dp_l = [0.2, 0.3, 0.4, 0.5]
+    dp_l = [0.2, 0.25, 0.3, 0.35, 0.4]
     sigma_factor_l = [1, 1.25, 1.5, 1.75, 2]
     # Fourier filter radius
-    f_radius_l = np.arange(0, 21)
+    f_radius_l = np.arange(0, 16)
     bt_params_list = blt.get_bt_params_list(bt_params, ('intsteps', 'ballspacing', 'dp', 'sigma_factor', 'f_radius'),
                                             (intsteps, ballspacing, dp_l, sigma_factor_l, f_radius_l))
     # Velocity smoothing
@@ -58,10 +58,7 @@ if __name__ == '__main__':
 
     job_id = int(os.environ["SLURM_ARRAY_TASK_ID"])
 
-    tstart = time.time()
     calibrate_partial(bt_params_list[job_id])
-    etime = time.time()-tstart
-    print('wall clock duration: {:1.1f} min'.format(etime/60))
 
 
 
