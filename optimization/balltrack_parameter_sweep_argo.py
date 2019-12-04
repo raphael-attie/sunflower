@@ -8,7 +8,7 @@ import time
 if __name__ == '__main__':
 
     os.chdir(os.path.expanduser('~/dev/sdo-tracking-framework'))
-    # directory hosting the drifted data (9 series)
+    # directory hosting the drifted data
     drift_dir = os.path.join(os.environ['DATA'], 'sanity_check/stein_series/')
     # output directory for the drifting images
     outputdir = os.path.join(drift_dir, 'calibration')
@@ -58,7 +58,7 @@ if __name__ == '__main__':
 
     job_id = int(os.environ["SLURM_ARRAY_TASK_ID"])
 
-    calibrate_partial(bt_params_list[job_id])
+    _ = calibrate_partial(bt_params_list[job_id])
 
 
 

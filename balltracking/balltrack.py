@@ -1075,7 +1075,7 @@ class Calibrator:
 
     def __init__(self, images, drift_rates, trange, rs, ballspacing, dp, sigma_factor, filter_radius, intsteps, drift_dir,
                  outputdir, output_prep_data=False, normalization = True,
-                 filter_function=None, subdirs=None, basename=None, write_ballpos_list=True, nthreads=1):
+                 filter_function=None, subdirs=None, basename='drift', write_ballpos_list=True, nthreads=1, verbose=False):
 
         """
 
@@ -1137,9 +1137,8 @@ class Calibrator:
         if self.images is None and check_file_series(filepaths):
             # does not save much time compared to the total time of balltracking,
             # but it significantly reduces disk usage compared to creating the images all over again.
-            print(
-                "Reading existing drift images at rate: [{:.2f}, {:.2f}] px/frame"
-                    .format(self.drift_rates[rate_idx][0], self.drift_rates[rate_idx][1]))
+            print("Reading existing drift images at rate: [{:.2f}, {:.2f}] px/frame"
+                  .format(self.drift_rates[rate_idx][0], self.drift_rates[rate_idx][1]))
 
             # Get a sample for the size
             sample = fitsio.read(str(filepaths[0]))
@@ -1147,8 +1146,8 @@ class Calibrator:
             for i, f in enumerate(filepaths):
                 drift_images[:, :, i] = fitsio.read(str(f))
         else:
+            # Use the self.images to create the drift images out of them
             os.makedirs(self.subdirs[rate_idx], exist_ok=True)
-
             print("Creating drift images at rate: [{:.2f}, {:.2f}] px/frame".format(self.drift_rates[rate_idx][0], self.drift_rates[rate_idx][1]))
             drift_images = create_drift_series(self.images, self.drift_rates[rate_idx], filepaths, filter_function=self.filter_function)
 
@@ -1262,8 +1261,8 @@ def create_drift_series(images, drift_rate, filepaths=None, filter_function=None
         if drift_rate[0] == 0 and drift_rate[1]==0:
             drift_images[:, :, i] = images[:, :, i]
         else:
-            dx = -drift_rate[0] * float(i)
-            dy = -drift_rate[1] * i
+            dx = drift_rate[0] * float(i)
+            dy = drift_rate[1] * i
             drift_images[:, :, i] = filters.translate_by_phase_shift(images[:, :, i], dx, dy)
 
         if filter_function is not None:
@@ -1523,20 +1522,26 @@ def make_lanes_visualization(vx, vy, nsteps, maxstep):
 
 
 def balltrack_calibration(bt_params, drift_rates, trange, fov_slices, reprocess_bt, drift_dir, outputdir, kernel, fwhm, dims,
-                          basename=None, write_ballpos_list=True):
+                          images=None, basename='drift', write_ballpos_list=True, nthreads=1, verbose=False):
+
+
+    if 'index' not in bt_params:
+        print('bt_params missing "index" key')
+        sys.exit(1)
 
     if reprocess_bt:
 
-        cal = Calibrator(None, drift_rates, trange, bt_params['rs'], bt_params['ballspacing'], bt_params['dp'],
+        cal = Calibrator(images, drift_rates, trange, bt_params['rs'], bt_params['ballspacing'], bt_params['dp'],
                          bt_params['sigma_factor'],
-                         bt_params['f_radius'],
+                         bt_params['fourier_radius'],
                          bt_params['intsteps'],
                          drift_dir,
                          outputdir,
                          output_prep_data=False,
                          basename=basename,
                          write_ballpos_list=write_ballpos_list,
-                         nthreads=1)
+                         nthreads=nthreads,
+                         verbose=verbose)
 
         ballpos_top_list, ballpos_bottom_list = cal.balltrack_all_rates()
 
@@ -1552,8 +1557,8 @@ def balltrack_calibration(bt_params, drift_rates, trange, fov_slices, reprocess_
     # Concatenate headers
     vx_headers = vx_headers_top + vx_headers_bottom
 
-    p_top, _, _, vxmeans_top, _, vxs_top, vys_top = fit_calibration(ballpos_top_list, xrates, trange, fwhm, dims, fov_slices, kernel)
-    p_bot, _, _, vxmeans_bot, _, vxs_bot, vys_bot = fit_calibration(ballpos_bottom_list, xrates, trange, fwhm, dims, fov_slices, kernel)
+    p_top, a_top, _, vxmeans_top, _, vxs_top, vys_top = fit_calibration(ballpos_top_list, xrates, trange, fwhm, dims, fov_slices, kernel)
+    p_bot, a_bot, _, vxmeans_bot, _, vxs_bot, vys_bot = fit_calibration(ballpos_bottom_list, xrates, trange, fwhm, dims, fov_slices, kernel)
 
     # Concatenate above results in one single list and create a dictionnary with the concatenated keys
     dict_vxmeans = OrderedDict(zip(vx_headers, vxmeans_top + vxmeans_bot))
@@ -1563,6 +1568,8 @@ def balltrack_calibration(bt_params, drift_rates, trange, fov_slices, reprocess_
     dict_results['p_top_1'] = p_top[1]
     dict_results['p_bot_0'] = p_bot[0]
     dict_results['p_bot_1'] = p_bot[1]
+    dict_results['a_top'] = a_top
+    dict_results['a_bot'] = a_bot
     dict_results.update(dict_vxmeans)
 
     csvfile = os.path.join(outputdir, 'param_sweep_{:d}.csv'.format(bt_params['index']))
@@ -1578,7 +1585,7 @@ def balltrack_calibration(bt_params, drift_rates, trange, fov_slices, reprocess_
                         vx_bot=vxs_bot[idx0],
                         vy_bot=vys_bot[idx0])
 
-    return
+    return dict_results
 
 
 def meshgrid_params_to_list(args):
