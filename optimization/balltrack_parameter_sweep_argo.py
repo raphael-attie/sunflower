@@ -19,7 +19,7 @@ if __name__ == '__main__':
     bt_params = OrderedDict({'rs': 2})
     # Parameter sweep
     intsteps = [3,4,5]
-    ballspacing = [1, 2, 3, 4]
+    ballspacing = [1, 2, 3]
     dp_l = [0.2, 0.25, 0.3, 0.35, 0.4]
     sigma_factor_l = [1, 1.25, 1.5, 1.75, 2]
     # Fourier filter radius
