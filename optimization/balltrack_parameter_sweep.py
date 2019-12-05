@@ -23,25 +23,18 @@ if __name__  == '__main__':
     nframes = 30
     trange = [0, nframes]
 
-    ### Ball parameters
+    # Ball parameters
     bt_params = OrderedDict({'rs': 2})
     # Parameter sweep
-    intsteps = [3,4,5]
-    ballspacing = [1, 2, 3, 4]
-    dp_l = [0.2, 0.3, 0.4, 0.5]
-    sigma_factor_l = [1, 1.25, 1.5, 1.75, 2]
-    ### Fourier filter radius
-    f_radius_l = np.arange(0, 21)
-    bt_params_list = blt.get_bt_params_list(bt_params, ('intsteps', 'ballspacing', 'dp', 'sigma_factor', 'f_radius'), (intsteps, ballspacing, dp_l, sigma_factor_l, f_radius_l))
-    # mydict = bt_params_list[0]
-    # file = '/Users/rattie/Data/sanity_check/stein_series/calibration/temp.csv'
-    # with open(file, 'w') as outfile:
-    #     csvwriter = csv.writer(outfile)
-    #     csvwriter.writerow(list(mydict.keys()))
-    #     csvwriter.writerow(list(mydict.values()))
-
-    #bt_df = pd.DataFrame(bt_params_list)
-
+    intsteps = [3,4,5,6]
+    ballspacing = [1, 2, 3]
+    dp_l = [0.2, 0.25, 0.3, 0.35, 0.4]
+    sigma_factor_l = [1.25, 1.5, 1.75, 2]
+    # Fourier filter radius
+    f_radius_l = np.arange(0, 16)
+    bt_params_list = blt.get_bt_params_list(bt_params,
+                                            ('intsteps', 'ballspacing', 'dp', 'sigma_factor', 'fourier_radius'),
+                                            (intsteps, ballspacing, dp_l, sigma_factor_l, f_radius_l))
     ### Velocity smoothing
     fwhm = 7
     kernel = 'boxcar'
@@ -61,12 +54,22 @@ if __name__  == '__main__':
     dims = [imsize, imsize]
 
     # Prepare partial function for parallel pool & map.
-    calibrate_partial = partial(blt.balltrack_calibration, drift_rates=drift_rates, trange=trange, fov_slices=fov_slices,
-                                reprocess_bt=reprocess_bt, drift_dir=drift_dir, outputdir=outputdir, kernel=kernel, fwhm=fwhm, dims=dims,
-                                basename='im_shifted', write_ballpos_list=False)
+    calibrate_partial = partial(blt.balltrack_calibration,
+                                drift_rates=drift_rates,
+                                trange=trange,
+                                fov_slices=fov_slices,
+                                reprocess_bt=reprocess_bt,
+                                drift_dir=drift_dir,
+                                outputdir=outputdir,
+                                kernel=kernel,
+                                fwhm=fwhm,
+                                dims=dims,
+                                basename='im_shifted',
+                                write_ballpos_list=False,
+                                nthreads=4)
 
 
-    calibrate_partial(bt_params_list[0])
+    df = calibrate_partial(bt_params_list[2913])
 
     #map(calibrate_partial, bt_params_list[0:6])
 

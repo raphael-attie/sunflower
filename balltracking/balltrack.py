@@ -1305,7 +1305,7 @@ def fit_calibration(ballpos_list, shift_rates, trange, fwhm, dims, fov_slices, k
     vxmeans /= len(fov_slices)
 
     p, r, _, _, _ = np.polyfit(vxmeans, shift_rates, 1, full=True)
-    rmse = np.sqrt(r[0]/vxmeans.size())
+    rmse = np.sqrt(r[0]/vxmeans.size)
 
     return p, rmse, vxmeans, vxs, vys
 
@@ -1555,8 +1555,8 @@ def balltrack_calibration(bt_params, drift_rates, trange, fov_slices, reprocess_
     # Concatenate headers
     vx_headers = vx_headers_top + vx_headers_bottom
 
-    p_top, a_top, _, vxmeans_top, _, vxs_top, vys_top = fit_calibration(ballpos_top_list, xrates, trange, fwhm, dims, fov_slices, kernel)
-    p_bot, a_bot, _, vxmeans_bot, _, vxs_bot, vys_bot = fit_calibration(ballpos_bottom_list, xrates, trange, fwhm, dims, fov_slices, kernel)
+    p_top, _, vxmeans_top, vxs_top, vys_top = fit_calibration(ballpos_top_list, xrates, trange, fwhm, dims, fov_slices, kernel)
+    p_bot, _, vxmeans_bot, vxs_bot, vys_bot = fit_calibration(ballpos_bottom_list, xrates, trange, fwhm, dims, fov_slices, kernel)
 
     # Concatenate above results in one single list and create a dictionnary with the concatenated keys
     dict_vxmeans = OrderedDict(zip(vx_headers, vxmeans_top + vxmeans_bot))
@@ -1566,8 +1566,6 @@ def balltrack_calibration(bt_params, drift_rates, trange, fov_slices, reprocess_
     dict_results['p_top_1'] = p_top[1]
     dict_results['p_bot_0'] = p_bot[0]
     dict_results['p_bot_1'] = p_bot[1]
-    dict_results['a_top'] = a_top
-    dict_results['a_bot'] = a_bot
     dict_results.update(dict_vxmeans)
 
     csvfile = os.path.join(outputdir, 'param_sweep_{:d}.csv'.format(bt_params['index']))
