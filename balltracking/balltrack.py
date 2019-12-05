@@ -1304,12 +1304,10 @@ def fit_calibration(ballpos_list, shift_rates, trange, fwhm, dims, fov_slices, k
         vxmeans += np.array([vx[slices].mean() for vx in vxs])
     vxmeans /= len(fov_slices)
 
-    p = np.polyfit(shift_rates, vxmeans, 1)
-    a = 1 / p[0]
-    vxfit = a * (vxmeans - p[1])
-    residuals = np.abs(vxfit - shift_rates)
+    p, r, _, _, _ = np.polyfit(vxmeans, shift_rates, 1, full=True)
+    rmse = np.sqrt(r[0]/vxmeans.size())
 
-    return p, a, vxfit, vxmeans, residuals, vxs, vys
+    return p, rmse, vxmeans, vxs, vys
 
 
 def check_file_series(filepaths):
