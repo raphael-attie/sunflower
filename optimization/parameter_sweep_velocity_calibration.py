@@ -48,17 +48,20 @@ def calc_c_pearson(vx1, vx2, vy1, vy2, fov=None):
     return c_pearson
 
 
-os.chdir(os.path.expanduser('~/dev/sdo-tracking-framework'))
 # directory hosting the drifted data (9 series)
 drift_dir = os.path.join(os.environ['DATA'], 'sanity_check/stein_series/')
 # output directory for the drifting images
 outputdir = os.path.join(drift_dir, 'calibration')
 
-nsets = 5040
+# number of parameter sets
+nsets = 3600
+filelist = [os.path.join(outputdir, 'param_sweep_{:d}.csv'.format(idx)) for idx in range(nsets)]
+# Concatenate all csv file content into one dataframe
+df_list = [pd.read_csv(f) for f in filelist]
+df = pd.concat(df_list, axis=0, ignore_index=True)
+# List of velocity flow files
 filelist = [os.path.join(outputdir, 'mean_velocity_{:d}.npz'.format(idx)) for idx in range(nsets)]
 
-# load calibration dataframe
-df = pd.read_pickle(os.path.join(drift_dir, 'calibration_dataframe.pkl'))
 df['a_top_0'] = 1 / df['p_top_0']
 df['a_bot_0'] = 1 / df['p_bot_0']
 
@@ -93,8 +96,4 @@ df['corr'] = correlations
 
 df.to_pickle(os.path.join(drift_dir, 'correlation_dataframe.pkl'))
 df.to_csv(os.path.join(drift_dir, 'correlation_dataframe.pkl'), index=False)
-
-
-
-
 
