@@ -1548,8 +1548,6 @@ def balltrack_calibration(bt_params, drift_rates, trange, fov_slices, reprocess_
         ballpos_bottom_list = np.load(os.path.join(outputdir, 'ballpos_bottom_list.npy'))
 
     xrates = np.array(drift_rates)[:, 0]
-    # Index where xrates = 0. Used to save that specific velocity map
-    idx0 = np.where(xrates == 0)[0][0]
     vx_headers_top = ['vx_top {:1.2f}'.format(vx[0]) for vx in drift_rates]
     vx_headers_bottom = ['vx_bottom {:1.2f}'.format(vx[0]) for vx in drift_rates]
     # Concatenate headers
@@ -1559,7 +1557,7 @@ def balltrack_calibration(bt_params, drift_rates, trange, fov_slices, reprocess_
     p_bot, _, vxmeans_bot, vxs_bot, vys_bot = fit_calibration(ballpos_bottom_list, xrates, trange, fwhm, dims, fov_slices, kernel)
 
     # Concatenate above results in one single list and create a dictionnary with the concatenated keys
-    dict_vxmeans = OrderedDict(zip(vx_headers, vxmeans_top + vxmeans_bot))
+    dict_vxmeans = OrderedDict(zip(vx_headers, vxmeans_top.tolist() + vxmeans_bot.tolist()))
 
     dict_results = bt_params.copy()
     dict_results['p_top_0'] = p_top[0]
@@ -1575,6 +1573,8 @@ def balltrack_calibration(bt_params, drift_rates, trange, fov_slices, reprocess_
         csvwriter.writerow(list(dict_results.values()))
 
     npzf = os.path.join(outputdir, 'mean_velocity_{:d}.npz'.format(bt_params['index']))
+    # Index where xrates = 0. Used to save specific velocity map
+    idx0 = np.where(xrates == 0)[0][0]
     np.savez_compressed(npzf,
                         vx_top=vxs_top[idx0],
                         vy_top=vys_top[idx0],
