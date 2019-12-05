@@ -59,6 +59,7 @@ filelist = [os.path.join(outputdir, 'param_sweep_{:d}.csv'.format(idx)) for idx 
 # Concatenate all csv file content into one dataframe
 df_list = [pd.read_csv(f) for f in filelist]
 df = pd.concat(df_list, axis=0, ignore_index=True)
+df.set_index('index', inplace=True)
 # List of velocity flow files
 filelist = [os.path.join(outputdir, 'mean_velocity_{:d}.npz'.format(idx)) for idx in range(nsets)]
 
@@ -93,6 +94,7 @@ for i, f in enumerate(filelist):
         correlations.append(calc_c_pearson(vx_stein_sm, vx_ball, vy_stein_sm, vy_ball, fov=fov))
 
 df['corr'] = correlations
+
 
 df.to_pickle(os.path.join(drift_dir, 'correlation_dataframe.pkl'))
 df.to_csv(os.path.join(drift_dir, 'correlation_dataframe.pkl'), index=False)

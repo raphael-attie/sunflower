@@ -24,7 +24,7 @@ if __name__ == '__main__':
     sigma_factor_l = [1.25, 1.5, 1.75, 2]
     # Fourier filter radius
     f_radius_l = np.arange(0, 16)
-    bt_params_list = blt.get_bt_params_list(bt_params, ('intsteps', 'ballspacing', 'dp', 'sigma_factor', 'f_radius'),
+    bt_params_list = blt.get_bt_params_list(bt_params, ('intsteps', 'ballspacing', 'dp', 'sigma_factor', 'fourier_radius'),
                                             (intsteps, ballspacing, dp_l, sigma_factor_l, f_radius_l))
     # Velocity smoothing
     fwhm = 7
