@@ -9,7 +9,7 @@ import numpy.ma as ma
 from numpy import pi, cos, sin
 import csv
 import matplotlib
-matplotlib.use('TkAgg')
+matplotlib.use('agg')
 import matplotlib.pyplot as plt
 from scipy.ndimage.filters import gaussian_filter
 import cython_modules.interp as cinterp
@@ -1118,6 +1118,7 @@ class Calibrator:
         self.basename = basename
         self.write_ballpos_list = write_ballpos_list
         self.nthreads = nthreads
+        self.verbose = verbose
 
         os.makedirs(self.drift_dir, exist_ok=True)
         os.makedirs(self.outputdir, exist_ok=True)
@@ -1145,11 +1146,14 @@ class Calibrator:
             drift_images = np.zeros([sample.shape[0], sample.shape[1], self.nframes])
             for i, f in enumerate(filepaths):
                 drift_images[:, :, i] = fitsio.read(str(f))
-        else:
+        elif self.images is not None:
             # Use the self.images to create the drift images out of them
             os.makedirs(self.subdirs[rate_idx], exist_ok=True)
             print("Creating drift images at rate: [{:.2f}, {:.2f}] px/frame".format(self.drift_rates[rate_idx][0], self.drift_rates[rate_idx][1]))
             drift_images = create_drift_series(self.images, self.drift_rates[rate_idx], filepaths, filter_function=self.filter_function)
+        else:
+            print("Drift data do not exist. Sources images not provided. Must provide them as input")
+            sys.exit(1)
 
         return drift_images
 
@@ -1171,7 +1175,8 @@ class Calibrator:
         drift_images = self.drift_series(rate_idx)
         ballpos_top, ballpos_bottom = balltrack_all(self.nframes, self.rs, self.dp, self.sigma_factor, self.intsteps, self.subdirs[rate_idx],
                                                     fourier_radius=self.filter_radius, ballspacing=self.ballspacing,
-                                                    data=drift_images, output_prep_data=self.output_prep_data, write_ballpos=False,
+                                                    data=drift_images, output_prep_data=self.output_prep_data,
+                                                    write_ballpos=False, verbose=self.verbose,
                                                     ncores=1)
         return ballpos_top, ballpos_bottom
 
@@ -1346,30 +1351,22 @@ def make_euler_velocity(ballpos_top, ballpos_bottom, cal_top, cal_bottom, dims, 
     return vx, vy
 
 
-def make_euler_velocity_lanes(ballpos_top, ballpos_bottom, cal_top, cal_bottom, dims, nframes, tavg, tstep, fwhm, nsteps, maxstep, outputdir):
+def make_euler_velocity_lanes(ballpos_top, ballpos_bottom, cal_top, cal_bottom, dims, tranges, fwhm, nsteps, maxstep, outputdir, kernel='gaussian'):
 
-    nframes = int(nframes)
-    tavg = int(tavg)
-    tstep = int(tstep)
-
-    if nframes == tavg:
-        tstarts = [0,]
-    else:
-        tstarts = np.arange(0, nframes - tavg, tstep)
-    tranges = [[tstart, tstart + tavg] for tstart in tstarts]
 
     vxl = []
     vyl = []
     lanesl = []
-    for i in range(len(tranges)):
+    for i, trange in enumerate(tranges):
+        tavg = trange[1] - trange[0]
         # Velocity field
-        vx, vy = make_euler_velocity(ballpos_top, ballpos_bottom, cal_top, cal_bottom, dims, tranges[i], fwhm)
+        vx, vy = make_euler_velocity(ballpos_top, ballpos_bottom, cal_top, cal_bottom, dims, trange, fwhm, kernel=kernel)
         # lanes
         lanes = make_lanes(vx, vy, nsteps, maxstep)
         # Write fits file
-        fitstools.writefits(vx, os.path.join(outputdir, 'vx_fwhm%d_tavg%d_%03d.fits'%(fwhm, tavg, i)))
-        fitstools.writefits(vy, os.path.join(outputdir, 'vy_fwhm%d_tavg%d_%03d.fits'%(fwhm, tavg, i)))
-        fitstools.writefits(lanes, os.path.join(outputdir, 'lanes_fwhm%d_tavg%d_nsteps%d_%03d.fits' %(fwhm, tavg, nsteps, i)))
+        fitstools.writefits(vx, os.path.join(outputdir, 'vx_fwhm%d_tavg%03d_%03d.fits'%(fwhm, tavg, i)))
+        fitstools.writefits(vy, os.path.join(outputdir, 'vy_fwhm%d_tavg%03d_%03d.fits'%(fwhm, tavg, i)))
+        fitstools.writefits(lanes, os.path.join(outputdir, 'lanes_fwhm%d_tavg%03d_nsteps%d_%03d.fits' %(fwhm, tavg, nsteps, i)))
 
         vxl.append(vx)
         vyl.append(vy)
@@ -1381,7 +1378,8 @@ def make_euler_velocity_lanes(ballpos_top, ballpos_bottom, cal_top, cal_bottom, 
         plt.ylabel('y [px]')
         plt.title('Supergranular lanes at fwhm = %d px ; tavg = %d ; map # %03d'%(fwhm, tavg, i))
         plt.tight_layout()
-        plt.savefig(os.path.join(outputdir, 'lanes_fwhm%d_tavg%d_%03d.png'%(fwhm, tavg, i)))
+        plt.savefig(os.path.join(outputdir, 'lanes_fwhm%d_tavg%03d_%03d.png'%(fwhm, tavg, i)))
+        plt.close()
 
     return vxl, vyl, lanesl
 
@@ -1520,7 +1518,7 @@ def make_lanes_visualization(vx, vy, nsteps, maxstep):
 
 
 def balltrack_calibration(bt_params, drift_rates, trange, fov_slices, reprocess_bt, drift_dir, outputdir, kernel, fwhm, dims,
-                          images=None, basename='drift', write_ballpos_list=True, nthreads=1, verbose=False):
+                          images=None, basename='drift', write_ballpos_list=True, nthreads=1):
 
 
     if 'index' not in bt_params:
@@ -1539,7 +1537,7 @@ def balltrack_calibration(bt_params, drift_rates, trange, fov_slices, reprocess_
                          basename=basename,
                          write_ballpos_list=write_ballpos_list,
                          nthreads=nthreads,
-                         verbose=verbose)
+                         verbose=bt_params['verbose'])
 
         ballpos_top_list, ballpos_bottom_list = cal.balltrack_all_rates()
 

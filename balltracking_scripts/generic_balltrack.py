@@ -31,7 +31,7 @@ if __name__ == '__main__':
 
     # # Make velocity flow fields
     kernel = 'boxcar'
-    fwhm = 7
+    fwhm = 11
     tranges = [[0, nt] for nt in range(30, bt_params['nframes']+1, 5)]
     cal_top = 1.801
     cal_bot = 1.713

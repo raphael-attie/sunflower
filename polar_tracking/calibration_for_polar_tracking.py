@@ -1,53 +1,70 @@
 import os
 import numpy as np
-import matplotlib
-matplotlib.use('agg')
-import matplotlib.pyplot as plt
 import balltracking.balltrack as blt
 import fitstools
 from collections import OrderedDict
 
 
 if __name__ == '__main__':
-    # Get the intensity files
-    datacubefile = os.path.join(os.environ['DATA'],
-                                'SDO/HMI/continuum/Lat_63/mtrack_20110627_200034_TAI_20110628_000033_TAI_Postel_060.4_63.0_continuum.fits')
-    # directory hosting the drifted data
-    drift_dir = os.path.join(os.environ['DATA'], 'SDO/HMI/continuum/Lat_63/calibration')
-    outputdir = drift_dir
-    # Ball parameters
-    bt_params = OrderedDict({'rs': 2,
-                             'intsteps': 4,
-                             'ballspacing': 2,
-                             'dp': 0.3,
-                             'sigma_factor': 1.75,
-                             'fourier_radius': 1.0,
-                             'nframes': 80,
-                             'datafiles': datacubefile,
-                             'outputdir': os.path.join(os.environ['DATA'], 'SDO/HMI/continuum/Lat_63/balltrack'),
-                             'index': 0,
-                             'ncores': 1})
 
-    reprocess_bt = False
-    # Load the nt images
-    images = fitstools.fitsread(datacubefile, tslice=slice(0, bt_params['nframes'])).astype(np.float32)
+    # Longitudes (Stonyhurst) at starting frame
+    # lons = [-7, -67, -77]
+    # Longitudes (Carrington):
+    lonCRs = [60, 0, 350]
+    # Latitudes
+    lats = [0, 60, 70]
+    lon_lats = [(60.4, 0), (60.4, 60), (60.4, 70), (0, 0), (350, 0)]
+    nevents = len(lon_lats)
+    basenames_l = ['mtrack_20110627_200034_TAI_20110628_000033_TAI_Postel_{:05.1f}_{:04.1f}_continuum.fits'
+                     .format(lon_lat[0], lon_lat[1]) for lon_lat in lon_lats]
+    # Get the intensity files
+    datacubefiles = [os.path.join(os.environ['DATA'], 'SDO/HMI/polar_study/', basename) for basename in basenames_l]
+    outputdirs_l = [os.path.join(os.environ['DATA'],
+                                 'SDO/HMI/polar_study/lonCR_{:05.1f}_lat_{:04.1f}/calibration'.format(lon_lat[0], lon_lat[1]))
+                    for lon_lat in lon_lats]
+
+    reprocess_bt = True
+    nframes = 40
+
+    # Ball parameters
+    bt_params_l = [OrderedDict({'rs': 2,
+                             'intsteps': 5,
+                             'ballspacing': 2,
+                             'dp': 0.25,
+                             'sigma_factor': 1.5,
+                             'fourier_radius': 1.0,
+                             'nframes': nframes,
+                             'datafiles': datacubefiles[i],
+                             'outputdir': outputdirs_l[i],
+                             'ncores': 1,
+                             'index':0,
+                             'verbose':False}) for i in range(nevents)]
+
     # Calibration parameters
     # Set npts drift rates
     dv = 0.04
     vx_rates = np.arange(-0.2, 0.21, dv)
     vx_rates[int(len(vx_rates) / 2)] = 0
     drift_rates = np.stack((vx_rates, np.zeros(len(vx_rates))), axis=1).tolist()
-    trange = [0, bt_params['nframes']]
-
     # Smoothing
     fwhm = 11
-    dims = images.shape[0:2]
-    trim = int(vx_rates.max() * bt_params['nframes'] + fwhm + 2)
+    dims = [512, 512]
+    trim = int(vx_rates.max() * nframes + fwhm + 2)
     fov_slices = np.s_[trim:dims[0] - trim, trim:dims[1] - trim]
     kernel = 'gaussian'
 
-    cal = blt.balltrack_calibration(bt_params, drift_rates, trange, fov_slices, reprocess_bt, drift_dir, outputdir,
-                                    kernel, fwhm, dims, nthreads=4, verbose=True)
+    for idx in range(1,nevents):
+        #idx = 0
+        print('Calibrating flows on datacube: ', datacubefiles[idx])
+        # Load the nt images
+        images = fitstools.fitsread(datacubefiles[idx], tslice=slice(0, nframes)).astype(np.float32)
+        drift_dir = outputdirs_l[idx]
+        outputdir = outputdirs_l[idx]
+
+        trange = [0, bt_params_l[idx]['nframes']]
+        # Must provide source images to create drift images. Do not provide the images if the drift images already exist
+        cal = blt.balltrack_calibration(bt_params_l[idx], drift_rates, trange, fov_slices, reprocess_bt, drift_dir, outputdir,
+                                        kernel, fwhm, dims, images=images, nthreads=6)
 
 
     ## Get flow maps from tracked positions
