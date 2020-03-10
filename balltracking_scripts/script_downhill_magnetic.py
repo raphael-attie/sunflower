@@ -4,10 +4,8 @@ Script testing the dowhill-clumping algorithm.
 import os, glob
 import numpy as np
 import matplotlib
-matplotlib.use('macosx')
-#matplotlib.use('qt5agg')
+matplotlib.use('tkagg')
 import matplotlib.pyplot as plt
-import seaborn as sns
 import fitstools
 from image_processing import segmentation
 import skimage.measure

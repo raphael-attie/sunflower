@@ -10,7 +10,6 @@ from skimage.feature import peak_local_max
 from skimage.morphology import watershed, disk
 from skimage.segmentation import find_boundaries
 from scipy.ndimage import gaussian_filter
-from image_processing import segmentation
 
 DTYPE = np.float32
 class MBT:
