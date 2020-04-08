@@ -1075,7 +1075,7 @@ class Calibrator:
 
     def __init__(self, images, drift_rates, trange, rs, ballspacing, dp, sigma_factor, filter_radius, intsteps, drift_dir,
                  outputdir, output_prep_data=False, normalization = True,
-                 filter_function=None, subdirs=None, basename='drift', write_ballpos_list=True, nthreads=1, verbose=False):
+                 filter_function=None, subdirs=None, basename='drift', save_ballpos_list=True, nthreads=1, verbose=False):
 
         """
 
@@ -1096,7 +1096,7 @@ class Calibrator:
         Reminder: Balltracking will still use its own filtering function (see param 'filter_radius')
         :param subdirs: [optional] user can provide drift data subdirectories. default is drift_ under drift_dir.
         :param basename: [optional] basename of the fits files in each subdirectory. They get appended by a 2-digit number.
-        :param write_ballpos_list = enable/disable writing the list of ballpos arrays for all drift rates.
+        :param save_ballpos_list = enable/disable writing the list of ballpos arrays for all drift rates.
         :param nthreads: [optional] number of threads to use for parallelization. Default to 1.
         """
 
@@ -1116,7 +1116,7 @@ class Calibrator:
         self.filter_radius = filter_radius
         self.ballspacing = ballspacing
         self.basename = basename
-        self.write_ballpos_list = write_ballpos_list
+        self.save_ballpos_list = save_ballpos_list
         self.nthreads = nthreads
         self.verbose = verbose
 
@@ -1199,12 +1199,11 @@ class Calibrator:
             pool.close()
             pool.join()
 
-        if self.write_ballpos_list:
-            print('saving ballpos_top_list.npy and ballbpos_bottom_list.npy...')
-            np.save(os.path.join(self.outputdir, 'ballpos_top_list.npy'), ballpos_top_list)
-            print('saved ballpos_top_list.npy in {:s}'.format(self.drift_dir))
-            np.save(os.path.join(self.outputdir, 'ballpos_bottom_list.npy'), ballpos_bottom_list)
-            print('saved ballpos_bottom_list.npy in {:s}'.format(self.drift_dir))
+        if self.save_ballpos_list:
+            np.savez(os.path.join(self.outputdir, 'ballpos_list.npz'),
+                     ballpos_top_list=ballpos_top_list,
+                     ballpos_bottom_list=ballpos_bottom_list)
+            print(f'saved ballpos_top_list and ballpos_bottom_list in {self.drift_dir}/ballpos_list.npz')
 
             # if return_ballpos:
         return ballpos_top_list, ballpos_bottom_list
@@ -1518,14 +1517,16 @@ def make_lanes_visualization(vx, vy, nsteps, maxstep):
 
 
 def balltrack_calibration(bt_params, drift_rates, trange, fov_slices, reprocess_bt, drift_dir, outputdir, kernel, fwhm, dims,
-                          images=None, basename='drift', write_ballpos_list=True, nthreads=1):
+                          images=None, basename='drift', save_ballpos_list=True, csvfile=None, verbose=False, nthreads=1):
 
 
     if 'index' not in bt_params:
         print('bt_params missing "index" key')
         sys.exit(1)
 
-    if reprocess_bt:
+    ballpos_list_file = os.path.join(outputdir, 'ballpos_list.npz')
+
+    if (reprocess_bt is True) or (reprocess_bt == 'once' and not os.path.isfile(ballpos_list_file)):
 
         cal = Calibrator(images, drift_rates, trange, bt_params['rs'], bt_params['ballspacing'], bt_params['dp'],
                          bt_params['sigma_factor'],
@@ -1535,15 +1536,17 @@ def balltrack_calibration(bt_params, drift_rates, trange, fov_slices, reprocess_
                          outputdir,
                          output_prep_data=False,
                          basename=basename,
-                         write_ballpos_list=write_ballpos_list,
+                         save_ballpos_list=save_ballpos_list,
                          nthreads=nthreads,
-                         verbose=bt_params['verbose'])
+                         verbose=verbose)
 
         ballpos_top_list, ballpos_bottom_list = cal.balltrack_all_rates()
 
     else:
-        ballpos_top_list = np.load(os.path.join(outputdir, 'ballpos_top_list.npy'))
-        ballpos_bottom_list = np.load(os.path.join(outputdir, 'ballpos_bottom_list.npy'))
+        npzfile = np.load(ballpos_list_file)
+        ballpos_top_list = npzfile['ballpos_top_list']
+        ballpos_bottom_list = npzfile['ballpos_bottom_list']
+
 
     xrates = np.array(drift_rates)[:, 0]
     vx_headers_top = ['vx_top {:1.2f}'.format(vx[0]) for vx in drift_rates]
@@ -1558,19 +1561,22 @@ def balltrack_calibration(bt_params, drift_rates, trange, fov_slices, reprocess_
     dict_vxmeans = OrderedDict(zip(vx_headers, vxmeans_top.tolist() + vxmeans_bot.tolist()))
 
     dict_results = bt_params.copy()
+    dict_results['kernel'] = kernel
+    dict_results['fwhm'] = fwhm
     dict_results['p_top_0'] = p_top[0]
     dict_results['p_top_1'] = p_top[1]
     dict_results['p_bot_0'] = p_bot[0]
     dict_results['p_bot_1'] = p_bot[1]
     dict_results.update(dict_vxmeans)
 
-    csvfile = os.path.join(outputdir, 'param_sweep_{:d}.csv'.format(bt_params['index']))
+    if csvfile is None:
+        csvfile = os.path.join(outputdir, 'param_sweep_{:s}.csv'.format(str(bt_params['index'])))
     with open(csvfile, 'w') as outfile:
         csvwriter = csv.writer(outfile)
         csvwriter.writerow(list(dict_results.keys()))
         csvwriter.writerow(list(dict_results.values()))
 
-    npzf = os.path.join(outputdir, 'mean_velocity_{:d}.npz'.format(bt_params['index']))
+    npzf = os.path.join(outputdir, 'mean_velocity_{:s}.npz'.format(str(bt_params['index'])))
     # Index where xrates = 0. Used to save specific velocity map
     idx0 = np.where(xrates == 0)[0][0]
     np.savez_compressed(npzf,

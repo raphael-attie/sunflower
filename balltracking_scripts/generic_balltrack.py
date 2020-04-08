@@ -30,25 +30,29 @@ if __name__ == '__main__':
         b_bot = np.load(os.path.join(bt_params['outputdir'], 'ballpos_bottom.npy'))
 
     # # Make velocity flow fields
-    kernel = 'boxcar'
-    fwhm = 11
-    tranges = [[0, nt] for nt in range(30, bt_params['nframes']+1, 5)]
-    cal_top = 1.801
-    cal_bot = 1.713
-    dims=[263, 263]
+    # kernel = 'gaussian' #'boxcar'
+    # fwhm = 7
 
-    def make_velocity_wrapper(trange):
-        vx_t, vy_t = blt.make_euler_velocity(b_top, b_bot, cal_top, cal_bot, [263, 263], trange, fwhm, kernel)
-        np.savez_compressed(os.path.join(bt_params['outputdir'], 'vxy_{:s}_fwhm_{:d}_avg_{:d}.npz'.format(kernel, fwhm, trange[1])),
-                            vx=vx_t, vy=vy_t)
-        return vx_t, vy_t
+    for fwhm in [7,9,11,13,15]:
+        for kernel in ['boxcar', 'gaussian']:
 
-    with Pool(processes = 6) as pool:
-        vx, vy = zip(*pool.map(make_velocity_wrapper, tranges))
+            tranges = [[0, nt] for nt in range(30, bt_params['nframes']+1, 5)]
+            cal_top = 1.79# 1.7893 # for 60 min with boxcar # 1.801 # for 30 min with boxcar
+            cal_bot = 1.70# 1.7024 # for 60 min with boxcar # 1.713 # for 30 min with boxcar
+            dims=[263, 263]
+
+            def make_velocity_wrapper(trange):
+                vx_t, vy_t = blt.make_euler_velocity(b_top, b_bot, cal_top, cal_bot, [263, 263], trange, fwhm, kernel)
+                np.savez_compressed(os.path.join(bt_params['outputdir'], 'vxy_{:s}_fwhm_{:d}_avg_{:d}.npz'.format(kernel, fwhm, trange[1])),
+                                    vx=vx_t, vy=vy_t)
+                return vx_t, vy_t
+
+            with Pool(processes = 6) as pool:
+                vx, vy = zip(*pool.map(make_velocity_wrapper, tranges))
 
 
-    # for trange in tranges:
-    #     vx, vy = blt.make_euler_velocity(b_top, b_bot, cal_top, cal_bot, [263, 263], trange, fwhm, kernel)
-    #     np.savez_compressed(os.path.join(bt_params['outputdir'], 'vxy_fwhm_{:d}_avg_{:d}.npz'.format(fwhm, trange[1])),
-    #                         vx=vx, vy=vy)
+            # for trange in tranges:
+            #     vx, vy = blt.make_euler_velocity(b_top, b_bot, cal_top, cal_bot, [263, 263], trange, fwhm, kernel)
+            #     np.savez_compressed(os.path.join(bt_params['outputdir'], 'vxy_fwhm_{:d}_avg_{:d}.npz'.format(fwhm, trange[1])),
+            #                         vx=vx, vy=vy)
 
