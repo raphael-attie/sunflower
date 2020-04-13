@@ -1,10 +1,6 @@
 from astropy.coordinates import SkyCoord
-import sunpy.map
-from sunpy.sun import heliographic_solar_center
 from astropy import units as u
-from sunpy.coordinates.frames import HeliographicCarrington
 from sunpy.coordinates import frames
-
 from sunpy.coordinates.ephemeris import get_sun_L0, get_sun_B0
 
 # def get_harvey_lon(date, radians=False):
