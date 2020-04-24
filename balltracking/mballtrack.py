@@ -154,7 +154,7 @@ class MBT:
 
         # Trim the array down to the actual number of balls used so far.
         # That number has been incremented each time new balls were added, in self.populate_emergence
-        self.ballpos = self.ballpos[0:self.nballs, ...]
+        self.ballpos = self.ballpos[:, 0:self.nballs, :]
         self.balls_age_t = self.balls_age_t[0:self.nballs, :]
         self.valid_balls_mask_t = self.valid_balls_mask_t[0:self.nballs, :]
 
@@ -190,7 +190,7 @@ class MBT:
     def populate_emergence(self):
 
         #flux_posx, flux_posy = get_local_extrema_ar(self.image, self.surface, self.polarity, self.ballspacing, self.mag_thresh, self.mag_thresh_sunspots)
-        flux_posx, flux_posy = get_local_extrema(self.image, self.surface, self.polarity, self.ballspacing,
+        flux_posx, flux_posy = get_local_extrema(self.image, self.polarity, self.ballspacing,
                                                     self.mag_thresh, local_min=self.local_min)
 
         # TODO: Consider profiling this for optimization
@@ -264,7 +264,7 @@ def mballtrack_main(**kwargs):
 def load_data(datafiles, n):
     _, ext = os.path.splitext(datafiles[0])
     if ext == '.fits':
-        image = load_fits(datafiles, n)
+        image = fitstools.fitsread(datafiles, tslice=slice(n,n+1)).astype(DTYPE)
         return image
     elif ext == '.npz':
         image = load_npz(datafiles, n)
@@ -276,13 +276,6 @@ def load_data(datafiles, n):
 def load_npz(datafiles, n):
     data = np.load(datafiles[n])
     image = data[data.files[0]]
-    return image
-
-
-def load_fits(datafiles, n):
-    #image = fitstools.fitsread(mbt.datafiles, tslice=n).astype(DTYPE)
-    image = fitstools.fitsread(datafiles, tslice=slice(n,n+1)).astype(DTYPE)
-    #image = np.median(image, 2)
     return image
 
 
@@ -299,12 +292,12 @@ def get_local_extrema(image, polarity, min_distance, threshold, local_min=False)
     """
 
     # Get a mask of where to look for local maxima.
-    if len(threshold) == 1:
+    if isinstance(threshold, int):
         if polarity >= 0:
             mask_thresh = image >= threshold
         else:
             mask_thresh = image <= -threshold
-    else:
+    else: # Useful for active regions
             mask_thresh = (image > min(threshold)) & (image < max(threshold))
 
 
@@ -526,17 +519,17 @@ def watershed_series(datafile, nframes, threshold, polarity, ballpos, verbose=Fa
     if prep_function is not None:
         data = prep_function(data)
 
-    ws_series = np.empty([nframes-7, data.shape[1], data.shape[0]], dtype=np.int32)
-    markers_series = np.empty([nframes-7, data.shape[1], data.shape[0]], dtype=np.int32)
-    borders_series = np.empty([nframes-7, data.shape[1], data.shape[0]], dtype=np.bool)
+    ws_series = np.empty([nframes, data.shape[1], data.shape[0]], dtype=np.int32)
+    markers_series = np.empty([nframes, data.shape[1], data.shape[0]], dtype=np.int32)
+    borders_series = np.empty([nframes, data.shape[1], data.shape[0]], dtype=np.bool)
 
     # For parallelization, need to see how to share a proper container, whatever is more efficient
-    for n in range(nframes-7):
+    for n in range(nframes):
         if verbose:
             print('Watershed series frame n = %d'%n)
         #data = fitstools.fitsread(datafile, tslice=n)
         data = load_data(datafile, n)
-        # Get a view of (x,y) coords at frame #i (use slice instead of fancy insteading). Either with slice(0,1) or 0:2
+        # Get a view of (x,y) coords at frame #i (use slice instead of fancy indexing). Either with slice(0,1) or 0:2
         # I'll use slice for clarity
         # positions = ballpos[slice(0,1),:,n]
         labels_ws, markers, borders = marker_watershed(data, ballpos[0,:,n], ballpos[1,:,n], threshold, polarity, invert=invert)

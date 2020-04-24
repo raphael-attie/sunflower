@@ -20,8 +20,8 @@ def fitsread(file, xslice=slice(None), yslice=slice(None), tslice=slice(None), c
     else:
         # Assume and read list of files
         fitsfiles = file[tslice]
-        if isinstance(fitsfiles, str):
-            data = fitsio.read(fitsfiles)
+        if len(fitsfiles) == 1:
+            data = fitsio.read(fitsfiles[0])
         else:
             # Load sample to get dimensions
             sample = fitsio.read(file[0])
