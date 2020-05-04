@@ -2,6 +2,7 @@ import sys
 import os
 import numpy as np
 from numpy import pi, cos, sin
+from pathlib import PurePath
 import cython_modules.interp as cinterp
 import fitstools
 import balltracking.balltrack as blt
@@ -11,13 +12,16 @@ from skimage.morphology import watershed, disk
 from skimage.segmentation import find_boundaries
 from scipy.ndimage import gaussian_filter
 
+
 DTYPE = np.float32
 class MBT:
     def __init__(self, nt=1, rs =2, am=1, dp=0.3, td=5, zdamping=1,
                  ballspacing=10, intsteps=15, mag_thresh=30, mag_thresh_sunspots=400, noise_level=20, polarity=1,
-                 track_emergence=False, emergence_box=10, datafiles=None, data=None, prep_function=None, local_min=False):
+                 track_emergence=False, emergence_box=10, datafiles=None, data=None, prep_function=None, local_min=False,
+                 outputdir=None, fig_dir = None, do_plots=False):
 
         self.datafiles = datafiles
+        self.outputdir = outputdir
         self.data = data
         self.nt = nt
         self.intsteps = intsteps
@@ -54,8 +58,8 @@ class MBT:
         # Deepest height below surface level at which ball can fall down.
         self.min_ds = 4 * self.rs
 
-        # Maximum number of balls that can possibly used
-        self.nballs_max = self.nxc*self.nyc
+        # Maximum number of balls that can possibly be used
+        self.nballs_max = int(self.nx *self.ny / 2)
         # Current position, force and velocity components, updated after each frame
         self.pos = np.full([3, self.nballs_max], -1, dtype=DTYPE)
         self.vel = np.zeros([3, self.nballs_max], dtype=DTYPE)
@@ -108,13 +112,19 @@ class MBT:
         self.new_valid_balls_mask = np.zeros([self.nballs_max], dtype=bool)
         self.new_valid_balls_mask[0:self.nballs] = True
         self.unique_valid_balls = np.arange(self.nballs)
+        self.do_plots = do_plots
+        self.fig_dir = fig_dir
 
 
     def track_all_frames(self):
 
+        if self.do_plots:
+            os.makedirs(self.fig_dir, exist_ok=True)
+
         for n in range(0, self.nt):
 
-            #print('Frame n=%d'%n)
+            print('Frame n={:d}: {:s}'.format(n, self.datafiles[n]))
+
 
             self.image = load_data(self.datafiles, n)
             if self.prep_function is not None:
@@ -133,14 +143,20 @@ class MBT:
             for i in range(self.intsteps):
 
                 #print('intermediate step i=%d'%i)
-                #fig_title = '/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/mballtrack/frame_%d_%d.png'%(n,i)
-                #plot_balls_over_frame(self.image, self.pos[0, :], self.pos[1, :], fig_title)
+                if self.do_plots:
+                    if self.polarity == 1:
+                        fig_title = PurePath(self.fig_dir, 'frame_pos_%d_%d.png'%(n,i))
+                    else:
+                        fig_title = PurePath(self.fig_dir, 'frame_neg_%d_%d.png' % (n, i))
+
+                    plot_balls_over_frame(self.image, self.pos[0, :], self.pos[1, :], fig_title)
                 # Interpolate surface
                 surface_i = (old_surface*(self.intsteps - i) + self.surface * i)/self.intsteps
                 blt.integrate_motion(self, surface_i)
             old_surface = self.surface.copy()
-            # fig_title = '/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/mballtrack/frame_%d_%d.png'%(n,self.intsteps)
-            # plot_balls_over_frame(self.image, self.pos[0, :], self.pos[1, :], fig_title)
+            # if self.do_plots:
+            #     fig_title = '/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/mballtrack/frame_%d_%d.png'%(n,self.intsteps)
+            #     plot_balls_over_frame(self.image, self.pos[0, :], self.pos[1, :], fig_title)
             set_bad_balls(self, self.pos)
 
             # Flag the bad balls with -1
@@ -223,13 +239,19 @@ class MBT:
             # Insert the new positions contiguously in the self.pos array
             # We need to use the number of balls at initialization (self.nballs) and increment it with the number
             # of new balls that will populate and track the emerging flux.
+            # newpos = np.array([newposx, newposy, newposz])
+            # self.pos = np.concatenate([self.pos, newpos], axis=1)
             self.pos[0, self.nballs:self.nballs + newposx.size] = newposx
             self.pos[1, self.nballs:self.nballs + newposx.size] = newposy
             self.pos[2, self.nballs:self.nballs + newposx.size] = newposz
             # Initialize the velocity, otherwise they could be NaN
+            # vel_zero = np.zeros(newpos.shape)
+            # self.vel = np.concatenate([self.vel, vel_zero], axis=1)
             self.vel[:, self.nballs:self.nballs + newposx.size] = 0
 
             # Must add these new balls to self.new_valid_balls_mask and bad_balls_mask
+            # new_bad_balls = np.full(newpos.shape[1], False)
+            # self.bad_balls_mask = np.concatenate([self.bad_balls_mask, new_bad_balls])
             self.bad_balls_mask[self.nballs:self.nballs + newposx.size] = False
             self.new_valid_balls_mask = np.logical_not(self.bad_balls_mask)
             self.nballs += newposx.size
@@ -563,7 +585,7 @@ def merge_watershed(labels_p, borders_p, nballs_p, labels_n, borders_n):
 def plot_balls_over_frame(frame, x, y, fig_title):
     plt.figure(0, figsize=(11.5, 9))
     plt.imshow(frame, vmin=-100, vmax=100, cmap='gray')
-    plt.plot(x, y, ls='none', marker='+', color='green', markerfacecolor='none', ms=2)
+    plt.plot(x, y, ls='none', marker='+', color='red', markerfacecolor='none', ms=6)
     plt.axis([0, frame.shape[1], 0, frame.shape[0]])
     plt.colorbar()
     plt.tight_layout()
