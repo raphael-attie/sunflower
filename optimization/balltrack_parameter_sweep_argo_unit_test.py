@@ -4,11 +4,12 @@ import balltracking.balltrack as blt
 from functools import partial
 from collections import OrderedDict
 import fitstools
+import time
 
+''' This is to be tested locally, not on ARGO, before sending this to ARGO as a batch job. 
+'''
 
 if __name__ == '__main__':
-
-    os.chdir(os.path.expanduser('~/dev/sdo-tracking-framework'))
 
     # output directory for the drifting images
     outputdir = os.path.join(os.environ['DATA'], 'sanity_check/stein_series/calibration_unit_test')
@@ -22,14 +23,13 @@ if __name__ == '__main__':
     # Ball parameters
     bt_params = OrderedDict({'rs': 2})
     # Parameter sweep
-    intsteps = [3, 4, 5]
+    intsteps = [3,4,5]
     ballspacing = [1, 2]
-    dp_l = np.arange(0.2, 0.31, 0.01)  # [0.2, 0.25, 0.3, 0.35, 0.4]
+    dp_l = np.arange(0.2, 0.31, 0.01) # [0.2, 0.25, 0.3, 0.35, 0.4]
     sigma_factor_l = [1.0, 1.25, 1.5, 1.75, 2]
     # Fourier filter radius
     f_radius_l = np.arange(0, 10)
-    bt_params_list = blt.get_bt_params_list(bt_params,
-                                            ('intsteps', 'ballspacing', 'dp', 'sigma_factor', 'fourier_radius'),
+    bt_params_list = blt.get_bt_params_list(bt_params, ('intsteps', 'ballspacing', 'dp', 'sigma_factor', 'fourier_radius'),
                                             (intsteps, ballspacing, dp_l, sigma_factor_l, f_radius_l))
     # Velocity smoothing
     fwhm = 7
@@ -48,6 +48,7 @@ if __name__ == '__main__':
     trim = int(vx_rates.max() * nframes + fwhm + 2)
     fov_slices = np.s_[trim:imsize - trim, trim:imsize - trim]
 
+
     images = fitstools.fitsread(image_files, cube=False)
 
     calibrate_partial = partial(blt.balltrack_calibration,
@@ -63,9 +64,10 @@ if __name__ == '__main__':
                                 save_ballpos_list=False,
                                 verbose=True)
 
-    job_id = int(os.environ["SLURM_ARRAY_TASK_ID"])
+    job_id = 0 # int(os.environ["SLURM_ARRAY_TASK_ID"])
 
     _ = calibrate_partial(bt_params_list[job_id])
+
 
 
 

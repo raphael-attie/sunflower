@@ -8,7 +8,7 @@ import pandas as pd
 
 if __name__ == '__main__':
 
-    # directory hosting the drifted data
+    # directory hosting the data
     drift_dir = os.path.join(os.environ['DATA'], 'sanity_check/stein_series/')
     # output directory for the drifting images
     outputdir = os.path.join(drift_dir, 'calibration')

@@ -1073,8 +1073,8 @@ def integrate_motion0(pos, vel, bt, surface):
 ##############################################################################################################
 class Calibrator:
 
-    def __init__(self, images, drift_rates, trange, rs, ballspacing, dp, sigma_factor, filter_radius, intsteps, drift_dir,
-                 outputdir, output_prep_data=False, normalization = True,
+    def __init__(self, images, drift_rates, trange, rs, ballspacing, dp, sigma_factor, filter_radius, intsteps,
+                 outputdir, drift_dir=None, output_prep_data=False, normalization = True, read_write_drift_images=False,
                  filter_function=None, subdirs=None, basename='drift', save_ballpos_list=True, nthreads=1, verbose=False):
 
         """
@@ -1108,6 +1108,7 @@ class Calibrator:
         self.dp = dp
         self.intsteps = intsteps
         self.sigma_factor = sigma_factor
+        self.read_write_drift_images = read_write_drift_images
         self.drift_dir = drift_dir
         self.outputdir = outputdir
         self.output_prep_data = output_prep_data
@@ -1120,40 +1121,51 @@ class Calibrator:
         self.nthreads = nthreads
         self.verbose = verbose
 
-        os.makedirs(self.drift_dir, exist_ok=True)
-        os.makedirs(self.outputdir, exist_ok=True)
+        if self.drift_dir is None:
+            self.drift_dir = outputdir
 
+        os.makedirs(self.outputdir, exist_ok=True)
+        os.makedirs(self.drift_dir, exist_ok=True)
         if subdirs is None:
-            self.subdirs = [os.path.join(drift_dir, 'drift_{:02d}'.format(i)) for i in range(len(drift_rates))]
+            self.subdirs = [os.path.join(self.drift_dir, 'drift_{:02d}'.format(i)) for i in range(len(drift_rates))]
         else:
             self.subdirs = subdirs
 
 
-
     def drift_series(self, rate_idx):
 
-        # Files supposed to be created or to be read if already exist.
-        filepaths = [Path(os.path.join(self.subdirs[rate_idx], '{:s}_{:02d}.fits'.format(self.basename, i))) for i in range(*self.trange)]
+        if self.read_write_drift_images:
+            # Files supposed to be created or to be read if already exist.
+            filepaths = [Path(os.path.join(self.subdirs[rate_idx], '{:s}_{:02d}.fits'.format(self.basename, i))) for i in range(*self.trange)]
 
-        if self.images is None and check_file_series(filepaths):
-            # does not save much time compared to the total time of balltracking,
-            # but it significantly reduces disk usage compared to creating the images all over again.
-            print("Reading existing drift images at rate: [{:.2f}, {:.2f}] px/frame"
-                  .format(self.drift_rates[rate_idx][0], self.drift_rates[rate_idx][1]))
+            if self.images is None and check_file_series(filepaths):
+                # does not save much time compared to the total time of balltracking, should I bother?
+                print("Reading existing drift images at rate: [{:.2f}, {:.2f}] px/frame"
+                      .format(self.drift_rates[rate_idx][0], self.drift_rates[rate_idx][1]))
 
-            # Get a sample for the size
-            sample = fitsio.read(str(filepaths[0]))
-            drift_images = np.zeros([sample.shape[0], sample.shape[1], self.nframes])
-            for i, f in enumerate(filepaths):
-                drift_images[:, :, i] = fitsio.read(str(f))
-        elif self.images is not None:
-            # Use the self.images to create the drift images out of them
-            os.makedirs(self.subdirs[rate_idx], exist_ok=True)
-            print("Creating drift images at rate: [{:.2f}, {:.2f}] px/frame".format(self.drift_rates[rate_idx][0], self.drift_rates[rate_idx][1]))
-            drift_images = create_drift_series(self.images, self.drift_rates[rate_idx], filepaths, filter_function=self.filter_function)
+                # Get a sample for the size
+                sample = fitsio.read(str(filepaths[0]))
+                drift_images = np.zeros([sample.shape[0], sample.shape[1], self.nframes])
+                for i, f in enumerate(filepaths):
+                    drift_images[:, :, i] = fitsio.read(str(f))
+            elif self.images is not None:
+                # Use the self.images to create the drift images out of them
+                os.makedirs(self.subdirs[rate_idx], exist_ok=True)
+                print("Creating drift images at rate: [{:.2f}, {:.2f}] px/frame".format(self.drift_rates[rate_idx][0], self.drift_rates[rate_idx][1]))
+                drift_images = create_drift_series(self.images, self.drift_rates[rate_idx], filepaths=filepaths, filter_function=self.filter_function)
+            else:
+                print("Drift data do not exist. Sources images not provided. Must provide them as input")
+                sys.exit(1)
+
         else:
-            print("Drift data do not exist. Sources images not provided. Must provide them as input")
-            sys.exit(1)
+            if self.images is None:
+                print("Drift data do not exist. Sources images not provided. Must provide them as input")
+                sys.exit(1)
+
+            if self.verbose:
+                print("Creating drift images at rate: [{:.2f}, {:.2f}] px/frame".format(self.drift_rates[rate_idx][0],
+                                                                                        self.drift_rates[rate_idx][1]))
+            drift_images = create_drift_series(self.images, self.drift_rates[rate_idx], filter_function=self.filter_function)
 
         return drift_images
 
@@ -1516,8 +1528,8 @@ def make_lanes_visualization(vx, vy, nsteps, maxstep):
     return lanes_series, [xtracks.reshape([nsteps+1, *dims]), ytracks.reshape([nsteps+1, *dims])]
 
 
-def balltrack_calibration(bt_params, drift_rates, trange, fov_slices, reprocess_bt, drift_dir, outputdir, kernel, fwhm, dims,
-                          images=None, basename='drift', save_ballpos_list=True, csvfile=None, verbose=False, nthreads=1):
+def balltrack_calibration(bt_params, drift_rates, trange, fov_slices, reprocess_bt, outputdir, kernel, fwhm, dims,
+                          drift_dir=None, images=None, basename='drift', save_ballpos_list=True, csvfile=None, verbose=False, nthreads=1):
 
 
     if 'index' not in bt_params:
@@ -1532,8 +1544,8 @@ def balltrack_calibration(bt_params, drift_rates, trange, fov_slices, reprocess_
                          bt_params['sigma_factor'],
                          bt_params['fourier_radius'],
                          bt_params['intsteps'],
-                         drift_dir,
                          outputdir,
+                         drift_dir=drift_dir,
                          output_prep_data=False,
                          basename=basename,
                          save_ballpos_list=save_ballpos_list,
