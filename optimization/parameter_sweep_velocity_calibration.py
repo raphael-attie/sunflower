@@ -1,7 +1,7 @@
 import os, glob
 import pandas as pd
 import numpy as np
-
+import re
 import fitsio
 from scipy.signal import convolve2d
 from scipy.ndimage.filters import gaussian_filter
@@ -80,31 +80,33 @@ vx_stein_sm, vy_stein_sm = smooth_vel(vx_stein, vy_stein, fwhm, kernel='boxcar')
 # List of balltracked velocity flows
 filelist = glob.glob(os.path.join(datadir, 'mean_velocity*.npz'))
 
-corr_uncalibrated = []
-correlations = []
-corr_top = []
-corr_bot = []
-for i, f in enumerate(filelist):
+# Create new columns in the dataframes
+df['corr_uncal'] = -1
+df['corr'] = -1
+df['corr_top'] = -1
+df['corr_bot'] = -1
+
+for f in filelist:
+    # Parse the index from that filename
+    regex = re.compile(r'\d+')
+    idx = int(regex.findall(f)[0])
+
     with np.load(f) as vel:
-        vx_top = vel['vx_top'] * df['a_top_0'].iloc[i]
-        vy_top = vel['vy_top'] * df['a_top_0'].iloc[i]
-        vx_bot = vel['vx_bot'] * df['a_bot_0'].iloc[i]
-        vy_bot = vel['vy_bot'] * df['a_bot_0'].iloc[i]
+        vx_top = vel['vx_top'] * df['a_top_0'].loc[idx]
+        vy_top = vel['vy_top'] * df['a_top_0'].loc[idx]
+        vx_bot = vel['vx_bot'] * df['a_bot_0'].loc[idx]
+        vy_bot = vel['vy_bot'] * df['a_bot_0'].loc[idx]
         # Calibrate velocity
         vx_ball = 0.5 * (vx_top + vx_bot)
         vy_ball = 0.5 * (vy_top + vy_bot)
         vx_ball_uncal = 0.5 * (vel['vx_top'] + vel['vx_bot'])
         vy_ball_uncal = 0.5 * (vel['vy_top'] + vel['vy_bot'])
-        # Calculate correlation with Stein simulation
-        corr_uncalibrated.append(calc_c_pearson(vx_stein_sm, vx_ball_uncal, vy_stein_sm, vy_ball_uncal, fov=fov))
-        correlations.append(calc_c_pearson(vx_stein_sm, vx_ball, vy_stein_sm, vy_ball, fov=fov))
-        corr_top.append(calc_c_pearson(vx_stein_sm, vx_top, vy_stein_sm, vy_top, fov=fov))
-        corr_bot.append(calc_c_pearson(vx_stein_sm, vx_bot, vy_stein_sm, vy_bot, fov=fov))
 
-df['corr_uncal'] = corr_uncalibrated
-df['corr'] = correlations
-df['corr_top'] = corr_top
-df['corr_bot'] = corr_bot
+    # Calculate correlation with Stein simulation
+    df.loc[idx, 'corr_uncal'] = calc_c_pearson(vx_stein_sm, vx_ball_uncal, vy_stein_sm, vy_ball_uncal, fov=fov)
+    df.loc[idx, 'corr'] = calc_c_pearson(vx_stein_sm, vx_ball, vy_stein_sm, vy_ball, fov=fov)
+    df.loc[idx, 'corr_top'] = calc_c_pearson(vx_stein_sm, vx_top, vy_stein_sm, vy_top, fov=fov)
+    df.loc[idx, 'corr_bot'] = calc_c_pearson(vx_stein_sm, vx_bot, vy_stein_sm, vy_bot, fov=fov)
 
 
 df.to_csv(os.path.join(os.environ['DATA'], 'sanity_check/stein_series/correlation_dataframe.csv'), index=False)
