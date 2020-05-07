@@ -48,20 +48,19 @@ def calc_c_pearson(vx1, vx2, vy1, vy2, fov=None):
     return c_pearson
 
 
-# directory hosting the drifted data (9 series)
-drift_dir = os.path.join(os.environ['DATA'], 'sanity_check/stein_series/')
 # output directory for the drifting images
-outputdir = os.path.join(drift_dir, 'calibration')
+datadir = os.path.join(os.environ['DATA'], 'sanity_check/stein_series/calibration')
+datadir_stein = os.path.join(os.environ['DATA'], 'Ben/SteinSDO/')
 
 # number of parameter sets
 nsets = 3600
-filelist = [os.path.join(outputdir, 'param_sweep_{:d}.csv'.format(idx)) for idx in range(nsets)]
+filelist = [os.path.join(datadir, 'param_sweep_{:d}.csv'.format(idx)) for idx in range(nsets)]
 # Concatenate all csv file content into one dataframe
 df_list = [pd.read_csv(f) for f in filelist]
 df = pd.concat(df_list, axis=0, ignore_index=True)
 df.set_index('index', inplace=True)
 # List of velocity flow files
-filelist = [os.path.join(outputdir, 'mean_velocity_{:d}.npz'.format(idx)) for idx in range(nsets)]
+filelist = [os.path.join(datadir, 'mean_velocity_{:d}.npz'.format(idx)) for idx in range(nsets)]
 
 df['a_top_0'] = 1 / df['p_top_0']
 df['a_bot_0'] = 1 / df['p_bot_0']
@@ -73,9 +72,8 @@ pad = 10
 step = fwhm
 fov = np.s_[pad:-pad:step, pad:-pad:step]
 # Get Stein velocity
-data_dir_stein = os.path.expanduser('~/Data/Ben/SteinSDO/')
-svx_files = sorted(glob.glob(os.path.join(data_dir_stein,'SDO_vx*.fits')))
-svy_files = sorted(glob.glob(os.path.join(data_dir_stein,'SDO_vy*.fits')))
+svx_files = sorted(glob.glob(os.path.join(datadir_stein,'SDO_vx*.fits')))
+svy_files = sorted(glob.glob(os.path.join(datadir_stein,'SDO_vy*.fits')))
 vx_stein, vy_stein = load_vel_mean((svx_files, svy_files), trange)
 # smooth the Stein velocities
 vx_stein_sm, vy_stein_sm = smooth_vel(vx_stein, vy_stein, fwhm, kernel='boxcar')
@@ -107,6 +105,5 @@ df['corr_top'] = corr_top
 df['corr_bot'] = corr_bot
 
 
-df.to_pickle(os.path.join(drift_dir, 'correlation_dataframe.pkl'))
-df.to_csv(os.path.join(drift_dir, 'correlation_dataframe.csv'), index=False)
+df.to_csv(os.path.join(os.environ['DATA'], 'sanity_check/stein_series/correlation_dataframe.csv'), index=False)
 

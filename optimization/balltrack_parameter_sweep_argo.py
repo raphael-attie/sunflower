@@ -11,7 +11,7 @@ if __name__ == '__main__':
     os.chdir(os.path.expanduser('~/dev/sdo-tracking-framework'))
 
     # output directory for the drifting images
-    outputdir = os.path.join(os.environ['DATA'], 'sanity_check/stein_series/calibration_unit_test')
+    outputdir = os.path.join(os.environ['DATA'], 'sanity_check/stein_series/calibration')
 
     reprocess_bt = True
     nframes = 30
