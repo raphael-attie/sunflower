@@ -52,12 +52,13 @@ def calc_c_pearson(vx1, vx2, vy1, vy2, fov=None):
 datadir = os.path.join(os.environ['DATA'], 'sanity_check/stein_series/calibration')
 datadir_stein = os.path.join(os.environ['DATA'], 'Ben/SteinSDO/')
 # number of parameter sets
-
+# These files aren't ordered. This will be taken care for by sorting per index key.
 filelist = glob.glob(os.path.join(datadir, 'param_sweep_*.csv'))
 # Concatenate all csv file content into one dataframe
 df_list = [pd.read_csv(f) for f in filelist]
 df = pd.concat(df_list, axis=0, ignore_index=True)
 df.set_index('index', inplace=True)
+df.sort_index(inplace=True)
 
 df['a_top_0'] = 1 / df['p_top_0']
 df['a_bot_0'] = 1 / df['p_bot_0']
