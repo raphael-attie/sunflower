@@ -92,21 +92,21 @@ for f in filelist:
     idx = int(regex.findall(f)[0])
 
     with np.load(f) as vel:
-        vx_top = vel['vx_top'] * df['a_top_0'].loc[idx]
-        vy_top = vel['vy_top'] * df['a_top_0'].loc[idx]
-        vx_bot = vel['vx_bot'] * df['a_bot_0'].loc[idx]
-        vy_bot = vel['vy_bot'] * df['a_bot_0'].loc[idx]
+        vx_top_cal = vel['vx_top'] * df['a_top_0'].loc[idx]
+        vy_top_cal = vel['vy_top'] * df['a_top_0'].loc[idx]
+        vx_bot_cal = vel['vx_bot'] * df['a_bot_0'].loc[idx]
+        vy_bot_cal = vel['vy_bot'] * df['a_bot_0'].loc[idx]
         # Calibrate velocity
-        vx_ball = 0.5 * (vx_top + vx_bot)
-        vy_ball = 0.5 * (vy_top + vy_bot)
+        vx_ball_cal = 0.5 * (vx_top_cal + vx_bot_cal)
+        vy_ball_cal = 0.5 * (vy_top_cal + vy_bot_cal)
         vx_ball_uncal = 0.5 * (vel['vx_top'] + vel['vx_bot'])
         vy_ball_uncal = 0.5 * (vel['vy_top'] + vel['vy_bot'])
 
     # Calculate correlation with Stein simulation
     df.loc[idx, 'corr_uncal'] = calc_c_pearson(vx_stein_sm, vx_ball_uncal, vy_stein_sm, vy_ball_uncal, fov=fov)
-    df.loc[idx, 'corr'] = calc_c_pearson(vx_stein_sm, vx_ball, vy_stein_sm, vy_ball, fov=fov)
-    df.loc[idx, 'corr_top'] = calc_c_pearson(vx_stein_sm, vx_top, vy_stein_sm, vy_top, fov=fov)
-    df.loc[idx, 'corr_bot'] = calc_c_pearson(vx_stein_sm, vx_bot, vy_stein_sm, vy_bot, fov=fov)
+    df.loc[idx, 'corr'] = calc_c_pearson(vx_stein_sm, vx_ball_cal, vy_stein_sm, vy_ball_cal, fov=fov)
+    df.loc[idx, 'corr_top'] = calc_c_pearson(vx_stein_sm, vx_top_cal, vy_stein_sm, vy_top_cal, fov=fov)
+    df.loc[idx, 'corr_bot'] = calc_c_pearson(vx_stein_sm, vx_bot_cal, vy_stein_sm, vy_bot_cal, fov=fov)
 
 
 df.to_csv(os.path.join(os.environ['DATA'], 'sanity_check/stein_series/correlation_dataframe.csv'), index=False)
