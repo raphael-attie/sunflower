@@ -60,6 +60,8 @@ df = pd.concat(df_list, axis=0, ignore_index=True)
 df.set_index('index', inplace=True)
 df.sort_index(inplace=True)
 
+# unit in m/s for Stein simulation for 1 px / frame interval
+u = 368000 / 60
 
 trange = [0, 30]
 fwhm = 7
@@ -78,10 +80,19 @@ vx_stein_sm, vy_stein_sm = smooth_vel(vx_stein, vy_stein, fwhm, kernel='boxcar')
 filelist = glob.glob(os.path.join(datadir, 'mean_velocity*.npz'))
 
 # Create new columns in the dataframes
-df['corr_uncal'] = -1
-df['corr'] = -1
-df['corr_top'] = -1
-df['corr_bot'] = -1
+df.insert(8, 'corr_uncal', -1)
+df.insert(9, 'corr', -1)
+df.insert(10, 'corr_top', -1)
+df.insert(11, 'corr_bot', -1)
+df.insert(12, 'MAE_uncal_vx', -1)
+df.insert(13, 'MAE_uncal_vy', -1)
+df.insert(14, 'MAE_cal_vx', -1)
+df.insert(15, 'MAE_cal_vy', -1)
+df.insert(16, 'RMSE_uncal_vx', -1)
+df.insert(17, 'RMSE_uncal_vy', -1)
+df.insert(18, 'RMSE_cal_vx', -1)
+df.insert(19, 'RMSE_cal_vy', -1)
+
 
 for f in filelist:
     # Parse the index from that filename
@@ -98,6 +109,23 @@ for f in filelist:
         vy_ball_cal = 0.5 * (vy_top_cal + vy_bot_cal)
         vx_ball_uncal = 0.5 * (vel['vx_top'] + vel['vx_bot'])
         vy_ball_uncal = 0.5 * (vel['vy_top'] + vel['vy_bot'])
+
+    error_uncal_vx = (vx_stein_sm[fov].ravel() - vx_ball_uncal[fov].ravel() * u)
+    df.loc[idx, 'RMSE_uncal_vx'] = np.sqrt(np.mean(error_uncal_vx ** 2))
+    df.loc[idx, 'MAE_uncal_vx'] = np.mean(np.abs(error_uncal_vx))
+
+    error_uncal_vy = (vy_stein_sm[fov].ravel() - vy_ball_uncal[fov].ravel() * u)
+    df.loc[idx, 'RMSE_uncal_vy'] = np.sqrt(np.mean(error_uncal_vy ** 2))
+    df.loc[idx, 'MAE_uncal_vy'] = np.mean(np.abs(error_uncal_vy))
+
+    error_cal_vx = (vx_stein_sm[fov].ravel() - vx_ball_cal[fov].ravel() * u)
+    df.loc[idx, 'RMSE_cal_vx'] = np.sqrt(np.mean(error_uncal_vx ** 2))
+    df.loc[idx, 'MAE_cal_vx'] = np.mean(np.abs(error_uncal_vx))
+
+    error_cal_vy = (vy_stein_sm[fov].ravel() - vy_ball_cal[fov].ravel() * u)
+    df.loc[idx, 'RMSE_cal_vy'] = np.sqrt(np.mean(error_cal_vy ** 2))
+    df.loc[idx, 'MAE_cal_vy'] = np.mean(np.abs(error_cal_vy))
+
 
     # Calculate correlation with Stein simulation
     df.loc[idx, 'corr_uncal'] = calc_c_pearson(vx_stein_sm, vx_ball_uncal, vy_stein_sm, vy_ball_uncal, fov=fov)
