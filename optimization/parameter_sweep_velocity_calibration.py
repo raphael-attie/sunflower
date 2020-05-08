@@ -119,8 +119,8 @@ for f in filelist:
     df.loc[idx, 'MAE_uncal_vy'] = np.mean(np.abs(error_uncal_vy))
 
     error_cal_vx = (vx_stein_sm[fov].ravel() - vx_ball_cal[fov].ravel() * u)
-    df.loc[idx, 'RMSE_cal_vx'] = np.sqrt(np.mean(error_uncal_vx ** 2))
-    df.loc[idx, 'MAE_cal_vx'] = np.mean(np.abs(error_uncal_vx))
+    df.loc[idx, 'RMSE_cal_vx'] = np.sqrt(np.mean(error_cal_vx ** 2))
+    df.loc[idx, 'MAE_cal_vx'] = np.mean(np.abs(error_cal_vx))
 
     error_cal_vy = (vy_stein_sm[fov].ravel() - vy_ball_cal[fov].ravel() * u)
     df.loc[idx, 'RMSE_cal_vy'] = np.sqrt(np.mean(error_cal_vy ** 2))
