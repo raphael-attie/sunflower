@@ -60,9 +60,6 @@ df = pd.concat(df_list, axis=0, ignore_index=True)
 df.set_index('index', inplace=True)
 df.sort_index(inplace=True)
 
-df['a_top_0'] = 1 / df['p_top_0']
-df['a_bot_0'] = 1 / df['p_bot_0']
-
 
 trange = [0, 30]
 fwhm = 7
@@ -92,10 +89,10 @@ for f in filelist:
     idx = int(regex.findall(f)[0])
 
     with np.load(f) as vel:
-        vx_top_cal = vel['vx_top'] * df['a_top_0'].loc[idx]
-        vy_top_cal = vel['vy_top'] * df['a_top_0'].loc[idx]
-        vx_bot_cal = vel['vx_bot'] * df['a_bot_0'].loc[idx]
-        vy_bot_cal = vel['vy_bot'] * df['a_bot_0'].loc[idx]
+        vx_top_cal = vel['vx_top'] * df['p_top_0'].loc[idx]
+        vy_top_cal = vel['vy_top'] * df['p_top_0'].loc[idx]
+        vx_bot_cal = vel['vx_bot'] * df['p_bot_0'].loc[idx]
+        vy_bot_cal = vel['vy_bot'] * df['p_bot_0'].loc[idx]
         # Calibrate velocity
         vx_ball_cal = 0.5 * (vx_top_cal + vx_bot_cal)
         vy_ball_cal = 0.5 * (vy_top_cal + vy_bot_cal)
