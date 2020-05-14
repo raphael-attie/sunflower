@@ -100,6 +100,12 @@ for f in filelist:
     idx = int(regex.findall(f)[0])
 
     with np.load(f) as vel:
+        # Convert to same physical units as stein simulation (m/s)
+        vel['vx_top'] *= u
+        vel['vy_top'] *= u
+        vel['vx_bot'] *= u
+        vel['vy_bot'] *= u
+
         vx_top_cal = vel['vx_top'] * df['p_top_0'].loc[idx]
         vy_top_cal = vel['vy_top'] * df['p_top_0'].loc[idx]
         vx_bot_cal = vel['vx_bot'] * df['p_bot_0'].loc[idx]
@@ -110,19 +116,19 @@ for f in filelist:
         vx_ball_uncal = 0.5 * (vel['vx_top'] + vel['vx_bot'])
         vy_ball_uncal = 0.5 * (vel['vy_top'] + vel['vy_bot'])
 
-    error_uncal_vx = (vx_stein_sm[fov].ravel() - vx_ball_uncal[fov].ravel() * u)
+    error_uncal_vx = (vx_stein_sm[fov].ravel() - vx_ball_uncal[fov].ravel())
     df.loc[idx, 'RMSE_uncal_vx'] = np.sqrt(np.mean(error_uncal_vx ** 2))
     df.loc[idx, 'MAE_uncal_vx'] = np.mean(np.abs(error_uncal_vx))
 
-    error_uncal_vy = (vy_stein_sm[fov].ravel() - vy_ball_uncal[fov].ravel() * u)
+    error_uncal_vy = (vy_stein_sm[fov].ravel() - vy_ball_uncal[fov].ravel())
     df.loc[idx, 'RMSE_uncal_vy'] = np.sqrt(np.mean(error_uncal_vy ** 2))
     df.loc[idx, 'MAE_uncal_vy'] = np.mean(np.abs(error_uncal_vy))
 
-    error_cal_vx = (vx_stein_sm[fov].ravel() - vx_ball_cal[fov].ravel() * u)
+    error_cal_vx = (vx_stein_sm[fov].ravel() - vx_ball_cal[fov].ravel())
     df.loc[idx, 'RMSE_cal_vx'] = np.sqrt(np.mean(error_cal_vx ** 2))
     df.loc[idx, 'MAE_cal_vx'] = np.mean(np.abs(error_cal_vx))
 
-    error_cal_vy = (vy_stein_sm[fov].ravel() - vy_ball_cal[fov].ravel() * u)
+    error_cal_vy = (vy_stein_sm[fov].ravel() - vy_ball_cal[fov].ravel())
     df.loc[idx, 'RMSE_cal_vy'] = np.sqrt(np.mean(error_cal_vy ** 2))
     df.loc[idx, 'MAE_cal_vy'] = np.mean(np.abs(error_cal_vy))
 
