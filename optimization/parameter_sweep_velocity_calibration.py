@@ -111,14 +111,12 @@ for f in filelist:
         vx_ball_uncal = 0.5 * (vel['vx_top'] + vel['vx_bot']) * u
         vy_ball_uncal = 0.5 * (vel['vy_top'] + vel['vy_bot']) * u
 
-    error_vx_uncal_top = (vx_stein_sm[fov].ravel() - vx_top_cal[fov].ravel())
-    error_vx_uncal_bot = (vx_stein_sm[fov].ravel() - vx_bot_cal[fov].ravel())
     error_vx_cal_top = (vx_stein_sm[fov].ravel() - vx_top_cal[fov].ravel())
     error_vx_cal_bot = (vx_stein_sm[fov].ravel() - vx_bot_cal[fov].ravel())
-    df.loc[idx, 'MAE_uncal_vx_top'] = np.mean(np.abs(error_vx_uncal_top))
-    df.loc[idx, 'MAE_uncal_vx_bot'] = np.mean(np.abs(error_vx_uncal_bot))
     df.loc[idx, 'MAE_cal_vx_top'] = np.mean(np.abs(error_vx_cal_top))
     df.loc[idx, 'MAE_cal_vx_bot'] = np.mean(np.abs(error_vx_cal_bot))
+    df.loc[idx, 'RMSE_cal_vx_top'] = np.sqrt(np.mean(error_vx_cal_top ** 2))
+    df.loc[idx, 'RMSE_cal_vx_bot'] = np.sqrt(np.mean(error_vx_cal_bot ** 2))
 
     error_uncal_vx = (vx_stein_sm[fov].ravel() - vx_ball_uncal[fov].ravel())
     df.loc[idx, 'RMSE_uncal_vx'] = np.sqrt(np.mean(error_uncal_vx ** 2))
