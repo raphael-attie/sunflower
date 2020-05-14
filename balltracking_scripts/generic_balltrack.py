@@ -1,8 +1,10 @@
 import balltracking.balltrack as blt
 import os, glob
 import numpy as np
+import pandas as pd
 from collections import OrderedDict
 from multiprocessing import Pool
+
 
 if __name__ == '__main__':
 
@@ -32,13 +34,24 @@ if __name__ == '__main__':
     # # Make velocity flow fields
     # kernel = 'gaussian' #'boxcar'
     # fwhm = 7
+    caldf = pd.read_csv(os.path.expanduser('~/Data/sanity_check/stein_series/correlation_dataframe.csv'))
+    row = caldf[(caldf.rs == bt_params['rs'])
+                & (caldf.ballspacing==bt_params['ballspacing'])
+                & (caldf.intsteps==bt_params['intsteps'])
+                & np.isclose(caldf.dp, bt_params['dp'])
+                & np.isclose(caldf.sigma_factor, bt_params['sigma_factor'])
+                & np.isclose(caldf.fourier_radius, bt_params['fourier_radius'])]
+
+    cal_top = row.p_top_0.values[0]
+    cal_bot = row.p_bot_0.values[0]
+    print('Using calibration factors of (top / bottom):')
+    print(cal_top)
+    print(cal_bot)
 
     for fwhm in [7,9,11,13,15]:
         for kernel in ['boxcar', 'gaussian']:
 
             tranges = [[0, nt] for nt in range(30, bt_params['nframes']+1, 5)]
-            cal_top = 1.79# 1.7893 # for 60 min with boxcar # 1.801 # for 30 min with boxcar
-            cal_bot = 1.70# 1.7024 # for 60 min with boxcar # 1.713 # for 30 min with boxcar
             dims=[263, 263]
 
             def make_velocity_wrapper(trange):
