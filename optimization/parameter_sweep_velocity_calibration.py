@@ -100,21 +100,16 @@ for f in filelist:
     idx = int(regex.findall(f)[0])
 
     with np.load(f) as vel:
-        # Convert to same physical units as stein simulation (m/s)
-        vel['vx_top'] *= u
-        vel['vy_top'] *= u
-        vel['vx_bot'] *= u
-        vel['vy_bot'] *= u
 
-        vx_top_cal = vel['vx_top'] * df['p_top_0'].loc[idx]
-        vy_top_cal = vel['vy_top'] * df['p_top_0'].loc[idx]
-        vx_bot_cal = vel['vx_bot'] * df['p_bot_0'].loc[idx]
-        vy_bot_cal = vel['vy_bot'] * df['p_bot_0'].loc[idx]
+        vx_top_cal = vel['vx_top'] * df['p_top_0'].loc[idx] * u
+        vy_top_cal = vel['vy_top'] * df['p_top_0'].loc[idx] * u
+        vx_bot_cal = vel['vx_bot'] * df['p_bot_0'].loc[idx] * u
+        vy_bot_cal = vel['vy_bot'] * df['p_bot_0'].loc[idx] * u
         # Calibrate velocity
         vx_ball_cal = 0.5 * (vx_top_cal + vx_bot_cal)
         vy_ball_cal = 0.5 * (vy_top_cal + vy_bot_cal)
-        vx_ball_uncal = 0.5 * (vel['vx_top'] + vel['vx_bot'])
-        vy_ball_uncal = 0.5 * (vel['vy_top'] + vel['vy_bot'])
+        vx_ball_uncal = 0.5 * (vel['vx_top'] + vel['vx_bot']) * u
+        vy_ball_uncal = 0.5 * (vel['vy_top'] + vel['vy_bot']) * u
 
     error_uncal_vx = (vx_stein_sm[fov].ravel() - vx_ball_uncal[fov].ravel())
     df.loc[idx, 'RMSE_uncal_vx'] = np.sqrt(np.mean(error_uncal_vx ** 2))
