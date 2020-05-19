@@ -65,8 +65,8 @@ u = 368000 / 60
 
 trange = [0, 30]
 fwhm = 7
-step = fwhm
-fov = np.s_[fwhm:-fwhm:fwhm, fwhm:-fwhm:fwhm]
+trim = 10 # Same as Benoit
+fov = np.s_[trim:-trim:fwhm, trim:-trim:fwhm]
 # Get Stein velocity
 svx_files = sorted(glob.glob(os.path.join(datadir_stein,'SDO_vx*.fits')))
 svy_files = sorted(glob.glob(os.path.join(datadir_stein,'SDO_vy*.fits')))
