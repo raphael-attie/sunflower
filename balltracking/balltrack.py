@@ -26,8 +26,8 @@ import graphics
 DTYPE = np.float32
 class BT:
 
-    def __init__(self, nt, rs, ballspacing, dp, intsteps=3, sigma_factor=1, fourier_radius=0, mode='top', direction='forward', datafiles=None, data=None,
-                 output_prep_data=False, outputdir='', verbose=False):
+    def __init__(self, nt, rs, ballspacing, dp, intsteps, sigma_factor, fourier_radius, mode, direction, datafiles=None, data=None,
+                 output_prep_data=False, outputdir=None, verbose=False):
 
         """
         This is the class hosting all the parameters and intermediate results of balltracking.
@@ -45,12 +45,16 @@ class BT:
         :param data: numpy data cube whose dimensions are (y-axis, x-axis, time)
         """
 
+        if output_prep_data & (outputdir is None):
+            sys.exit('Missing output directory to output prep data')
+
         self.datafiles = datafiles
         self.data = data
         if direction != 'forward' and direction != 'backward':
             raise ValueError
+
         self.direction = direction
-        self.nt = nt
+        self.nt = int(nt)
 
         # Get a sample. 1st of the series in forward direction. last of the series in backward direction.
         # TODO: It could be wiser to get some average value between 1st, middle, and last of the series?
@@ -345,37 +349,37 @@ class BT:
         return xnew, ynew
 
 
-def track_instance(mode_direction, nframes, rs, dp, sigma_factor, intsteps=3, fourier_radius=0, ballspacing=4, datafile=None, data=None, output_prep_data=False, outputdir='', verbose=False):
+def track_instance(params, side_direction, datafiles=None, data=None):
 
     """
-    Run balltracking on a given tuple (mode,direction). This routine must be executed with 4 of these pairs for
+    Wrapper to run balltracking on a given tuple of (side, direction). This routine must be executed with 4 of these pairs for
     a complete flow tracking.
 
-    :param mode_direction: tracking mode and tracking direction, e.g. ('top', 'forward').
-    :param nframes: number of frames to track in the image series
-    :param rs: ball radius
-    :param dp: charateristic depth
-    :param sigma_factor: multiplier to the standard deviation
-    :param intsteps: number of intermediate integration steps between images
-    :param fourier_radius: radius for image fourier filter in spatial domain units (pixels) instead of k-space.
-    :param datafile: path to data cube file or series of files.
+    :params: all ball parameters relevant to the BT class.
+    :param side_direction: tracking mode and tracking direction, e.g. ('top', 'forward').
+    :param datafiles: path to data cube file or series of files.
     :param data: for calibration only. numpy data arrays of drifting data surface.
-    :param output_prep_data: write fits files and export png files of the data surface, as seen by the balls.
-    :param outputdir: output directory to write the intermediate ball tracks as .npz files
-    :param verbose: True of False for more or less verbosity.
     :return:
     """
-    bt_instance = BT(nframes, rs, ballspacing, dp, intsteps=intsteps, sigma_factor=sigma_factor, fourier_radius=fourier_radius, mode=mode_direction[0], direction=mode_direction[1],
-                     datafiles=datafile, data=data, output_prep_data=output_prep_data, outputdir=outputdir, verbose=verbose)
+    print(side_direction)
+
+    params_side = params[side_direction[0]]
+
+    bt_instance = BT(params['nframes'], params_side['rs'], params_side['ballspacing'], params_side['dp'],
+                     params_side['intsteps'], params_side['sigma_factor'], params_side['fourier_radius'],
+                     side_direction[0], side_direction[1],
+                     output_prep_data=params['output_prep_data'],
+                     outputdir=params['outputdir'],
+                     verbose=params['verbose'],
+                     datafiles=datafiles, data=data)
+
     bt_instance.track()
 
     return bt_instance.ballpos
 
 
 
-
-def balltrack_all(nframes, rs, dp, sigma_factor, intsteps, outputdir, fourier_radius=0, ballspacing=4, datafiles=None,
-                  data=None, output_prep_data=False, write_ballpos=True, ncores=1, verbose=False):
+def balltrack_all(params, datafiles=None, data=None, write_ballpos=True, ncores=1):
 
     """ Run the tracking on the 4 (mode, direction) pairs:
     (('top', 'forward'),
@@ -383,61 +387,46 @@ def balltrack_all(nframes, rs, dp, sigma_factor, intsteps, outputdir, fourier_ra
      ('bottom', 'forward'),
      ('bottom', 'backward'))
 
-     Can be executed in a parallel pool of up to 4 processes.
+     Can be executed in a pool of up to 4 parallel workers.
 
-    :param nframes: number of frames to track in the image series
-    :param rs: ball radius
-    :param dp: charateristic depth
-    :param sigma_factor: multiplier to the standard deviation
-    :param intsteps: number of intermediate integration steps between images
+    :params: all ball parameters relevant to the BT class
     :param datafiles: path to data cube file or series of files.
     :param data: numpy data cube used if datafile not given.
-    :param outputdir: output directory to write the intermediate ball tracks as .npz files
-    :param fourier_radius: radius for image fourier filter in spatial domain units (pixels) instead of k-space.
-    :param ballspacing: spacing between balls on initial grid (in pixels)
-    :param ballspacing: spacing between balls on initial grid (in pixels)
-    :param output_prep_data: write filtered "prepped" data surfacce as fits files in outputdir
+    :param write_ballpos: sets whether to write the array of ball positions as .npz or not.
     :param ncores: number of cores to use for running the 4 modes/directions in parallel.
-    Default is 1 for sequential processing. There can up to 4 workers for these parallel tasks.
+        Default is 1 for sequential processing. There can up to 4 workers for these parallel tasks.
     :return: 2D arrays of ball positions for top-side and bottom-side tracking -> [ball #, coordinates]
     """
+    if write_ballpos and 'outputdir' not in params:
+        sys.exit('missing outputdir in params to write ball positions')
 
-    # Must enforce integer type for nframes
-    nframes = int(nframes)
     # Check user data input
     if (datafiles is None or not isinstance(datafiles, str)) and not isinstance(datafiles, list) and data is None:
         raise ValueError
-    # Create outputdir if does not exist
-    os.makedirs(outputdir, exist_ok=True)
     # Get a BT instance with the above parameters
     mode_direction_list = (('top','forward'),
                            ('top', 'backward'),
                            ('bottom', 'forward'),
                            ('bottom', 'backward'))
     if datafiles is not None:
-        partial_track = partial(track_instance, nframes=nframes, rs=rs, dp=dp, sigma_factor=sigma_factor, intsteps=intsteps,
-                                fourier_radius=fourier_radius, ballspacing=ballspacing, datafile=datafiles,
-                                output_prep_data=output_prep_data, outputdir=outputdir, verbose=verbose)
+        partial_track = partial(track_instance, params, datafiles=datafiles)
     else:
-        partial_track = partial(track_instance, nframes=nframes, rs=rs, dp=dp, sigma_factor=sigma_factor, intsteps=intsteps,
-                                fourier_radius=fourier_radius, ballspacing=ballspacing, data=data,
-                                output_prep_data=output_prep_data, outputdir=outputdir, verbose=verbose)
+        partial_track = partial(track_instance, params, data=data)
     # Only use 1 to 4 workers. 1 means no parallelization.
-    ncores = max(min(ncores, 4), 1)
     if ncores == 1:
-        ballpos_tf, ballpos_tb, ballpos_bf, ballpos_bb = list(map(partial_track, mode_direction_list))
+        ballpos_top_f, ballpos_top_b, ballpos_bot_f, ballpos_bot_b = list(map(partial_track, mode_direction_list))
     else:
-        with Pool(processes=ncores) as pool:
-            ballpos_tf, ballpos_tb, ballpos_bf, ballpos_bb = pool.map(partial_track, mode_direction_list)
+        with Pool(processes=max(min(ncores, 4), 1)) as pool:
+            ballpos_top_f, ballpos_top_b, ballpos_bot_f, ballpos_bot_b = pool.map(partial_track, mode_direction_list)
 
-    ballpos_top = np.concatenate((ballpos_tf, ballpos_tb), axis=1)
-    ballpos_bottom = np.concatenate((ballpos_bf, ballpos_bb), axis=1)
+    ballpos_top = np.concatenate((ballpos_top_f, ballpos_top_b), axis=1)
+    ballpos_bottom = np.concatenate((ballpos_bot_f, ballpos_bot_b), axis=1)
 
     if write_ballpos:
-        np.save(os.path.join(outputdir, 'ballpos_top.npy'), ballpos_top)
-        np.save(os.path.join(outputdir, 'ballpos_bottom.npy'), ballpos_bottom)
-        fitstools.writefits(ballpos_top, os.path.join(outputdir, 'ballpos_top.fits'))
-        fitstools.writefits(ballpos_top, os.path.join(outputdir, 'ballpos_bottom.fits'))
+        # Create outputdir if does not exist
+        os.makedirs(params['outputdir'], exist_ok=True)
+        np.savez_compressed(os.path.join(params['outputdir'], 'ballpos.npz'),
+                            ballpos_top=ballpos_top, ballpos_bottom=ballpos_bottom)
 
     return ballpos_top, ballpos_bottom
 
@@ -1346,7 +1335,7 @@ def check_file_series(filepaths):
 ##############################################################################################################
 ##############################################################################################################
 
-def make_euler_velocity(ballpos_top, ballpos_bottom, cal_top, cal_bottom, dims, trange, fwhm, kernel):
+def make_euler_velocity(ballpos_top, ballpos_bottom, cal_top, cal_bottom, dims, trange, fwhm, kernel, outputdir=None):
 
     vx_top, vy_top, wplane_top = make_velocity_from_tracks(ballpos_top, dims, trange, fwhm, kernel)
     vx_bottom, vy_bottom, wplane_bottom = make_velocity_from_tracks(ballpos_bottom, dims, trange, fwhm, kernel)
@@ -1358,6 +1347,11 @@ def make_euler_velocity(ballpos_top, ballpos_bottom, cal_top, cal_bottom, dims, 
 
     vx = 0.5 * (vx_top + vx_bottom)
     vy = 0.5 * (vy_top + vy_bottom)
+
+    if outputdir is not None:
+        np.savez_compressed(
+            os.path.join(outputdir, 'vxy_{:s}_fwhm_{:d}_avg_{:d}.npz'.format(kernel, fwhm, trange[1])),
+            vx=vx, vy=vy)
 
     return vx, vy
 

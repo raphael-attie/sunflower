@@ -5,26 +5,26 @@ import fitsio
 from astropy.io import fits
 
 
-def fitsread(file, xslice=slice(None), yslice=slice(None), tslice=slice(None), cube=True):
+def fitsread(files, xslice=slice(None), yslice=slice(None), tslice=slice(None), cube=True):
 
-    if isinstance(file, str):
+    if isinstance(files, str):
         if cube:
-            with fitsio.FITS(file) as fitsfile:
+            with fitsio.FITS(files) as fitsfile:
                 if fitsfile[0].has_data():
                     data = np.squeeze(np.moveaxis(fitsfile[0][tslice, yslice, xslice], 0, 2) )
                 else:
                     data = np.squeeze(np.moveaxis(fitsfile[1][tslice, yslice, xslice], 0, 2))
         else:
             #Load as single file and single image
-            data = fitsio.read(file)
+            data = fitsio.read(files)
     else:
-        # Assume and read list of files
-        fitsfiles = file[tslice]
-        if len(fitsfiles) == 1:
-            data = fitsio.read(fitsfiles[0])
-        else:
+        fitsfiles = files[tslice]
+        if isinstance(tslice, int):
+            # There's only file to read.
+            data = fitsio.read(fitsfiles)
+        else: # Assume and read list of files
             # Load sample to get dimensions
-            sample = fitsio.read(file[0])
+            sample = fitsio.read(fitsfiles[0])
             data = np.empty([*sample.shape, len(fitsfiles)], np.float32)
             for i, datafile in enumerate(fitsfiles):
                   data[:, :, i] = fitsio.read(datafile)

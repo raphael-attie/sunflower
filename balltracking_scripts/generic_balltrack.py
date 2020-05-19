@@ -22,6 +22,7 @@ if __name__ == '__main__':
                              'nframes': 364,
                              'datafiles': datafiles,
                              'outputdir': os.path.join(os.environ['DATA'], 'Ben/SteinSDO/balltrack'),
+                             'verbose':True,
                              'ncores': 4})
 
 
