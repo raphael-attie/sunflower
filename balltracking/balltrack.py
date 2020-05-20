@@ -1278,12 +1278,14 @@ def create_drift_series(images, drift_rate, filepaths=None, filter_function=None
     :param filter_function: optional filter to apply to the image
     :return: drifted images
     """
-    drift_images = np.zeros(images.shape)
+
+    if drift_rate[0] == 0 and drift_rate[1] == 0:
+        drift_images = images
+    else:
+        drift_images = np.zeros(images.shape)
 
     for i in range(images.shape[2]):
-        if drift_rate[0] == 0 and drift_rate[1]==0:
-            drift_images[:, :, i] = images[:, :, i]
-        else:
+        if (drift_rate[0] != 0) or (drift_rate[1]!=0):
             dx = drift_rate[0] * float(i)
             dy = drift_rate[1] * i
             drift_images[:, :, i] = filters.translate_by_phase_shift(images[:, :, i], dx, dy)
