@@ -184,7 +184,7 @@ class BT:
 
         self.initialize()
 
-        for n in range(self.nt):
+        for n in range(0, self.nt):
             if self.verbose:
                 print("Tracking direction {}/{}, frame {:d}".format(self.direction, self.mode, n))
 
@@ -1174,11 +1174,29 @@ class Calibrator:
         """
 
         drift_images = self.drift_series(rate_idx)
-        ballpos_top, ballpos_bottom = balltrack_all(self.nframes, self.rs, self.dp, self.sigma_factor, self.intsteps, self.subdirs[rate_idx],
-                                                    fourier_radius=self.filter_radius, ballspacing=self.ballspacing,
-                                                    data=drift_images, output_prep_data=self.output_prep_data,
-                                                    write_ballpos=False, verbose=self.verbose,
-                                                    ncores=1)
+
+        # Ball parameters
+        bt_params_top = OrderedDict({'rs': self.rs,
+                                     'ballspacing': self.ballspacing,
+                                     'intsteps': self.intsteps,
+                                     'dp': self.dp,
+                                     'sigma_factor': self.sigma_factor,
+                                     'fourier_radius': self.filter_radius})
+
+        bt_params_bottom = OrderedDict({'rs': self.rs,
+                                        'ballspacing': self.ballspacing,
+                                        'intsteps': self.intsteps,
+                                        'dp': self.dp,
+                                        'sigma_factor': self.sigma_factor,
+                                        'fourier_radius': self.filter_radius})
+
+        bt_params = {'top': bt_params_top, 'bottom': bt_params_bottom,
+                     'nframes': self.nframes,
+                     'outputdir': self.subdirs[rate_idx],
+                     'output_prep_data': False,
+                     'verbose': False}
+
+        ballpos_top, ballpos_bottom = balltrack_all(bt_params, data=drift_images, write_ballpos=False, ncores=1)
         return ballpos_top, ballpos_bottom
 
 
@@ -1530,11 +1548,19 @@ def balltrack_calibration(bt_params, drift_rates, trange, fov_slices, reprocess_
         print('bt_params missing "index" key')
         sys.exit(1)
 
+    if verbose:
+        print(bt_params)
+
+    xrates = np.array(drift_rates)[:, 0]
+    idx0 = np.where(xrates == 0)[0][0]
     ballpos_list_file = os.path.join(outputdir, 'ballpos_list.npz')
 
     if (reprocess_bt is True) or (reprocess_bt == 'once' and not os.path.isfile(ballpos_list_file)):
 
-        cal = Calibrator(images, drift_rates, trange, bt_params['rs'], bt_params['ballspacing'], bt_params['dp'],
+        cal = Calibrator(images, drift_rates, trange,
+                         bt_params['rs'],
+                         bt_params['ballspacing'],
+                         bt_params['dp'],
                          bt_params['sigma_factor'],
                          bt_params['fourier_radius'],
                          bt_params['intsteps'],
@@ -1547,6 +1573,8 @@ def balltrack_calibration(bt_params, drift_rates, trange, fov_slices, reprocess_
                          verbose=verbose)
 
         ballpos_top_list, ballpos_bottom_list = cal.balltrack_all_rates()
+        ballposf = os.path.join(outputdir, 'ballpos_{:s}.npz'.format(str(bt_params['index'])))
+        np.savez(ballposf, ballpos_top=ballpos_top_list[idx0], ballpos_bottom=ballpos_bottom_list[idx0])
 
     else:
         npzfile = np.load(ballpos_list_file)
@@ -1554,7 +1582,7 @@ def balltrack_calibration(bt_params, drift_rates, trange, fov_slices, reprocess_
         ballpos_bottom_list = npzfile['ballpos_bottom_list']
 
 
-    xrates = np.array(drift_rates)[:, 0]
+
     vx_headers_top = ['vx_top {:1.2f}'.format(vx[0]) for vx in drift_rates]
     vx_headers_bottom = ['vx_bottom {:1.2f}'.format(vx[0]) for vx in drift_rates]
     # Concatenate headers
@@ -1584,12 +1612,13 @@ def balltrack_calibration(bt_params, drift_rates, trange, fov_slices, reprocess_
 
     npzf = os.path.join(outputdir, 'mean_velocity_{:s}.npz'.format(str(bt_params['index'])))
     # Index where xrates = 0. Used to save specific velocity map
-    idx0 = np.where(xrates == 0)[0][0]
+
     np.savez_compressed(npzf,
                         vx_top=vxs_top[idx0],
                         vy_top=vys_top[idx0],
                         vx_bot=vxs_bot[idx0],
                         vy_bot=vys_bot[idx0])
+
 
     return dict_results
 

@@ -1,4 +1,4 @@
-import os, glob
+import os, glob, sys
 import pandas as pd
 import numpy as np
 import re
@@ -38,6 +38,8 @@ def smooth_vel(vxs, vys, fwhm, kernel='boxcar'):
         sigma = fwhm / 2.35
         vxs2 = gaussian_filter(vxs, sigma=sigma, order=0)
         vys2 = gaussian_filter(vys, sigma=sigma, order=0)
+    else:
+        sys.exit('invalid kernel')
 
     return vxs2, vys2
 
