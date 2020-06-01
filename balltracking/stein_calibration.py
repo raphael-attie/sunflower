@@ -1,10 +1,11 @@
-import os
+import os, glob
 import numpy as np
 import balltracking.balltrack as blt
 from functools import partial
 from collections import OrderedDict
 import time
 import pandas as pd
+import fitstools
 
 if __name__ == '__main__':
 
@@ -14,6 +15,9 @@ if __name__ == '__main__':
     outputdir = os.path.join(drift_dir, 'calibration')
     nframes = 60
     trange = [0, nframes]
+    # load image data
+    image_files = sorted(glob.glob(os.path.join(os.environ['DATA'], 'Ben/SteinSDO/SDO_int*.fits')))[0:nframes]
+
     # Ball parameters
     bt_params = OrderedDict({'rs': 2,
                              'intsteps': 5,
@@ -35,6 +39,7 @@ if __name__ == '__main__':
     imsize = 263
     dims = [imsize, imsize]
 
+    images = fitstools.fitsread(image_files, cube=False)
     # Velocity smoothing
     # fwhm = 7
     # kernel = 'boxcar'
@@ -48,11 +53,11 @@ if __name__ == '__main__':
             fov_slices = np.s_[trim:imsize - trim, trim:imsize - trim]
 
             calibrate_partial = partial(blt.balltrack_calibration,
+                                        images=images,
                                         drift_rates=drift_rates,
                                         trange=trange,
                                         fov_slices=fov_slices,
-                                        reprocess_bt=False,
-                                        drift_dir=drift_dir,
+                                        reprocess_bt=True,
                                         outputdir=outputdir,
                                         kernel=kernel,
                                         fwhm=fwhm,
