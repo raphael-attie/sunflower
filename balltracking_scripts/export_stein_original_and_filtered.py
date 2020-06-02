@@ -4,7 +4,7 @@ from pathlib import PurePath
 import fitsio
 import numpy as np
 from skimage.exposure import rescale_intensity
-from balltracking.balltrack import blt_prep_data2
+import balltracking.balltrack as blt
 # skimage.exposure.rescale_intensity(image, in_range='image', out_range='dtype')
 
 outputdir = PurePath(os.environ['DATA'], 'Ben/SteinSDO/converted_intensity_images')
@@ -18,7 +18,7 @@ fov = np.s_[10:-10, 10:-10]
 for f in fitsfiles:
     fp = PurePath(f)
     data = fitsio.read(f).astype(np.float32)
-    prep_data, _, _ = blt_prep_data2(data, sigma_factor=sigma_factor, pixel_radius=fourier_radius)
+    prep_data, _, _ = blt.prep_data2(data, sigma_factor=sigma_factor, pixel_radius=fourier_radius)
     vmin = np.percentile(prep_data[fov], 0.1)
     vmax = np.percentile(prep_data[fov], 99.5)
     #data2 = np.pad(data, (0, 1), mode='constant')

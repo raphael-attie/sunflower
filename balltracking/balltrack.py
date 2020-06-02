@@ -19,9 +19,7 @@ import fitstools
 from multiprocessing import Pool
 from functools import partial
 from pathlib import Path
-from scipy.misc import bytescale, imsave
 from scipy.signal import convolve2d
-import graphics
 
 DTYPE = np.float32
 class BT:
@@ -206,15 +204,8 @@ class BT:
                 self.surface = -self.surface
 
             if self.output_prep_data:
-                filename_data = os.path.join(self.outputdir, 'data_{}_{:05d}.png'.format(self.direction, n))
-                imsave(filename_data, bytescale(image, cmin=np.percentile(image, 0.1), cmax=np.percentile(image, 99.9)))
-
                 filename_surface = os.path.join(self.outputdir, 'prep_data_{}_{}_{:05d}.fits'.format(self.direction, self.mode, n))
                 fitstools.writefits(self.surface, filename_surface)
-                # filename_png = os.path.join(self.outputdir, os.path.splitext(os.path.basename(filename))[0] + '.png')
-                # imsave(filename_png, bytescale(surface))
-                graphics.fits_to_jpeg(filename_surface, self.outputdir)
-
 
             # The current position "pos" and velocity "vel" are attributes of bt.
             # They are integrated in place.
@@ -1649,5 +1640,3 @@ def get_bt_params_list(bt_params, param_names, param_lists):
         bt_params_list.append(bt_params2)
         bt_params2 = bt_params.copy()
     return bt_params_list
-
-
