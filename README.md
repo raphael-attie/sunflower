@@ -21,6 +21,7 @@ You also need to install the following python packages with conda (with version 
 
 - fitsio
 - numpy
+- cython 
 - scipy=1.2.1
 - scikit-image=0.15.0
 - mahotas
@@ -33,6 +34,7 @@ E.g to install the package ``fitsio``, you'll do:
 Compile my balltracking binaries written with Cython:
 
 - go to the *cython_modules* directory
+- If present (e.g. from a past installation) remove ``interp.c`` file
 - execute ``python setup_cbinterp.py build_ext --inplace``
 
 For Balltracking only, not Magnetic Balltracking, you will need to run a calibration procedure.
