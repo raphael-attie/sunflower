@@ -468,6 +468,9 @@ def filter_image(image, pixel_radius=0):
     ffilter_hpf = filters.han2d_bandpass(image2.shape[0], 0, pixel_radius)
     fdata = filters.ffilter_image(image2, ffilter_hpf)
 
+    if image.shape[0] % 2 != 0:
+        fdata = fdata[0:image.shape[0], 0:image.shape[1]]
+
     return fdata
 
 
@@ -858,7 +861,7 @@ def make_velocity_from_tracks(ballpos, dims, trange, fwhm, kernel='gaussian'):
     # px where bposx == -1 will give -1. Same for py
     px_lagrange = np.round((bposx[:, tslices[0]] + bposx[:, tslices[1]])/2)
     py_lagrange = np.round((bposy[:, tslices[0]] + bposy[:, tslices[1]])/2)
-    # Exclude the -1 flagged positions using a mask. Could there be NaNs left here?
+    # Exclude the -1 and NaN flagged positions using a mask.
     valid_mask = np.isfinite(vx_lagrange)
     # Taking the mask of the 2D arrays convert them to 1D arrays
     px_lagrange = px_lagrange[valid_mask]

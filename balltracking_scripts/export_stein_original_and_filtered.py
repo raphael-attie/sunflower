@@ -9,6 +9,9 @@ from skimage.exposure import rescale_intensity
 outputdir = PurePath(os.environ['DATA'], 'Ben/SteinSDO/converted_intensity_images')
 fitsfiles = sorted(glob.glob(PurePath(os.environ['DATA'], 'Ben/SteinSDO/SDO_int*.fits').as_posix()))
 
+sigma_factor: 2,
+fourier_radius: 2
+
 for f in fitsfiles:
     fp = PurePath(f)
     data = fitsio.read(f)
@@ -16,4 +19,6 @@ for f in fitsfiles:
     data2 = np.uint8(rescale_intensity(data, out_range=(0,255)))
     jpegfile = PurePath(outputdir, fp.stem + '.jpg').as_posix()
     cv2.imwrite(jpegfile, data2)
+
+
 
