@@ -29,7 +29,7 @@ You also need to install the python package *fitsio* with:
 Compile some binaries written in Cython:
 
 - go to the *cython_modules* directory
-- execute ``python setup_cbinterp.py build ext --inplace``
+- execute ``python setup_cbinterp.py build_ext --inplace``
 
 For Balltracking only, not Magnetic Balltracking, you will need to run a calibration procedure.
 After calibration, Balltracking runs through a script wrapping around the *balltrack_all()* function in *balltracking.balltrack*.
