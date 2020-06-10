@@ -20,7 +20,7 @@ def fitsread(files, xslice=slice(None), yslice=slice(None), tslice=slice(None), 
     else:
         fitsfiles = files[tslice]
         if isinstance(tslice, int):
-            # There's only file to read.
+            # There's only 1 file to read.
             data = fitsio.read(fitsfiles)
         else: # Assume and read list of files
             # Load sample to get dimensions

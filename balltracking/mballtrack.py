@@ -286,7 +286,7 @@ def mballtrack_main(**kwargs):
 def load_data(datafiles, n):
     _, ext = os.path.splitext(datafiles[0])
     if ext == '.fits':
-        image = fitstools.fitsread(datafiles, tslice=slice(n,n+1)).astype(DTYPE)
+        image = fitstools.fitsread(datafiles, tslice=n).astype(DTYPE)
         return image
     elif ext == '.npz':
         image = load_npz(datafiles, n)
