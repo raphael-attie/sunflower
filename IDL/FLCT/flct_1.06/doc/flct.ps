@@ -1,0 +1,2703 @@
+%!PS-Adobe-3.0
+%%BoundingBox: 38 24 574 768
+%%Title: Enscript Output
+%%For: George H Fisher
+%%Creator: GNU Enscript 1.6.6
+%%CreationDate: Mon Feb 12 05:37:26 2018
+%%Orientation: Portrait
+%%Pages: (atend)
+%%DocumentMedia: Letter 612 792 0 () ()
+%%DocumentNeededResources: (atend)
+%%EndComments
+%%BeginProlog
+%%BeginResource: procset Enscript-Prolog 1.6 6
+%
+% Procedures.
+%
+
+/_S {	% save current state
+  /_s save def
+} def
+/_R {	% restore from saved state
+  _s restore
+} def
+
+/S {	% showpage protecting gstate
+  gsave
+  showpage
+  grestore
+} bind def
+
+/MF {	% fontname newfontname -> -	make a new encoded font
+  /newfontname exch def
+  /fontname exch def
+
+  /fontdict fontname findfont def
+  /newfont fontdict maxlength dict def
+
+  fontdict {
+    exch
+    dup /FID eq {
+      % skip FID pair
+      pop pop
+    } {
+      % copy to the new font dictionary
+      exch newfont 3 1 roll put
+    } ifelse
+  } forall
+
+  newfont /FontName newfontname put
+
+  % insert only valid encoding vectors
+  encoding_vector length 256 eq {
+    newfont /Encoding encoding_vector put
+  } if
+
+  newfontname newfont definefont pop
+} def
+
+/MF_PS { % fontname newfontname -> -	make a new font preserving its enc
+  /newfontname exch def
+  /fontname exch def
+
+  /fontdict fontname findfont def
+  /newfont fontdict maxlength dict def
+
+  fontdict {
+    exch
+    dup /FID eq {
+      % skip FID pair
+      pop pop
+    } {
+      % copy to the new font dictionary
+      exch newfont 3 1 roll put
+    } ifelse
+  } forall
+
+  newfont /FontName newfontname put
+
+  newfontname newfont definefont pop
+} def
+
+/SF { % fontname width height -> -	set a new font
+  /height exch def
+  /width exch def
+
+  findfont
+  [width 0 0 height 0 0] makefont setfont
+} def
+
+/SUF { % fontname width height -> -	set a new user font
+  /height exch def
+  /width exch def
+
+  /F-gs-user-font MF
+  /F-gs-user-font width height SF
+} def
+
+/SUF_PS { % fontname width height -> -	set a new user font preserving its enc
+  /height exch def
+  /width exch def
+
+  /F-gs-user-font MF_PS
+  /F-gs-user-font width height SF
+} def
+
+/M {moveto} bind def
+/s {show} bind def
+
+/Box {	% x y w h -> -			define box path
+  /d_h exch def /d_w exch def /d_y exch def /d_x exch def
+  d_x d_y  moveto
+  d_w 0 rlineto
+  0 d_h rlineto
+  d_w neg 0 rlineto
+  closepath
+} def
+
+/bgs {	% x y height blskip gray str -> -	show string with bg color
+  /str exch def
+  /gray exch def
+  /blskip exch def
+  /height exch def
+  /y exch def
+  /x exch def
+
+  gsave
+    x y blskip sub str stringwidth pop height Box
+    gray setgray
+    fill
+  grestore
+  x y M str s
+} def
+
+/bgcs { % x y height blskip red green blue str -> -  show string with bg color
+  /str exch def
+  /blue exch def
+  /green exch def
+  /red exch def
+  /blskip exch def
+  /height exch def
+  /y exch def
+  /x exch def
+
+  gsave
+    x y blskip sub str stringwidth pop height Box
+    red green blue setrgbcolor
+    fill
+  grestore
+  x y M str s
+} def
+
+% Highlight bars.
+/highlight_bars {	% nlines lineheight output_y_margin gray -> -
+  gsave
+    setgray
+    /ymarg exch def
+    /lineheight exch def
+    /nlines exch def
+
+    % This 2 is just a magic number to sync highlight lines to text.
+    0 d_header_y ymarg sub 2 sub translate
+
+    /cw d_output_w cols div def
+    /nrows d_output_h ymarg 2 mul sub lineheight div cvi def
+
+    % for each column
+    0 1 cols 1 sub {
+      cw mul /xp exch def
+
+      % for each rows
+      0 1 nrows 1 sub {
+        /rn exch def
+        rn lineheight mul neg /yp exch def
+        rn nlines idiv 2 mod 0 eq {
+	  % Draw highlight bar.  4 is just a magic indentation.
+	  xp 4 add yp cw 8 sub lineheight neg Box fill
+	} if
+      } for
+    } for
+
+  grestore
+} def
+
+% Line highlight bar.
+/line_highlight {	% x y width height gray -> -
+  gsave
+    /gray exch def
+    Box gray setgray fill
+  grestore
+} def
+
+% Column separator lines.
+/column_lines {
+  gsave
+    .1 setlinewidth
+    0 d_footer_h translate
+    /cw d_output_w cols div def
+    1 1 cols 1 sub {
+      cw mul 0 moveto
+      0 d_output_h rlineto stroke
+    } for
+  grestore
+} def
+
+% Column borders.
+/column_borders {
+  gsave
+    .1 setlinewidth
+    0 d_footer_h moveto
+    0 d_output_h rlineto
+    d_output_w 0 rlineto
+    0 d_output_h neg rlineto
+    closepath stroke
+  grestore
+} def
+
+% Do the actual underlay drawing
+/draw_underlay {
+  ul_style 0 eq {
+    ul_str true charpath stroke
+  } {
+    ul_str show
+  } ifelse
+} def
+
+% Underlay
+/underlay {	% - -> -
+  gsave
+    0 d_page_h translate
+    d_page_h neg d_page_w atan rotate
+
+    ul_gray setgray
+    ul_font setfont
+    /dw d_page_h dup mul d_page_w dup mul add sqrt def
+    ul_str stringwidth pop dw exch sub 2 div ul_h_ptsize -2 div moveto
+    draw_underlay
+  grestore
+} def
+
+/user_underlay {	% - -> -
+  gsave
+    ul_x ul_y translate
+    ul_angle rotate
+    ul_gray setgray
+    ul_font setfont
+    0 0 ul_h_ptsize 2 div sub moveto
+    draw_underlay
+  grestore
+} def
+
+% Page prefeed
+/page_prefeed {		% bool -> -
+  statusdict /prefeed known {
+    statusdict exch /prefeed exch put
+  } {
+    pop
+  } ifelse
+} def
+
+% Wrapped line markers
+/wrapped_line_mark {	% x y charwith charheight type -> -
+  /type exch def
+  /h exch def
+  /w exch def
+  /y exch def
+  /x exch def
+
+  type 2 eq {
+    % Black boxes (like TeX does)
+    gsave
+      0 setlinewidth
+      x w 4 div add y M
+      0 h rlineto w 2 div 0 rlineto 0 h neg rlineto
+      closepath fill
+    grestore
+  } {
+    type 3 eq {
+      % Small arrows
+      gsave
+        .2 setlinewidth
+        x w 2 div add y h 2 div add M
+        w 4 div 0 rlineto
+        x w 4 div add y lineto stroke
+
+        x w 4 div add w 8 div add y h 4 div add M
+        x w 4 div add y lineto
+	w 4 div h 8 div rlineto stroke
+      grestore
+    } {
+      % do nothing
+    } ifelse
+  } ifelse
+} def
+
+% EPSF import.
+
+/BeginEPSF {
+  /b4_Inc_state save def    		% Save state for cleanup
+  /dict_count countdictstack def	% Count objects on dict stack
+  /op_count count 1 sub def		% Count objects on operand stack
+  userdict begin
+  /showpage { } def
+  0 setgray 0 setlinecap
+  1 setlinewidth 0 setlinejoin
+  10 setmiterlimit [ ] 0 setdash newpath
+  /languagelevel where {
+    pop languagelevel
+    1 ne {
+      false setstrokeadjust false setoverprint
+    } if
+  } if
+} bind def
+
+/EndEPSF {
+  count op_count sub { pos } repeat	% Clean up stacks
+  countdictstack dict_count sub { end } repeat
+  b4_Inc_state restore
+} bind def
+
+% Check PostScript language level.
+/languagelevel where {
+  pop /gs_languagelevel languagelevel def
+} {
+  /gs_languagelevel 1 def
+} ifelse
+%%EndResource
+%%BeginResource: procset Enscript-Encoding-88591 1.6 6
+/encoding_vector [
+/.notdef      	/.notdef      	/.notdef      	/.notdef      	
+/.notdef      	/.notdef      	/.notdef      	/.notdef      	
+/.notdef      	/.notdef      	/.notdef      	/.notdef      	
+/.notdef      	/.notdef      	/.notdef      	/.notdef      	
+/.notdef      	/.notdef      	/.notdef      	/.notdef      	
+/.notdef      	/.notdef      	/.notdef      	/.notdef      	
+/.notdef      	/.notdef      	/.notdef      	/.notdef      	
+/.notdef      	/.notdef      	/.notdef      	/.notdef      	
+/space        	/exclam       	/quotedbl     	/numbersign   	
+/dollar       	/percent      	/ampersand    	/quoteright   	
+/parenleft    	/parenright   	/asterisk     	/plus         	
+/comma        	/hyphen       	/period       	/slash        	
+/zero         	/one          	/two          	/three        	
+/four         	/five         	/six          	/seven        	
+/eight        	/nine         	/colon        	/semicolon    	
+/less         	/equal        	/greater      	/question     	
+/at           	/A            	/B            	/C            	
+/D            	/E            	/F            	/G            	
+/H            	/I            	/J            	/K            	
+/L            	/M            	/N            	/O            	
+/P            	/Q            	/R            	/S            	
+/T            	/U            	/V            	/W            	
+/X            	/Y            	/Z            	/bracketleft  	
+/backslash    	/bracketright 	/asciicircum  	/underscore   	
+/quoteleft    	/a            	/b            	/c            	
+/d            	/e            	/f            	/g            	
+/h            	/i            	/j            	/k            	
+/l            	/m            	/n            	/o            	
+/p            	/q            	/r            	/s            	
+/t            	/u            	/v            	/w            	
+/x            	/y            	/z            	/braceleft    	
+/bar          	/braceright   	/tilde        	/.notdef      	
+/.notdef      	/.notdef      	/.notdef      	/.notdef      	
+/.notdef      	/.notdef      	/.notdef      	/.notdef      	
+/.notdef      	/.notdef      	/.notdef      	/.notdef      	
+/.notdef      	/.notdef      	/.notdef      	/.notdef      	
+/.notdef      	/.notdef      	/.notdef      	/.notdef      	
+/.notdef      	/.notdef      	/.notdef      	/.notdef      	
+/.notdef      	/.notdef      	/.notdef      	/.notdef      	
+/.notdef      	/.notdef      	/.notdef      	/.notdef      	
+/space        	/exclamdown   	/cent         	/sterling     	
+/currency     	/yen          	/brokenbar    	/section      	
+/dieresis     	/copyright    	/ordfeminine  	/guillemotleft	
+/logicalnot   	/hyphen       	/registered   	/macron       	
+/degree       	/plusminus    	/twosuperior  	/threesuperior	
+/acute        	/mu           	/paragraph    	/bullet       	
+/cedilla      	/onesuperior  	/ordmasculine 	/guillemotright	
+/onequarter   	/onehalf      	/threequarters	/questiondown 	
+/Agrave       	/Aacute       	/Acircumflex  	/Atilde       	
+/Adieresis    	/Aring        	/AE           	/Ccedilla     	
+/Egrave       	/Eacute       	/Ecircumflex  	/Edieresis    	
+/Igrave       	/Iacute       	/Icircumflex  	/Idieresis    	
+/Eth          	/Ntilde       	/Ograve       	/Oacute       	
+/Ocircumflex  	/Otilde       	/Odieresis    	/multiply     	
+/Oslash       	/Ugrave       	/Uacute       	/Ucircumflex  	
+/Udieresis    	/Yacute       	/Thorn        	/germandbls   	
+/agrave       	/aacute       	/acircumflex  	/atilde       	
+/adieresis    	/aring        	/ae           	/ccedilla     	
+/egrave       	/eacute       	/ecircumflex  	/edieresis    	
+/igrave       	/iacute       	/icircumflex  	/idieresis    	
+/eth          	/ntilde       	/ograve       	/oacute       	
+/ocircumflex  	/otilde       	/odieresis    	/divide       	
+/oslash       	/ugrave       	/uacute       	/ucircumflex  	
+/udieresis    	/yacute       	/thorn        	/ydieresis    	
+] def
+%%EndResource
+%%EndProlog
+%%BeginSetup
+%%IncludeResource: font Courier-Bold
+%%IncludeResource: font Courier
+/HFpt_w 10 def
+/HFpt_h 10 def
+/Courier-Bold /HF-gs-font MF
+/HF /HF-gs-font findfont [HFpt_w 0 0 HFpt_h 0 0] makefont def
+/Courier /F-gs-font MF
+/F-gs-font 10 10 SF
+/#copies 1 def
+% Pagedevice definitions:
+gs_languagelevel 1 gt {
+  <<
+    /PageSize [612 792] 
+  >> setpagedevice
+} if
+%%BeginResource: procset Enscript-Header-simple 1.6 6
+
+/do_header {	% print default simple header
+  gsave
+    d_header_x d_header_y HFpt_h 3 div add translate
+
+    HF setfont
+    user_header_p {
+      5 0 moveto user_header_left_str show
+
+      d_header_w user_header_center_str stringwidth pop sub 2 div
+      0 moveto user_header_center_str show
+
+      d_header_w user_header_right_str stringwidth pop sub 5 sub
+      0 moveto user_header_right_str show
+    } {
+      5 0 moveto fname show
+      45 0 rmoveto fmodstr show
+      45 0 rmoveto pagenumstr show
+    } ifelse
+
+  grestore
+} def
+%%EndResource
+/d_page_w 536 def
+/d_page_h 744 def
+/d_header_x 0 def
+/d_header_y 729 def
+/d_header_w 536 def
+/d_header_h 15 def
+/d_footer_x 0 def
+/d_footer_y 0 def
+/d_footer_w 536 def
+/d_footer_h 0 def
+/d_output_w 536 def
+/d_output_h 729 def
+/cols 1 def
+%%EndSetup
+%%Page: (1) 1
+%%BeginPageSetup
+_S
+38 24 translate
+/pagenum 1 def
+/fname () def
+/fdir (.) def
+/ftail (.) def
+% User defined strings:
+/fmodstr (Mon Feb 12 05:37:26 2018) def
+/pagenumstr (1) def
+/user_header_p true def
+/user_header_left_str () def
+/user_header_center_str () def
+/user_header_right_str () def
+/user_footer_p false def
+%%EndPageSetup
+do_header
+5 716 M
+(FLCT\(1.06\)                       User Manuals                       FLCT\(1.06\)) s
+5 672 M
+(N) s
+5 672 M
+(NA) s
+11 672 M
+(AM) s
+17 672 M
+(ME) s
+23 672 M
+(E) s
+5 661 M
+(       flct - perform local correlation tracking between 2 images) s
+5 639 M
+(S) s
+5 639 M
+(SY) s
+11 639 M
+(YN) s
+17 639 M
+(NO) s
+23 639 M
+(OP) s
+29 639 M
+(PS) s
+35 639 M
+(SI) s
+41 639 M
+(IS) s
+47 639 M
+(S) s
+5 628 M
+(       f) s
+47 628 M
+(fl) s
+53 628 M
+(lc) s
+59 628 M
+(ct) s
+65 628 M
+(t  _) s
+83 628 M
+(i_) s
+89 628 M
+(n_) s
+95 628 M
+(-_) s
+101 628 M
+(f_) s
+107 628 M
+(i_) s
+113 628 M
+(l_) s
+119 628 M
+(e  _) s
+137 628 M
+(o_) s
+143 628 M
+(u_) s
+149 628 M
+(t_) s
+155 628 M
+(-_) s
+161 628 M
+(f_) s
+167 628 M
+(i_) s
+173 628 M
+(l_) s
+179 628 M
+(e  _) s
+197 628 M
+(d_) s
+203 628 M
+(e_) s
+209 628 M
+(l_) s
+215 628 M
+(t_) s
+221 628 M
+(a_) s
+227 628 M
+(t  _) s
+245 628 M
+(d_) s
+251 628 M
+(e_) s
+257 628 M
+(l_) s
+263 628 M
+(t_) s
+269 628 M
+(a_) s
+275 628 M
+(s  _) s
+293 628 M
+(s_) s
+299 628 M
+(i_) s
+305 628 M
+(g_) s
+311 628 M
+(m_) s
+317 628 M
+(a  [) s
+335 628 M
+([  _) s
+353 628 M
+(-_) s
+359 628 M
+(t  _) s
+377 628 M
+(t_) s
+383 628 M
+(h_) s
+389 628 M
+(r_) s
+395 628 M
+(e_) s
+401 628 M
+(s_) s
+407 628 M
+(h  _) s
+425 628 M
+(-_) s
+431 628 M
+(k _) s
+443 628 M
+(k_) s
+449 628 M
+(r _) s
+461 628 M
+(-_) s
+467 628 M
+(s) s
+5 617 M
+(       _) s
+47 617 M
+(N_) s
+53 617 M
+([_) s
+59 617 M
+(p_) s
+65 617 M
+(P_) s
+71 617 M
+(]_) s
+77 617 M
+([_) s
+83 617 M
+(q_) s
+89 617 M
+(Q_) s
+95 617 M
+(]_) s
+101 617 M
+([_) s
+107 617 M
+(i_) s
+113 617 M
+(] _) s
+125 617 M
+(-_) s
+131 617 M
+(p_) s
+137 617 M
+(c _) s
+149 617 M
+(l_) s
+155 617 M
+(a_) s
+161 617 M
+(t_) s
+167 617 M
+(m_) s
+173 617 M
+(i_) s
+179 617 M
+(n _) s
+191 617 M
+(l_) s
+197 617 M
+(a_) s
+203 617 M
+(t_) s
+209 617 M
+(m_) s
+215 617 M
+(a_) s
+221 617 M
+(x _) s
+233 617 M
+(-_) s
+239 617 M
+(h _) s
+251 617 M
+(-_) s
+257 617 M
+(b_) s
+263 617 M
+(c _) s
+275 617 M
+(-_) s
+281 617 M
+(q ]) s
+293 617 M
+(] .) s
+305 617 M
+(..) s
+311 617 M
+(..) s
+317 617 M
+(.) s
+5 595 M
+(D) s
+5 595 M
+(DE) s
+11 595 M
+(ES) s
+17 595 M
+(SC) s
+23 595 M
+(CR) s
+29 595 M
+(RI) s
+35 595 M
+(IP) s
+41 595 M
+(PT) s
+47 595 M
+(TI) s
+53 595 M
+(IO) s
+59 595 M
+(ON) s
+65 595 M
+(N) s
+5 584 M
+(       f) s
+47 584 M
+(fl) s
+53 584 M
+(lc) s
+59 584 M
+(ct) s
+65 584 M
+(t finds a 2-D velocity field from which an  initial  image  \(image1\)) s
+5 573 M
+(       evolves  into  a  2nd image \(image2\) over a time deltat.  The technique) s
+5 562 M
+(       "FLCT", was initially desribed in section 3 of Welsch B. T., Fisher  G.) s
+5 551 M
+(       H.,, Abbett W. P., and Regnier, S. 2004 ApJ 610, 1148.  Following this,) s
+5 540 M
+(       an updated writeup of the technique reflecting improvements to the code) s
+5 529 M
+(       was  published  by  G. H. Fisher and B. T.  Welsch in PASP conf. series) s
+5 518 M
+(       vol    383,     p     373     \(2008\)     \(publicly     available     at) s
+5 507 M
+(       http://arxiv.org/abs/0712.4289  \).  The current technique can be summa-) s
+5 496 M
+(       rized as follows:) s
+5 474 M
+(       For each pixel location in each of the 2  images,  first  form  smaller) s
+5 463 M
+(       sub-images  that  are  centered  on the given pixel location, perform a) s
+5 452 M
+(       mean subtraction of each subimage, and  then  multiply  each  of  these) s
+5 441 M
+(       subimages  with  a  2-D gaussian of width _) s
+299 441 M
+(s_) s
+305 441 M
+(i_) s
+311 441 M
+(g_) s
+317 441 M
+(m_) s
+323 441 M
+(a pixels, centered at the) s
+5 430 M
+(       given pixel location.   Then  compute  the  cross-correlation  function) s
+5 419 M
+(       between  the 2 resulting truncated images, and find the pixel shifts in) s
+5 408 M
+(       x and y that maximize that function.  The pixel shifts are converted to) s
+5 397 M
+(       velocity  units  by the magnitude of the time separation _) s
+389 397 M
+(d_) s
+395 397 M
+(e_) s
+401 397 M
+(l_) s
+407 397 M
+(t_) s
+413 397 M
+(a_) s
+419 397 M
+(t and the) s
+5 386 M
+(       unit of length along the edge of a single pixel,  _) s
+347 386 M
+(d_) s
+353 386 M
+(e_) s
+359 386 M
+(l_) s
+365 386 M
+(t_) s
+371 386 M
+(a_) s
+377 386 M
+(s_) s
+383 386 M
+(.   The  cross-) s
+5 375 M
+(       correlation function is computed using standard Fourier Transform tech-) s
+5 364 M
+(       niques, employing version 3 of the F) s
+257 364 M
+(FF) s
+263 364 M
+(FT) s
+269 364 M
+(TW) s
+275 364 M
+(W \() s
+287 364 M
+(\(h) s
+293 364 M
+(ht) s
+299 364 M
+(tt) s
+305 364 M
+(tp) s
+311 364 M
+(p:) s
+317 364 M
+(:/) s
+323 364 M
+(//) s
+329 364 M
+(/w) s
+335 364 M
+(ww) s
+341 364 M
+(ww) s
+347 364 M
+(w.) s
+353 364 M
+(.f) s
+359 364 M
+(ff) s
+365 364 M
+(ft) s
+371 364 M
+(tw) s
+377 364 M
+(w.) s
+383 364 M
+(.o) s
+389 364 M
+(or) s
+395 364 M
+(rg) s
+401 364 M
+(g\)) s
+407 364 M
+(\)  package.) s
+5 353 M
+(       Second-order  Taylor expansion of the solution is done to find the sub-) s
+5 342 M
+(       pixel location of the peak of the cross-correlation function.) s
+5 320 M
+(       When _) s
+77 320 M
+(s_) s
+83 320 M
+(i_) s
+89 320 M
+(g_) s
+95 320 M
+(m_) s
+101 320 M
+(a is set to zero, a special case, the cross-correlation  func-) s
+5 309 M
+(       tion  of  the  two  full images is computed, without multiplying by the) s
+5 298 M
+(       gaussian.  The net shift in x and y between the two full images is then) s
+5 287 M
+(       printed  to stdout, and the output file _) s
+287 287 M
+(o_) s
+293 287 M
+(u_) s
+299 287 M
+(t_) s
+305 287 M
+(-_) s
+311 287 M
+(f_) s
+317 287 M
+(i_) s
+323 287 M
+(l_) s
+329 287 M
+(e contains single values) s
+5 276 M
+(       for the shifts in the output velocity arrays.) s
+5 254 M
+(       If desired, the IDL procedure _) s
+227 254 M
+(s_) s
+233 254 M
+(h_) s
+239 254 M
+(i_) s
+245 254 M
+(f_) s
+251 254 M
+(t_) s
+257 254 M
+(__) s
+263 254 M
+(f_) s
+269 254 M
+(r_) s
+275 254 M
+(a_) s
+281 254 M
+(c_) s
+287 254 M
+(2_) s
+293 254 M
+(d_) s
+299 254 M
+(, which is  included  in  the) s
+5 243 M
+(       _) s
+47 243 M
+(f_) s
+53 243 M
+(l_) s
+59 243 M
+(c_) s
+65 243 M
+(t  distribution,  can then be used to remove this overall shift from) s
+5 232 M
+(       image2.  _) s
+101 232 M
+(s_) s
+107 232 M
+(h_) s
+113 232 M
+(i_) s
+119 232 M
+(f_) s
+125 232 M
+(t_) s
+131 232 M
+(__) s
+137 232 M
+(f_) s
+143 232 M
+(r_) s
+149 232 M
+(a_) s
+155 232 M
+(c_) s
+161 232 M
+(2_) s
+167 232 M
+(d works in the same was as the IDL shift  function,) s
+5 221 M
+(       but allows for non-integer shifts.) s
+5 199 M
+(       The  two  input images are read from _) s
+269 199 M
+(i_) s
+275 199 M
+(n_) s
+281 199 M
+(-_) s
+287 199 M
+(f_) s
+293 199 M
+(i_) s
+299 199 M
+(l_) s
+305 199 M
+(e , which is a binary-format) s
+5 188 M
+(       file that can be written with the IDL procedure  v) s
+341 188 M
+(vc) s
+347 188 M
+(ci) s
+353 188 M
+(im) s
+359 188 M
+(ma) s
+365 188 M
+(ag) s
+371 188 M
+(ge) s
+377 188 M
+(e2) s
+383 188 M
+(2o) s
+389 188 M
+(ou) s
+395 188 M
+(ut) s
+401 188 M
+(t.) s
+407 188 M
+(.p) s
+413 188 M
+(pr) s
+419 188 M
+(ro) s
+425 188 M
+(o,) s
+431 188 M
+(,  _) s
+449 188 M
+(o_) s
+455 188 M
+(u_) s
+461 188 M
+(t_) s
+467 188 M
+(-) s
+5 177 M
+(       _) s
+47 177 M
+(f_) s
+53 177 M
+(i_) s
+59 177 M
+(l_) s
+65 177 M
+(e  contains  the resulting 2-D arrays of vx, vy, and vm \(the x and y) s
+5 166 M
+(       components of the velocity, and a mask array set to 0 for  those  loca-) s
+5 155 M
+(       tions where no velocity is computed, 1 where it is, and 0.5 where it is) s
+5 144 M
+(       interpolated -- see discussion of interpolation in the section  on  the) s
+5 133 M
+(       "skip"  option\).   The  output  file can be read with the IDL procedure) s
+5 122 M
+(       v) s
+47 122 M
+(vc) s
+53 122 M
+(ci) s
+59 122 M
+(im) s
+65 122 M
+(ma) s
+71 122 M
+(ag) s
+77 122 M
+(ge) s
+83 122 M
+(e3) s
+89 122 M
+(3i) s
+95 122 M
+(in) s
+101 122 M
+(n.) s
+107 122 M
+(.p) s
+113 122 M
+(pr) s
+119 122 M
+(ro) s
+125 122 M
+(o.) s
+131 122 M
+(.  The data in _) s
+221 122 M
+(i_) s
+227 122 M
+(n_) s
+233 122 M
+(-_) s
+239 122 M
+(f_) s
+245 122 M
+(i_) s
+251 122 M
+(l_) s
+257 122 M
+(e and _) s
+293 122 M
+(o_) s
+299 122 M
+(u_) s
+305 122 M
+(t_) s
+311 122 M
+(-_) s
+317 122 M
+(f_) s
+323 122 M
+(i_) s
+329 122 M
+(l_) s
+335 122 M
+(e is stored in  binary,) s
+5 111 M
+(       large-endian  byte  order,  and f) s
+239 111 M
+(fl) s
+245 111 M
+(lc) s
+251 111 M
+(ct) s
+257 111 M
+(t and the IDL I/O procedures to read) s
+5 100 M
+(       and write the files should be platform independent.) s
+5 67 M
+(O) s
+5 67 M
+(OP) s
+11 67 M
+(PT) s
+17 67 M
+(TI) s
+23 67 M
+(IO) s
+29 67 M
+(ON) s
+35 67 M
+(NS) s
+41 67 M
+(S) s
+5 56 M
+(       -t thresh) s
+5 45 M
+(              Do not compute the velocity at a  given  pixel  if  the  average) s
+5 34 M
+(              absolute  value  between  the  2 images at that location is less) s
+5 23 M
+(              than _) s
+119 23 M
+(t_) s
+125 23 M
+(h_) s
+131 23 M
+(r_) s
+137 23 M
+(e_) s
+143 23 M
+(s_) s
+149 23 M
+(h_) s
+155 23 M
+(.  If _) s
+191 23 M
+(t_) s
+197 23 M
+(h_) s
+203 23 M
+(r_) s
+209 23 M
+(e_) s
+215 23 M
+(s_) s
+221 23 M
+(h is between 0 and 1,  _) s
+359 23 M
+(t_) s
+365 23 M
+(h_) s
+371 23 M
+(r_) s
+377 23 M
+(e_) s
+383 23 M
+(s_) s
+389 23 M
+(h  is  assumed) s
+5 12 M
+(              given  in  units  relative  to the largest absolute value of the) s
+_R
+S
+%%Page: (2) 2
+%%BeginPageSetup
+_S
+38 24 translate
+/pagenum 2 def
+/fname () def
+/fdir (.) def
+/ftail (.) def
+% User defined strings:
+/fmodstr (Mon Feb 12 05:37:26 2018) def
+/pagenumstr (2) def
+/user_header_p true def
+/user_header_left_str () def
+/user_header_center_str () def
+/user_header_right_str () def
+/user_footer_p false def
+%%EndPageSetup
+do_header
+5 716 M
+(              image averages.  To force a _) s
+257 716 M
+(t_) s
+263 716 M
+(h_) s
+269 716 M
+(r_) s
+275 716 M
+(e_) s
+281 716 M
+(s_) s
+287 716 M
+(h value between 0 and 1  to  be) s
+5 705 M
+(              considered  in  "absolute" units, append an "a" to the numerical) s
+5 694 M
+(              value of _) s
+143 694 M
+(t_) s
+149 694 M
+(h_) s
+155 694 M
+(r_) s
+161 694 M
+(e_) s
+167 694 M
+(s_) s
+173 694 M
+(h_) s
+179 694 M
+(.  If the velocity isn't computed, the mask array) s
+5 683 M
+(              is set to 0 at that location \(it is 1 otherwise\).) s
+5 650 M
+(       -k kr  Perform  gaussian, low pass filtering on the sub-images that are) s
+5 639 M
+(              used to construct the cross-correlation function.  The value  of) s
+5 628 M
+(              _) s
+89 628 M
+(k_) s
+95 628 M
+(r is expressed in units of the maximum wavenumber \(Nyquist fre-) s
+5 617 M
+(              quency\) in each direction of the sub-image.   Specifically,  the) s
+5 606 M
+(              complex  amplitude of the \(kx,ky\) Fourier mode of each sub-image) s
+5 595 M
+(              is  multiplied  by  exp\(-\(kx/kxr\)^2-\(ky/kyr\)^2\),  where  kxr   =) s
+5 584 M
+(              kr*kx_max  and  kyr=kr*ky_max,  and where kx_max, ky_max are the) s
+5 573 M
+(              Nyquist frequencies of the sub-image.) s
+5 551 M
+(              This option is most useful when the images  contain  significant) s
+5 540 M
+(              amounts  of  uncorrelated,  pixel-to-pixel noise-like structure.) s
+5 529 M
+(              Empirically, values of _) s
+227 529 M
+(k_) s
+233 529 M
+(r in the range of 0.2 to 0.5 seem to  be) s
+5 518 M
+(              most  useful, with lower values resulting in stronger filtering.) s
+5 485 M
+(       -s N[pP][qQ][i]) s
+5 463 M
+(              Only compute the velocity every _) s
+281 463 M
+(N pixels in both  the  x  and  y) s
+5 452 M
+(              directions.   This  "skip"  option is useful when the images are) s
+5 441 M
+(              very large and one does not need the velocity computed at  every) s
+5 430 M
+(              location  in  the  two  images.  The sub-options _) s
+383 430 M
+(p_) s
+389 430 M
+(P _) s
+401 430 M
+(q_) s
+407 430 M
+(Q and _) s
+443 430 M
+(i are) s
+5 419 M
+(              each optional, but if present, they must  occur  in  the  stated) s
+5 408 M
+(              order.  The subparameter _) s
+239 408 M
+(p_) s
+245 408 M
+(P where P is an integer, is the offset) s
+5 397 M
+(              for the start of computation in the x-direction  of  the  array,) s
+5 386 M
+(              and  similarly  _) s
+185 386 M
+(q_) s
+191 386 M
+(Q  where Q is an integer, is the offset for the) s
+5 375 M
+(              start of computation in  the  y-direction  of  the  array.   The) s
+5 364 M
+(              default  values  of  P  and Q are zero \(no p or q present in the) s
+5 353 M
+(              skip string\).  P and Q must be smaller in  absolute  value  than) s
+5 342 M
+(              the  skip  integer N.  If P or Q are negative, they are reset to) s
+5 331 M
+(              N-|P| or N-|Q|.  The suboption _) s
+275 331 M
+(i determines if cubic convolution) s
+5 320 M
+(              interpolation  is  to  be  done on the points that were skipped,) s
+5 309 M
+(              using values from the points that were computed.  If  interpola-) s
+5 298 M
+(              tion  is  done on a given gridpoint, then the mask array vm that) s
+5 287 M
+(              is written out to _) s
+197 287 M
+(o_) s
+203 287 M
+(u_) s
+209 287 M
+(t_) s
+215 287 M
+(-_) s
+221 287 M
+(f_) s
+227 287 M
+(i_) s
+233 287 M
+(l_) s
+239 287 M
+(e contains a value  of  0.5  for  those) s
+5 276 M
+(              points  that  were  interpolated.  The skip string argument must) s
+5 265 M
+(              not contain any blanks.) s
+5 243 M
+(              Empirically, setting _) s
+215 243 M
+(N > _) s
+239 243 M
+(s_) s
+245 243 M
+(i_) s
+251 243 M
+(g_) s
+257 243 M
+(m_) s
+263 243 M
+(a / 2 pixels and then interpolating) s
+5 232 M
+(              compares  poorly with calculations performed at every gridpoint.) s
+5 210 M
+(              If using the skip option while also  using  the  "Plate  Carree") s
+5 199 M
+(              option  \(see  below\),  you  must also use the interpolation sub-) s
+5 188 M
+(              option described above.) s
+5 155 M
+(       -h     If this "high resolution" flag is set, cubic convolution  inter-) s
+5 144 M
+(              polation  is  performed  to  0.1  pixel  precision before Taylor) s
+5 133 M
+(              expansion is done to find the location of the peak.) s
+5 111 M
+(              We have DISABLED this option because it is slower and less accu-) s
+5 100 M
+(              rate than the default method.) s
+5 67 M
+(       -pc latmin latmax) s
+5 56 M
+(              If  this "Plate Carree" option is set, then the input images are) s
+5 45 M
+(              assumed to be in Plate Carree coordinates \(uniformly  spaced  in) s
+5 34 M
+(              longitude  and latitude\).  In this case, the images are interpo-) s
+5 23 M
+(              lated to a Mercator  Projection,  then  FLCT  is  run,  and  the) s
+5 12 M
+(              resulting velocities are interpolated back to Plate Carree coor-) s
+_R
+S
+%%Page: (3) 3
+%%BeginPageSetup
+_S
+38 24 translate
+/pagenum 3 def
+/fname () def
+/fdir (.) def
+/ftail (.) def
+% User defined strings:
+/fmodstr (Mon Feb 12 05:37:26 2018) def
+/pagenumstr (3) def
+/user_header_p true def
+/user_header_left_str () def
+/user_header_center_str () def
+/user_header_right_str () def
+/user_footer_p false def
+%%EndPageSetup
+do_header
+5 716 M
+(              dinates, with cos\(latitude\) modulation.  The limits  latmin  and) s
+5 705 M
+(              latmax  are  assumed  to be given in radians, unless they end in) s
+5 694 M
+(              'd', in which case they are assumed to be in degrees,  and  will) s
+5 683 M
+(              then  be converted to radians.  Because of possible artifacts in) s
+5 672 M
+(              low-signal regions of the image due to the  interpolation  algo-) s
+5 661 M
+(              rithm,  we strongly recommend using the thresholding option \("-t) s
+5 650 M
+(              thresh"\) when using the Plate Carree option.) s
+5 628 M
+(              If sigma is set to 0 when the Plate Carree option is  set,  then) s
+5 617 M
+(              single  values  of the x and y shifts are returned, and a single) s
+5 606 M
+(              value of 0.5 is returned as the mask value.  The x and y  shifts) s
+5 595 M
+(              are  modulated by the cosine of the average latitude, coinciding) s
+5 584 M
+(              with the centroid of the image in pixel space.) s
+5 551 M
+(       -bc    If this flag is set, an attempt is made to correct the bias that) s
+5 540 M
+(              under-estimates  velocity amplitudes.  This bias is intrinsic to) s
+5 529 M
+(              the FLCT algorithm. The bias correction algorithm that is imple-) s
+5 518 M
+(              mented  uses  the  Hessian determinant, and the assumed value of) s
+5 507 M
+(              sigma, to adjust the x-and-y velocities.  More detail  is  given) s
+5 496 M
+(              in  the  file  b) s
+179 496 M
+(bi) s
+185 496 M
+(ia) s
+191 496 M
+(as) s
+197 496 M
+(s_) s
+203 496 M
+(_c) s
+209 496 M
+(co) s
+215 496 M
+(or) s
+221 496 M
+(rr) s
+227 496 M
+(re) s
+233 496 M
+(ec) s
+239 496 M
+(ct) s
+245 496 M
+(ti) s
+251 496 M
+(io) s
+257 496 M
+(on) s
+263 496 M
+(n_) s
+269 496 M
+(_i) s
+275 496 M
+(in) s
+281 496 M
+(n_) s
+287 496 M
+(_f) s
+293 496 M
+(fl) s
+299 496 M
+(lc) s
+305 496 M
+(ct) s
+311 496 M
+(t.) s
+317 496 M
+(.t) s
+323 496 M
+(tx) s
+329 496 M
+(xt) s
+335 496 M
+(t in the FLCT distribu-) s
+5 485 M
+(              tion.) s
+5 452 M
+(       -q     If this flag is set, no non-error output is sent to s) s
+401 452 M
+(st) s
+407 452 M
+(td) s
+413 452 M
+(do) s
+419 452 M
+(ou) s
+425 452 M
+(ut) s
+431 452 M
+(t.) s
+437 452 M
+(.) s
+5 419 M
+(E) s
+5 419 M
+(EX) s
+11 419 M
+(XA) s
+17 419 M
+(AM) s
+23 419 M
+(MP) s
+29 419 M
+(PL) s
+35 419 M
+(LE) s
+41 419 M
+(ES) s
+47 419 M
+(S) s
+5 408 M
+(       e) s
+47 408 M
+(ex) s
+53 408 M
+(xa) s
+59 408 M
+(am) s
+65 408 M
+(mp) s
+71 408 M
+(pl) s
+77 408 M
+(le) s
+83 408 M
+(e u) s
+95 408 M
+(us) s
+101 408 M
+(si) s
+107 408 M
+(in) s
+113 408 M
+(ng) s
+119 408 M
+(g a) s
+131 408 M
+(a s) s
+143 408 M
+(sh) s
+149 408 M
+(hi) s
+155 408 M
+(if) s
+161 408 M
+(ft) s
+167 408 M
+(te) s
+173 408 M
+(ed) s
+179 408 M
+(d i) s
+191 408 M
+(im) s
+197 408 M
+(ma) s
+203 408 M
+(ag) s
+209 408 M
+(ge) s
+215 408 M
+(e i) s
+227 408 M
+(in) s
+233 408 M
+(n a) s
+245 408 M
+(an) s
+251 408 M
+(n I) s
+263 408 M
+(ID) s
+269 408 M
+(DL) s
+275 408 M
+(L s) s
+287 408 M
+(se) s
+293 408 M
+(es) s
+299 408 M
+(ss) s
+305 408 M
+(si) s
+311 408 M
+(io) s
+317 408 M
+(on) s
+323 408 M
+(n,) s
+329 408 M
+(, w) s
+341 408 M
+(wi) s
+347 408 M
+(it) s
+353 408 M
+(th) s
+359 408 M
+(h s) s
+371 408 M
+(si) s
+377 408 M
+(ig) s
+383 408 M
+(gm) s
+389 408 M
+(ma) s
+395 408 M
+(a=) s
+401 408 M
+(=1) s
+407 408 M
+(15) s
+413 408 M
+(5:) s
+419 408 M
+(:) s
+5 386 M
+(              IDL>f1=randomu\(seed,101,101\)) s
+5 364 M
+(              IDL>f2=shift_frac2d\(f1,1.,-1.\)) s
+5 342 M
+(              IDL>vcimage2out,f1,f2,'testin.dat') s
+5 320 M
+(              IDL>$flct testin.dat testout.dat 1. 1. 15.) s
+5 298 M
+(              IDL>vcimage3in,vx,vy,vm,'testout.dat') s
+5 276 M
+(              IDL>shade_surf,vx) s
+5 254 M
+(              IDL>shade_surf,vy) s
+5 232 M
+(       S) s
+47 232 M
+(Sa) s
+53 232 M
+(am) s
+59 232 M
+(me) s
+65 232 M
+(e a) s
+77 232 M
+(as) s
+83 232 M
+(s a) s
+95 232 M
+(ab) s
+101 232 M
+(bo) s
+107 232 M
+(ov) s
+113 232 M
+(ve) s
+119 232 M
+(e,) s
+125 232 M
+(, b) s
+137 232 M
+(bu) s
+143 232 M
+(ut) s
+149 232 M
+(t o) s
+161 232 M
+(on) s
+167 232 M
+(nl) s
+173 232 M
+(ly) s
+179 232 M
+(y c) s
+191 232 M
+(co) s
+197 232 M
+(om) s
+203 232 M
+(mp) s
+209 232 M
+(pu) s
+215 232 M
+(ut) s
+221 232 M
+(ti) s
+227 232 M
+(in) s
+233 232 M
+(ng) s
+239 232 M
+(g e) s
+251 232 M
+(ev) s
+257 232 M
+(ve) s
+263 232 M
+(er) s
+269 232 M
+(ry) s
+275 232 M
+(y 5) s
+287 232 M
+(5 p) s
+299 232 M
+(pi) s
+305 232 M
+(ix) s
+311 232 M
+(xe) s
+317 232 M
+(el) s
+323 232 M
+(ls) s
+329 232 M
+(s,) s
+335 232 M
+(, a) s
+347 232 M
+(an) s
+353 232 M
+(nd) s
+359 232 M
+(d t) s
+371 232 M
+(th) s
+377 232 M
+(he) s
+383 232 M
+(en) s
+389 232 M
+(n  i) s
+407 232 M
+(in) s
+413 232 M
+(nt) s
+419 232 M
+(te) s
+425 232 M
+(er) s
+431 232 M
+(rp) s
+437 232 M
+(po) s
+443 232 M
+(ol) s
+449 232 M
+(la) s
+455 232 M
+(at) s
+461 232 M
+(t-) s
+467 232 M
+(-) s
+5 221 M
+(       i) s
+47 221 M
+(in) s
+53 221 M
+(ng) s
+59 221 M
+(g:) s
+65 221 M
+(:) s
+5 199 M
+(              IDL>$flct testin.dat testout.dat 1. 1. 15. -s 5i) s
+5 177 M
+(       S) s
+47 177 M
+(Sa) s
+53 177 M
+(am) s
+59 177 M
+(me) s
+65 177 M
+(e  a) s
+83 177 M
+(as) s
+89 177 M
+(s a) s
+101 177 M
+(ab) s
+107 177 M
+(bo) s
+113 177 M
+(ov) s
+119 177 M
+(ve) s
+125 177 M
+(e,) s
+131 177 M
+(, b) s
+143 177 M
+(bu) s
+149 177 M
+(ut) s
+155 177 M
+(t o) s
+167 177 M
+(on) s
+173 177 M
+(nl) s
+179 177 M
+(ly) s
+185 177 M
+(y c) s
+197 177 M
+(co) s
+203 177 M
+(om) s
+209 177 M
+(mp) s
+215 177 M
+(pu) s
+221 177 M
+(ut) s
+227 177 M
+(ti) s
+233 177 M
+(in) s
+239 177 M
+(ng) s
+245 177 M
+(g e) s
+257 177 M
+(ev) s
+263 177 M
+(ve) s
+269 177 M
+(er) s
+275 177 M
+(ry) s
+281 177 M
+(y 5) s
+293 177 M
+(5 p) s
+305 177 M
+(pi) s
+311 177 M
+(ix) s
+317 177 M
+(xe) s
+323 177 M
+(el) s
+329 177 M
+(ls) s
+335 177 M
+(s,) s
+341 177 M
+(, w) s
+353 177 M
+(wi) s
+359 177 M
+(it) s
+365 177 M
+(th) s
+371 177 M
+(h 1) s
+383 177 M
+(1 p) s
+395 177 M
+(pi) s
+401 177 M
+(ix) s
+407 177 M
+(xe) s
+413 177 M
+(el) s
+419 177 M
+(l x) s
+431 177 M
+(x a) s
+443 177 M
+(an) s
+449 177 M
+(nd) s
+455 177 M
+(d 2) s
+467 177 M
+(2) s
+5 166 M
+(       p) s
+47 166 M
+(pi) s
+53 166 M
+(ix) s
+59 166 M
+(xe) s
+65 166 M
+(el) s
+71 166 M
+(l y) s
+83 166 M
+(y o) s
+95 166 M
+(of) s
+101 166 M
+(ff) s
+107 166 M
+(fs) s
+113 166 M
+(se) s
+119 166 M
+(et) s
+125 166 M
+(ts) s
+131 166 M
+(s,) s
+137 166 M
+(, a) s
+149 166 M
+(an) s
+155 166 M
+(nd) s
+161 166 M
+(d t) s
+173 166 M
+(th) s
+179 166 M
+(he) s
+185 166 M
+(en) s
+191 166 M
+(n i) s
+203 166 M
+(in) s
+209 166 M
+(nt) s
+215 166 M
+(te) s
+221 166 M
+(er) s
+227 166 M
+(rp) s
+233 166 M
+(po) s
+239 166 M
+(ol) s
+245 166 M
+(la) s
+251 166 M
+(at) s
+257 166 M
+(ti) s
+263 166 M
+(in) s
+269 166 M
+(ng) s
+275 166 M
+(g:) s
+281 166 M
+(:) s
+5 144 M
+(              IDL>$flct testin.dat testout.dat 1. 1. 15. -s 5p1q2i) s
+5 122 M
+(       R) s
+47 122 M
+(Re) s
+53 122 M
+(em) s
+59 122 M
+(mo) s
+65 122 M
+(ov) s
+71 122 M
+(ve) s
+77 122 M
+(e a) s
+89 122 M
+(a n) s
+101 122 M
+(ne) s
+107 122 M
+(et) s
+113 122 M
+(t s) s
+125 122 M
+(sh) s
+131 122 M
+(hi) s
+137 122 M
+(if) s
+143 122 M
+(ft) s
+149 122 M
+(t b) s
+161 122 M
+(be) s
+167 122 M
+(et) s
+173 122 M
+(tw) s
+179 122 M
+(we) s
+185 122 M
+(ee) s
+191 122 M
+(en) s
+197 122 M
+(n i) s
+209 122 M
+(im) s
+215 122 M
+(ma) s
+221 122 M
+(ag) s
+227 122 M
+(ge) s
+233 122 M
+(es) s
+239 122 M
+(s f) s
+251 122 M
+(f1) s
+257 122 M
+(1 a) s
+269 122 M
+(an) s
+275 122 M
+(nd) s
+281 122 M
+(d f) s
+293 122 M
+(f2) s
+299 122 M
+(2,) s
+305 122 M
+(, u) s
+317 122 M
+(us) s
+323 122 M
+(si) s
+329 122 M
+(in) s
+335 122 M
+(ng) s
+341 122 M
+(g s) s
+353 122 M
+(si) s
+359 122 M
+(ig) s
+365 122 M
+(gm) s
+371 122 M
+(ma) s
+377 122 M
+(a=) s
+383 122 M
+(=0) s
+389 122 M
+(0 \() s
+401 122 M
+(\(r) s
+407 122 M
+(re) s
+413 122 M
+(es) s
+419 122 M
+(su) s
+425 122 M
+(ul) s
+431 122 M
+(lt) s
+437 122 M
+(t i) s
+449 122 M
+(in) s
+455 122 M
+(nt) s
+461 122 M
+(to) s
+467 122 M
+(o) s
+5 111 M
+(       f) s
+47 111 M
+(f3) s
+53 111 M
+(3\)) s
+59 111 M
+(\):) s
+65 111 M
+(:) s
+5 89 M
+(              IDL>vcimage2out,f1,f2,'testin.dat') s
+5 67 M
+(              IDL>$flct testin.dat testout.dat 1. 1. 0 -k 0.5) s
+5 45 M
+(              IDL>vcimage3in,delx,dely,delm,'testout.dat') s
+5 23 M
+(              IDL>f3=shift_frac2d\(f2,-delx,-dely\)) s
+_R
+S
+%%Page: (4) 4
+%%BeginPageSetup
+_S
+38 24 translate
+/pagenum 4 def
+/fname () def
+/fdir (.) def
+/ftail (.) def
+% User defined strings:
+/fmodstr (Mon Feb 12 05:37:26 2018) def
+/pagenumstr (4) def
+/user_header_p true def
+/user_header_left_str () def
+/user_header_center_str () def
+/user_header_right_str () def
+/user_footer_p false def
+%%EndPageSetup
+do_header
+5 716 M
+(       S) s
+47 716 M
+(Sa) s
+53 716 M
+(am) s
+59 716 M
+(me) s
+65 716 M
+(e a) s
+77 716 M
+(as) s
+83 716 M
+(s 1) s
+95 716 M
+(1s) s
+101 716 M
+(st) s
+107 716 M
+(t e) s
+119 716 M
+(ex) s
+125 716 M
+(xa) s
+131 716 M
+(am) s
+137 716 M
+(mp) s
+143 716 M
+(pl) s
+149 716 M
+(le) s
+155 716 M
+(e,) s
+161 716 M
+(, b) s
+173 716 M
+(bu) s
+179 716 M
+(ut) s
+185 716 M
+(t u) s
+197 716 M
+(us) s
+203 716 M
+(si) s
+209 716 M
+(in) s
+215 716 M
+(ng) s
+221 716 M
+(g l) s
+233 716 M
+(lo) s
+239 716 M
+(ow) s
+245 716 M
+(w-) s
+251 716 M
+(-p) s
+257 716 M
+(pa) s
+263 716 M
+(as) s
+269 716 M
+(ss) s
+275 716 M
+(s f) s
+287 716 M
+(fi) s
+293 716 M
+(il) s
+299 716 M
+(lt) s
+305 716 M
+(te) s
+311 716 M
+(er) s
+317 716 M
+(ri) s
+323 716 M
+(in) s
+329 716 M
+(ng) s
+335 716 M
+(g,) s
+341 716 M
+(, r) s
+353 716 M
+(ru) s
+359 716 M
+(un) s
+365 716 M
+(n o) s
+377 716 M
+(ou) s
+383 716 M
+(ut) s
+389 716 M
+(ts) s
+395 716 M
+(si) s
+401 716 M
+(id) s
+407 716 M
+(de) s
+413 716 M
+(e o) s
+425 716 M
+(of) s
+431 716 M
+(f I) s
+443 716 M
+(ID) s
+449 716 M
+(DL) s
+455 716 M
+(L:) s
+461 716 M
+(:) s
+5 694 M
+(              flct testin.dat testout.dat 1. 1. 15. -k 0.25) s
+5 672 M
+(       S) s
+47 672 M
+(Sa) s
+53 672 M
+(am) s
+59 672 M
+(me) s
+65 672 M
+(e a) s
+77 672 M
+(as) s
+83 672 M
+(s p) s
+95 672 M
+(pr) s
+101 672 M
+(re) s
+107 672 M
+(ev) s
+113 672 M
+(vi) s
+119 672 M
+(io) s
+125 672 M
+(ou) s
+131 672 M
+(us) s
+137 672 M
+(s,) s
+143 672 M
+(, b) s
+155 672 M
+(bu) s
+161 672 M
+(ut) s
+167 672 M
+(t o) s
+179 672 M
+(on) s
+185 672 M
+(nl) s
+191 672 M
+(ly) s
+197 672 M
+(y c) s
+209 672 M
+(co) s
+215 672 M
+(om) s
+221 672 M
+(mp) s
+227 672 M
+(pu) s
+233 672 M
+(ut) s
+239 672 M
+(te) s
+245 672 M
+(e v) s
+257 672 M
+(ve) s
+263 672 M
+(el) s
+269 672 M
+(l.) s
+275 672 M
+(. f) s
+287 672 M
+(fo) s
+293 672 M
+(or) s
+299 672 M
+(r a) s
+311 672 M
+(av) s
+317 672 M
+(vg) s
+323 672 M
+(g a) s
+335 672 M
+(ab) s
+341 672 M
+(bs) s
+347 672 M
+(s.) s
+353 672 M
+(. i) s
+365 672 M
+(im) s
+371 672 M
+(ma) s
+377 672 M
+(ag) s
+383 672 M
+(ge) s
+389 672 M
+(e v) s
+401 672 M
+(va) s
+407 672 M
+(al) s
+413 672 M
+(lu) s
+419 672 M
+(ue) s
+425 672 M
+(es) s
+431 672 M
+(s a) s
+443 672 M
+(ab) s
+449 672 M
+(bo) s
+455 672 M
+(ov) s
+461 672 M
+(ve) s
+467 672 M
+(e) s
+5 661 M
+(       0) s
+47 661 M
+(0.) s
+53 661 M
+(.5) s
+59 661 M
+(5:) s
+65 661 M
+(:) s
+5 639 M
+(              flct testin.dat testout.dat 1. 1. 15. -t 0.5a) s
+5 617 M
+(       P) s
+47 617 M
+(Pr) s
+53 617 M
+(ri) s
+59 617 M
+(in) s
+65 617 M
+(nt) s
+71 617 M
+(t o) s
+83 617 M
+(ou) s
+89 617 M
+(ut) s
+95 617 M
+(t s) s
+107 617 M
+(sh) s
+113 617 M
+(ho) s
+119 617 M
+(or) s
+125 617 M
+(rt) s
+131 617 M
+(t s) s
+143 617 M
+(su) s
+149 617 M
+(um) s
+155 617 M
+(mm) s
+161 617 M
+(ma) s
+167 617 M
+(ar) s
+173 617 M
+(ry) s
+179 617 M
+(y o) s
+191 617 M
+(of) s
+197 617 M
+(f d) s
+209 617 M
+(do) s
+215 617 M
+(oc) s
+221 617 M
+(cu) s
+227 617 M
+(um) s
+233 617 M
+(me) s
+239 617 M
+(en) s
+245 617 M
+(nt) s
+251 617 M
+(ta) s
+257 617 M
+(at) s
+263 617 M
+(ti) s
+269 617 M
+(io) s
+275 617 M
+(on) s
+281 617 M
+(n:) s
+287 617 M
+(:) s
+5 595 M
+(              flct) s
+5 562 M
+(F) s
+5 562 M
+(FI) s
+11 562 M
+(IL) s
+17 562 M
+(LE) s
+23 562 M
+(ES) s
+29 562 M
+(S) s
+5 551 M
+(       There are no configuration files.) s
+5 518 M
+(K) s
+5 518 M
+(KN) s
+11 518 M
+(NO) s
+17 518 M
+(OW) s
+23 518 M
+(WN) s
+29 518 M
+(N L) s
+41 518 M
+(LI) s
+47 518 M
+(IM) s
+53 518 M
+(MI) s
+59 518 M
+(IT) s
+65 518 M
+(TA) s
+71 518 M
+(AT) s
+77 518 M
+(TI) s
+83 518 M
+(IO) s
+89 518 M
+(ON) s
+95 518 M
+(NS) s
+101 518 M
+(S) s
+5 507 M
+(       f) s
+47 507 M
+(fl) s
+53 507 M
+(lc) s
+59 507 M
+(ct) s
+65 507 M
+(t is unable to find flows that are normal to image gradients.   This) s
+5 496 M
+(       is a defect of the LCT concept.) s
+5 474 M
+(       f) s
+47 474 M
+(fl) s
+53 474 M
+(lc) s
+59 474 M
+(ct) s
+65 474 M
+(t  cannot  determine  velocities  on  scales below the scale size of) s
+5 463 M
+(       structures in the images.  This is a defect of the LCT concept.) s
+5 441 M
+(       Images that  have  minimal  structure  can  give  nonsensical  velocity) s
+5 430 M
+(       results.) s
+5 408 M
+(       Results  can  depend on value of sigma.  User must experiment to deter-) s
+5 397 M
+(       mine best choice of sigma.) s
+5 375 M
+(       Velocities corresponding to shifts less than  0.1-0.2  pixels  are  not) s
+5 364 M
+(       always  detected.   It  may be necessary to increase the amount of time) s
+5 353 M
+(       between images, depending on the noise level in the images.   Sometimes) s
+5 342 M
+(       using the filtering option helps.) s
+5 320 M
+(       Velocities computed within _) s
+209 320 M
+(s_) s
+215 320 M
+(i_) s
+221 320 M
+(g_) s
+227 320 M
+(m_) s
+233 320 M
+(a pixels of the image edges can be unre-) s
+5 309 M
+(       liable.) s
+5 287 M
+(       Noisy images can result in spurious velocity results unless a  suitable) s
+5 276 M
+(       threshold value _) s
+143 276 M
+(t_) s
+149 276 M
+(h_) s
+155 276 M
+(r_) s
+161 276 M
+(e_) s
+167 276 M
+(s_) s
+173 276 M
+(h is chosen.) s
+5 243 M
+(A) s
+5 243 M
+(AU) s
+11 243 M
+(UT) s
+17 243 M
+(TH) s
+23 243 M
+(HO) s
+29 243 M
+(OR) s
+35 243 M
+(RS) s
+41 243 M
+(S) s
+5 232 M
+(       George  H. Fisher, SSL UC Berkeley <fisher at ssl dot berkeley dot edu>) s
+5 221 M
+(       Brian T. Welsch, SSL UC Berkeley <welsch at ssl dot berkeley dot edu>) s
+5 199 M
+(S) s
+5 199 M
+(SE) s
+11 199 M
+(EE) s
+17 199 M
+(E A) s
+29 199 M
+(AL) s
+35 199 M
+(LS) s
+41 199 M
+(SO) s
+47 199 M
+(O) s
+5 188 M
+(       source code of v) s
+137 188 M
+(vc) s
+143 188 M
+(ci) s
+149 188 M
+(im) s
+155 188 M
+(ma) s
+161 188 M
+(ag) s
+167 188 M
+(ge) s
+173 188 M
+(e2) s
+179 188 M
+(2o) s
+185 188 M
+(ou) s
+191 188 M
+(ut) s
+197 188 M
+(t.) s
+203 188 M
+(.p) s
+209 188 M
+(pr) s
+215 188 M
+(ro) s
+221 188 M
+(o \(IDL procedure\), source  code  of  v) s
+443 188 M
+(vc) s
+449 188 M
+(ci) s
+455 188 M
+(im) s
+461 188 M
+(m-) s
+467 188 M
+(-) s
+5 177 M
+(       a) s
+47 177 M
+(ag) s
+53 177 M
+(ge) s
+59 177 M
+(e3) s
+65 177 M
+(3i) s
+71 177 M
+(in) s
+77 177 M
+(n.) s
+83 177 M
+(.p) s
+89 177 M
+(pr) s
+95 177 M
+(ro) s
+101 177 M
+(o  \(IDL  procedure\),  and source code of s) s
+347 177 M
+(sh) s
+353 177 M
+(hi) s
+359 177 M
+(if) s
+365 177 M
+(ft) s
+371 177 M
+(t_) s
+377 177 M
+(_f) s
+383 177 M
+(fr) s
+389 177 M
+(ra) s
+395 177 M
+(ac) s
+401 177 M
+(c2) s
+407 177 M
+(2d) s
+413 177 M
+(d.) s
+419 177 M
+(.p) s
+425 177 M
+(pr) s
+431 177 M
+(ro) s
+437 177 M
+(o \(IDL) s
+5 166 M
+(       procedure\).) s
+5 122 M
+(Unix/Linux                       JANUARY 2018                       FLCT\(1.06\)) s
+_R
+S
+%%Trailer
+%%Pages: 4
+%%DocumentNeededResources: font Courier-Bold Courier 
+%%EOF

@@ -1,0 +1,696 @@
+USER'S GUIDE TO THE FLCT LIBRARY
+
+Starting with version 1.03 of flct and warp, the mathematical/computational 
+tasks have been placed in a series of functions that are separate from the main
+programs, which are now mainly assigned to do the I/O operations, and then
+call the flct, flct_pc, shift_frac2d, or warp_frac2d functions.  These functions
+can also be called independently from other Fortran or C programs by linking to
+the flct library.  In this document, we
+describe how to call these functions from either C or Fortran.  The flct
+library of functions is written entirely in C, but contains function 
+wrappers which allow for subroutine calls from a Fortran program.
+
+The flct function computes a 2-d velocity field from two images
+that are separated slightly in time.  The flct_pc function does the same
+task as the flct function, but assumes the two images are given on a Plate
+Carree grid (uniformly spaced in longitude and latitude).  
+The shift_frac2d function performs a 
+uniform shift on an image, and the warp_frac2d function will perform a 
+non-uniform shift (i.e. a "warp") of an image.
+
+From either C or Fortran, the flct, flct_pc, shift_frac2d, or warp_frac2d 
+functions will require that the calling program also link to the fftw3 
+library as well as the flct library.
+
+When using gcc to link to flct and fftw3, typical linking options would be 
+-lflct -lfftw3 -lm.  Make sure that flctsubs.h is installed in a location
+that the compiler will find.  
+
+When linking with gfortran, typical linking options would
+be -lflct -lfftw3.  
+
+Note that when building the flct library, the default is to assume that complex
+variables in C are not defined.  See the README-install.txt file in the source
+folder for instructions on how to compile in support for complex variables in C
+if you need it.
+
+--------------------------------------
+C INTERFACE:
+--------------------------------------
+
+i4 flct (i4 transp, double * f1, double * f2, i4 nx, i4 ny, double deltat, 
+    double deltas, double sigma, double * vx, double * vy, double * vm,
+    double thresh, i4 absflag, i4 filter, double kr, i4 skip,
+    i4 poffset, i4 qoffset, i4 interpolate, i4 biascor, i4 verbose)
+
+PURPOSE:  To use local-correlation tracking to find a 2D velocity field from
+          two images separated slightly in time.
+
+USAGE: iflct=flct(transp, f1, f2, nx, ny, deltat, deltas, sigma, 
+       vx, vy, vm, thresh, absflag, filter, kr, skip, poffset, qoffset, 
+       interpolate, biascor, verbose);
+
+transp:        (input) 4-byte integer indicating whether input images are stored
+               in column-major (1st index varies fastest) or row-major
+               (2nd index varies fastest) order.  Typically, 2D-images
+               constructed in IDL or Fortran are stored in column-major order.
+               If (transp == 0) then row-major order is assumed, but if
+               (transp == 1) column major order is assumed.
+
+f1:            (input) pointer to a double precision array of size nx*ny
+               containing the first of the images to be operated on by the 
+               flct function.
+
+f2:            (input) pointer to a double precision array of size nx*ny 
+               containing the second of the images to be operated on by the 
+               flct function.
+
+nx:            (input) 4-byte integer containing the number of pixels in 
+               x direction across the image
+
+ny:            (input) 4-byte integer containing the number of pixels in 
+               y direction across the image
+
+deltat:        (input) double precision value of the time between images
+
+deltas:        (input) double precision value of the distance across one edge
+               of a pixel
+
+sigma:         (input) double precision value of the Gaussian windowing function
+               used to localize regions of the image near a given pixel.  Sigma
+               is measured in pixels.  If sigma is set to 0, then flct returns
+               a whole frame shift, rather than a 2-D velocity field.
+
+vx:            (output) pointer to a double precision array of size nx*ny
+               containing the x-component of the velocity, measured in 
+               units of deltas/deltat.  If (sigma == 0.) then only one value
+               of vx is computed.
+
+vy:            (output) pointer to a double precision array of size nx*ny
+               containing the y-component of the velocity, measured in 
+               units of deltas/deltat.  If (sigma == 0.) then only one value
+               of vy is computed.
+
+vm:            (output) pointer to a double precision array of size nx*ny
+               containing a mask, set to 0 if no velocity was computed, 
+               set to 1 if the velocity was computed, and set to 0.5 if
+               the velocity was interpolated.  If (sigma == 0.) then only one
+               value of vm is returned.
+
+thresh:        (input) double precision value of the image threshold, where no
+               estimate of the velocity will be done if the absolute value of
+               the average image value is less than thresh.  If thresh is
+               between 0 and 1, then the threshold is assumed to be in units
+               relative to the maximum absolute value (unless absflag !=0).
+
+absflag:       (input) 4-byte integer flag value:  If (absflag !=0) and 
+               thresh is between 0 and 1, then thresh is regarded as an 
+               absolute limit, rather a relative limit.
+
+filter:        (input) 4-byte integer flag value:  If (filter !=0) then high
+               frequency spatial components of the images are attenuated by a 
+               Gaussian low-pass filter.  Filtering can be useful if there is
+               a lot of high frequency noise in the images.
+
+kr:            (input) double precision filter value.  If (filter !=0) then 
+               kr determines the amount of high spatial-frequency filtering of 
+               the images.  Smaller values of kr result in stronger filtering.
+               We have found useful values are in the range 0.25 to 0.5.  Values
+               larger than 1.0 typically have little effect, and values 0.1
+               and smaller typically result in too much filtering.
+
+skip:          (input) 4-byte integer value specifying how many pixels to 
+               skip between velocity calculations.  If (skip ==0) no skipping 
+               is done.  Setting skip to 2 means to skip every other pixel 
+               in both the x and y directions.  This option is useful when 
+               working with very large images, and also where interpolation 
+               is done (see discussion of "interpolate" below).  
+
+poffset:       (input) 4-byte integer value specifying initial offset in 
+               pixels in the x-direction if skipping is invoked.
+
+qoffset:       (input) 4-byte integer value specifying initial offset in 
+               pixels in the y-direction if skipping is invoked.
+
+interpolate:   (input) 4-byte integer value of interpolate flag.  If skip is 
+               non-zero, and if (interpolate !=0) the
+               velocities at the skipped pixels are interpolated by using
+               cubic convolution interpolation, by using the pixels where the
+               velocity has been computed.  This option can be useful for
+               very large images, and where skip is less than sigma.  The 
+               mask array vm is set to 0.5 at the locations where the velocity 
+               components are interpolated.
+
+biascor:       (input) 4-byte integer value of the "bias-correction" flag.
+               if(biascor != 0) then the flct velocities are "bias corrected"
+               by attempting to correct for the fact that the gaussian window
+               function is the same for both the initial and final images,
+               resulting in a velocity under-estimate using the standard
+               FLCT algorithm.  
+
+verbose:       (input) 4-byte integer value of the verbosity flag.  
+               If (verbose ==0) then flct messages to stdout are suppressed.
+
+-----------------------------------
+
+i4 flct_pc (i4 transp, double * f1, double * f2, i4 nx, i4 ny, double deltat, 
+    double deltas, double sigma, double * vx, double * vy, double * vm,
+    double thresh, i4 absflag, i4 filter, double kr, i4 skip,
+    i4 poffset, i4 qoffset, i4 interpolate, double latmin, double latmax,
+    i4 biascor, i4 verbose)
+
+PURPOSE:  To use local-correlation tracking to find a 2D velocity field from
+          two images separated slightly in time.  The images are assumed to
+          be in Plate Carree coordinates (equally spaced in longitude and
+          latitude).  The images are interpolated to a Mercator grid, flct
+          is run, and the velocities are interpolated back to a Plate Carree
+          grid, with a cos(latitude) modulation of the velocity amplitude.
+          The interpolation method used is cubic convolution.
+
+USAGE: iflct=flct_pc(transp, f1, f2, nx, ny, deltat, deltas, sigma, 
+       vx, vy, vm, thresh, absflag, filter, kr, skip, poffset, qoffset, 
+       interpolate, latmin, latmax, biascor, verbose);
+
+transp:        (input) 4-byte integer indicating whether input images are stored
+               in column-major (1st index varies fastest) or row-major
+               (2nd index varies fastest) order.  Typically, 2D-images
+               constructed in IDL or Fortran are stored in column-major order.
+               If (transp == 0) then row-major order is assumed, but if
+               (transp == 1) column major order is assumed.
+
+f1:            (input) pointer to a double precision array of size nx*ny
+               containing the first of the images to be operated on by the 
+               flct function.
+
+f2:            (input) pointer to a double precision array of size nx*ny 
+               containing the second of the images to be operated on by the 
+               flct function.
+
+nx:            (input) 4-byte integer containing the number of pixels in 
+               x direction across the image
+
+ny:            (input) 4-byte integer containing the number of pixels in 
+               y direction across the image
+
+deltat:        (input) double precision value of the time between images
+
+deltas:        (input) double precision value of the distance across one edge
+               of a pixel
+
+sigma:         (input) double precision value of the Gaussian windowing function
+               used to localize regions of the image near a given pixel.  Sigma
+               is measured in pixels.  If sigma is set to 0, then flct returns
+               a whole frame shift, rather than a 2-D velocity field.
+
+vx:            (output) pointer to a double precision array of size nx*ny
+               containing the x-component of the velocity, measured in 
+               units of deltas/deltat.  If (sigma == 0.) then only one value
+               of vx is computed.
+
+vy:            (output) pointer to a double precision array of size nx*ny
+               containing the y-component of the velocity, measured in 
+               units of deltas/deltat.  If (sigma == 0.) then only one value
+               of vy is computed.
+
+vm:            (output) pointer to a double precision array of size nx*ny
+               containing a mask, set to 0 if no velocity was computed, 
+               and set to 0.5 if the velocity was interpolated.  
+               If (sigma == 0.) then only one
+               value of vm is returned.  Note that because flct_pc uses
+               interpolation, no value of 1.0 is ever returned into vm
+               from flct_pc. 
+
+thresh:        (input) double precision value of the image threshold, where no
+               estimate of the velocity will be done if the absolute value of
+               the average image value is less than thresh.  If thresh is
+               between 0 and 1, then the threshold is assumed to be in units
+               relative to the maximum absolute value (unless absflag !=0).
+
+absflag:       (input) 4-byte integer flag value:  If (absflag !=0) and 
+               thresh is between 0 and 1, then thresh is regarded as an 
+               absolute limit, rather a relative limit.
+
+filter:        (input) 4-byte integer flag value:  If (filter !=0) then high
+               frequency spatial components of the images are attenuated by a 
+               Gaussian low-pass filter.  Filtering can be useful if there is
+               a lot of high frequency noise in the images.
+
+kr:            (input) double precision filter value.  If (filter !=0) then 
+               kr determines the amount of high spatial-frequency filtering of 
+               the images.  Smaller values of kr result in stronger filtering.
+               We have found useful values are in the range 0.25 to 0.5.  Values
+               larger than 1.0 typically have little effect, and values 0.1
+               and smaller typically result in too much filtering.
+
+skip:          (input) 4-byte integer value specifying how many pixels to 
+               skip between velocity calculations.  If (skip ==0) no skipping 
+               is done.  Setting skip to 2 means to skip every other pixel 
+               in both the x and y directions.  This option is useful when 
+               working with very large images, and also where interpolation 
+               is done (see discussion of "interpolate" below).  For flct_pc,
+               interpolate must be non-zero if skip is selected, or the
+               function will exit.
+
+poffset:       (input) 4-byte integer value specifying initial offset in 
+               pixels in the x-direction if skipping is invoked.
+
+qoffset:       (input) 4-byte integer value specifying initial offset in 
+               pixels in the y-direction if skipping is invoked.
+
+interpolate:   (input) 4-byte integer value of interpolate flag.  If skip is 
+               non-zero, and if (interpolate !=0) the
+               velocities at the skipped pixels are interpolated by using
+               cubic convolution interpolation, by using the pixels where the
+               velocity has been computed.  This option can be useful for
+               very large images, and where skip is less than sigma.  The 
+               mask array vm is set to 0.5 at the locations where the velocity 
+               components are interpolated.
+
+latmin:        (input) double precision value of the minimum latitude of the
+               images, in radians.
+
+latmax:        (input) double precision value of the maximum latitude of the
+               images, in radians.
+
+biascor:       (input) 4-byte integer value of the "bias-correction" flag.
+               if(biascor != 0) then the flct velocities are "bias corrected"
+               by attempting to correct for the fact that the gaussian window
+               function is the same for both the initial and final images,
+               resulting in a velocity under-estimate using the standard
+               FLCT algorithm.
+
+verbose:       (input) 4-byte integer value of the verbosity flag.  
+               If (verbose ==0) then flct messages to stdout are suppressed.
+
+-----------------------------------
+
+i4 shift_frac2d(double *arr, double delx, double dely, double *outarr,
+        i4 nx, i4 ny, i4 transp, i4 verbose)
+
+PURPOSE:  To apply a non-integer uniform shift of delx,dely to an image.
+
+USAGE:  istat=shift_frac2d(arr,delx,dely,outarr,nx,ny,transp,verbose);
+
+arr:           (input) pointer to a double precision array of size nx*ny
+               containing the image to be operated on by the 
+               shift_frac2d function.
+
+delx:          (input) double precision value of shift in x to apply to the
+               input image arr.
+
+dely:          (input) double precision value of shift in y to apply to the
+               input image arr.
+
+outarr:        (output) pointer to a double precision array of size nx*ny
+               containing the shifted image computed by shift_frac2d.
+
+nx:            (input) 4-byte integer value of the number of pixels across 
+               the image in the x-direction.
+
+ny:            (input) 4-byte integer value of the number of pixels across 
+               the image in the y-direction.
+
+transp:        (input) 4-byte integer indicating whether input image is stored
+               in column-major (1st index varies fastest) or row-major
+               (2nd index varies fastest) order.  Typically, 2D-images
+               constructed in IDL or Fortran are stored in column-major order.
+               If (transp == 0) then row-major order is assumed, but if
+               (transp == 1) column major order is assumed.
+
+verbose:       (input) 4-byte integer value of the verbosity flag.  
+               If (verbose ==0) then shift_frac2d messages to stdout are 
+               suppressed.
+------------------------------------
+
+i4 warp_frac2d(double *arr, double *delx, double *dely, double *outarr,
+        i4 nx, i4 ny, i4 transp, i4 verbose)
+
+PURPOSE:  To apply a non-integer, non-uniform shift of delx,dely to an image.
+
+USAGE:  istat=warp_frac2d(arr,delx,dely,outarr,nx,ny,transp,verbose);
+
+arr:           (input) pointer to a double precision array of size nx*ny
+               containing the image to be operated on by the 
+               warp_frac2d function.
+
+delx:          (input) pointer to a double precision array of length nx*ny  
+               of the shift in x to apply to the input image arr.  
+
+dely:          (input) pointer to a double precision array of length nx*ny  
+               of the shift in y to apply to the input image arr.  
+
+outarr:        (output) pointer to a double precision array of size nx*ny
+               containing the warped image computed by warp_frac2d.
+
+nx:            (input) 4-byte integer value of the number of pixels across 
+               the image in the x-direction.
+
+ny:            (input) 4-byte integer value of the number of pixels across 
+               the image in the y-direction.
+
+transp:        (input) 4-byte integer indicating whether input image is stored
+               in column-major (1st index varies fastest) or row-major
+               (2nd index varies fastest) order.  Typically, 2D-images
+               constructed in IDL or Fortran are stored in column-major order.
+               If (transp == 0) then row-major order is assumed, but if
+               (transp == 1) column major order is assumed.
+
+verbose:       (input) 4-byte integer value of the verbosity flag.  
+               If (verbose ==0) then shift_frac2d messages to stdout are 
+               suppressed.
+
+-----------------------------
+FORTRAN INTERFACE:
+-----------------------------
+
+void flct_f77_(i4 * transp, double * f1, double * f2, i4 * nx, i4 * ny,
+     double * deltat, double * deltas, double * sigma, double * vx,
+     double * vy, double * vm, double * thresh, i4 * absflag, i4 * filter,
+     double * kr, i4 * skip, i4 * poffset, i4 * qoffset, i4 * interpolate,
+     i4 * biascor, i4 * verbose)
+
+PURPOSE:  To use local-correlation tracking to find a 2D velocity field from
+          two images separated slightly in time.  Call from Fortran.
+
+USAGE:    call flct_f77(transp,f1,f2,nx,ny,deltat,deltas,sigma,
+               vx,vy,vm,thresh,absflag,filter,kr,skip,poffset,qoffset,
+               interpolate,biascor,verbose)
+
+
+transp:        (input)  integer*4 variable indicating whether input images 
+               are stored in column-major (1st index varies fastest) or 
+               row-major (2nd index varies fastest) order.  Typically, 2D-images
+               constructed in IDL or Fortran are stored in column-major order.
+               If (transp .eq. 0) then row-major order is assumed, but if
+               (transp .eq. 1) column major order is assumed.  From a fortran
+               program, you will probably want to set transp=1.
+
+f1:            (input) real*8 2D array dimensioned (nx,ny)
+               containing the first of the images to be operated on by the 
+               flct function.
+
+f2:            (input) real*8 2D array dimensioned (nx,ny) 
+               containing the second of the images to be operated on by the 
+               flct function.
+
+nx:            (input) integer*4 variable containing the number of pixels in 
+               x direction across the image
+
+ny:            (input) integer*4 variable containing the number of pixels in 
+               y direction across the image
+
+deltat:        (input) real*8 variable set to the time between images
+
+deltas:        (input) real*8 variable set to the distance across one edge
+               of a pixel
+
+sigma:         (input) real*8 variable set to the Gaussian windowing function
+               parameter used to localize regions of the image near a given 
+               pixel.  Sigma is measured in pixels.  If sigma is set to 0, 
+               then flct returns a whole frame shift, rather than a 2-D 
+               velocity field.
+
+vx:            (output) real*8 array of dimension (nx,ny)
+               containing the x-component of the velocity, measured in 
+               units of deltas/deltat.  If (sigma .eq. 0.) then only one value
+               of vx is computed.
+
+vy:            (output) real*8 array of dimension (nx,ny)
+               containing the y-component of the velocity, measured in 
+               units of deltas/deltat.  If (sigma .eq. 0.) then only one value
+               of vy is computed.
+
+vm:            (output) real*8 array of dimension (nx,ny)
+               containing a mask, set to 0 if no velocity was computed, 
+               set to 1 if the velocity was computed, and set to 0.5 if
+               the velocity was interpolated.  If (sigma .eq. 0.) then only one
+               value of vm is returned.
+
+thresh:        (input) real*8 variable of the image threshold, where no
+               estimate of the velocity will be done if the absolute value of
+               the average image value is less than thresh.  If thresh is
+               between 0 and 1, then the threshold is assumed to be in units
+               relative to the maximum absolute value (unless absflag .ne. 0).
+
+absflag:       (input) integer*4 variable:  If (absflag .ne. 0) and 
+               thresh is between 0 and 1, then thresh is regarded as an 
+               absolute limit, rather a relative limit.
+
+filter:        (input) integer*4 flag variable:  If (filter .ne. 0) then high
+               frequency spatial components of the images are attenuated by a 
+               Gaussian low-pass filter.  Filtering can be useful if there is
+               a lot of high frequency noise in the images.
+
+kr:            (input) real*8 variable.  If (filter .ne. 0) then 
+               kr determines the amount of high spatial-frequency filtering of 
+               the images.  Smaller values of kr result in stronger filtering.
+               We have found useful values are in the range 0.25 to 0.5.  Values
+               of kr larger than 1.0 typically have little effect, and values 
+               0.1 and smaller typically result in too much filtering.
+
+skip:          (input) integer*4 variable specifying how many pixels to 
+               skip between velocity calculations.  If (skip .eq. 0) no 
+               skipping is done.  Setting skip to 2 means to skip every other 
+               pixel in both the x and y directions.  This option is useful 
+               when working with very large images, and also where interpolation
+               is done (see discussion of "interpolate" below).  
+
+poffset:       (input) integer*4 variable specifying initial offset in 
+               pixels in the x-direction if skipping is invoked.
+
+qoffset:       (input) integer*4 variable specifying initial offset in 
+               pixels in the y-direction if skipping is invoked.
+
+interpolate:   (input) integer*4 variable, the interpolate flag.  If skip is 
+               non-zero, and if (interpolate .ne. 0) the
+               velocities at the skipped pixels are interpolated by using
+               cubic convolution interpolation, by using the pixels where the
+               velocity has been computed.  This option can be useful for
+               very large images, and where skip is less than sigma.  The 
+               mask array vm is set to 0.5 at the locations where the velocity 
+               components are interpolated.
+
+biascor:       (input) integer*4 variable, the "bias-correction" flag.
+               if(biascor .ne. 0) then the flct velocities are "bias corrected"
+               by attempting to correct for the fact that the gaussian window
+               function is the same for both the initial and final images,
+               resulting in a velocity under-estimate using the standard
+               FLCT algorithm.
+
+verbose:       (input) integer*4 variable, the verbosity flag.  
+               If (verbose .eq. 0) then flct messages to stdout are suppressed.
+
+--------------------------
+
+void flct_pc_f77_(i4 * transp, double * f1, double * f2, i4 * nx, i4 * ny,
+     double * deltat, double * deltas, double * sigma, double * vx,
+     double * vy, double * vm, double * thresh, i4 * absflag, i4 * filter,
+     double * kr, i4 * skip, i4 * poffset, i4 * qoffset, i4 * interpolate,
+     double * latmin, double * latmax, i4 * biascor, i4 * verbose)
+
+PURPOSE:  To use local-correlation tracking to find a 2D velocity field from
+          two images separated slightly in time.  The images are assumed to
+          be in Plate Carree coordinates (equally spaced in longitude and
+          latitude).  The images are interpolated to a Mercator grid, flct
+          is run, and the velocities are interpolated back to a Plate Carree
+          grid, with a cos(latitude) modulation of the velocity amplitude.
+          The interpolation method used is cubic convolution.
+          Call from Fortran.
+
+USAGE:    call flct_pc_f77(transp,f1,f2,nx,ny,deltat,deltas,sigma,
+               vx,vy,vm,thresh,absflag,filter,kr,skip,poffset,qoffset,
+               interpolate,latmin,latmax,biascor,verbose)
+
+
+transp:        (input)  integer*4 variable indicating whether input images 
+               are stored in column-major (1st index varies fastest) or 
+               row-major (2nd index varies fastest) order.  Typically, 2D-images
+               constructed in IDL or Fortran are stored in column-major order.
+               If (transp .eq. 0) then row-major order is assumed, but if
+               (transp .eq. 1) column major order is assumed.  From a fortran
+               program, you will probably want to set transp=1.
+
+f1:            (input) real*8 2D array dimensioned (nx,ny)
+               containing the first of the images to be operated on by the 
+               flct function.
+
+f2:            (input) real*8 2D array dimensioned (nx,ny) 
+               containing the second of the images to be operated on by the 
+               flct function.
+
+nx:            (input) integer*4 variable containing the number of pixels in 
+               x direction across the image
+
+ny:            (input) integer*4 variable containing the number of pixels in 
+               y direction across the image
+
+deltat:        (input) real*8 variable set to the time between images
+
+deltas:        (input) real*8 variable set to the distance across one edge
+               of a pixel
+
+sigma:         (input) real*8 variable set to the Gaussian windowing function
+               parameter used to localize regions of the image near a given 
+               pixel.  Sigma is measured in pixels.  If sigma is set to 0, 
+               then flct returns a whole frame shift, rather than a 2-D 
+               velocity field.
+
+vx:            (output) real*8 array of dimension (nx,ny)
+               containing the x-component of the velocity, measured in 
+               units of deltas/deltat.  If (sigma .eq. 0.) then only one value
+               of vx is computed.
+
+vy:            (output) real*8 array of dimension (nx,ny)
+               containing the y-component of the velocity, measured in 
+               units of deltas/deltat.  If (sigma .eq. 0.) then only one value
+               of vy is computed.
+
+vm:            (output) real*8 array of dimension (nx,ny)
+               containing a mask, set to 0 if no velocity was computed, 
+               and set to 0.5 if the velocity was interpolated.  
+               If (sigma .eq. 0.) then only one value of vm is returned.
+               Note that because flct_pc_f77 uses interpolation, no value
+               of 1.0 is ever returned into vm from flct_pc.
+
+thresh:        (input) real*8 variable of the image threshold, where no
+               estimate of the velocity will be done if the absolute value of
+               the average image value is less than thresh.  If thresh is
+               between 0 and 1, then the threshold is assumed to be in units
+               relative to the maximum absolute value (unless absflag .ne. 0).
+
+absflag:       (input) integer*4 variable:  If (absflag .ne. 0) and 
+               thresh is between 0 and 1, then thresh is regarded as an 
+               absolute limit, rather a relative limit.
+
+filter:        (input) integer*4 flag variable:  If (filter .ne. 0) then high
+               frequency spatial components of the images are attenuated by a 
+               Gaussian low-pass filter.  Filtering can be useful if there is
+               a lot of high frequency noise in the images.
+
+kr:            (input) real*8 variable.  If (filter .ne. 0) then 
+               kr determines the amount of high spatial-frequency filtering of 
+               the images.  Smaller values of kr result in stronger filtering.
+               We have found useful values are in the range 0.25 to 0.5.  Values
+               of kr larger than 1.0 typically have little effect, and values 
+               0.1 and smaller typically result in too much filtering.
+
+skip:          (input) integer*4 variable specifying how many pixels to 
+               skip between velocity calculations.  If (skip .eq. 0) no 
+               skipping is done.  Setting skip to 2 means to skip every other 
+               pixel in both the x and y directions.  This option is useful 
+               when working with very large images, and also where interpolation
+               is done (see discussion of "interpolate" below).  If flct_pc_f77
+               is called with a non-zero value of skip, you must also set
+               interpolate to a non-zero value.
+
+poffset:       (input) integer*4 variable specifying initial offset in 
+               pixels in the x-direction if skipping is invoked.
+
+qoffset:       (input) integer*4 variable specifying initial offset in 
+               pixels in the y-direction if skipping is invoked.
+
+interpolate:   (input) integer*4 variable, the interpolate flag.  If skip is 
+               non-zero, and if (interpolate .ne. 0) the
+               velocities at the skipped pixels are interpolated by using
+               cubic convolution interpolation, by using the pixels where the
+               velocity has been computed.  This option can be useful for
+               very large images, and where skip is less than sigma.  The 
+               mask array vm is set to 0.5 at the locations where the velocity 
+               components are interpolated.
+
+latmin:        (input) real*8 value of the minimum latitude of the images, 
+               in radians.
+
+latmax:        (input) real*8 value of the maximum latitude of the images, 
+               in radians.
+
+biascor:       (input) integer*4 variable, the "bias-correction" flag.
+               if(biascor .ne. 0) then the flct velocities are "bias corrected"
+               by attempting to correct for the fact that the gaussian window
+               function is the same for both the initial and final images,
+               resulting in a velocity under-estimate using the standard
+               FLCT algorithm.
+
+verbose:       (input) integer*4 variable, the verbosity flag.  
+               If (verbose .eq. 0) then flct messages to stdout are suppressed.
+
+--------------------------
+
+void shift_frac2d_f77_(double *arr, double *delx, double *dely, double *outarr,
+     i4 *nx, i4 *ny, i4 *transp, i4 *verbose)
+
+PURPOSE:  To apply a non-integer uniform shift of delx,dely to an image.
+          Call from Fortran.
+
+USAGE:  call shift_frac2d_f77(arr,delx,dely,outarr,nx,ny,transp,verbose)
+
+arr:           (input) real*8 array dimensioned (nx,ny)
+               containing the image to be operated on by the 
+               shift_frac2d_f77 subroutine.
+
+delx:          (input) real*8 variable of the shift in x to apply 
+               to the input image arr.
+
+dely:          (input) real*8 variable of the shift in y to apply 
+               to the input image arr.
+
+outarr:        (output) real*8 array of dimension (nx,ny)
+               containing the shifted image computed by shift_frac2d_f77.
+
+nx:            (input) integer*4 variable of the number of pixels across 
+               the image in the x-direction.
+
+ny:            (input) integer*4 variable of the number of pixels across 
+               the image in the y-direction.
+
+transp:        (input) integer*4 variable indicating whether input image is 
+               stored in column-major (1st index varies fastest) or row-major
+               (2nd index varies fastest) order.  Typically, 2D-images
+               constructed in IDL or Fortran are stored in column-major order.
+               If (transp .eq. 0) then row-major order is assumed, but if
+               (transp .eq. 1) column major order is assumed.
+               From a fortran program you'll probably want to set transp=1.
+
+verbose:       (input) integer*4 variable of the verbosity flag.  
+               If (verbose .eq. 0) then shift_frac2d_f77 messages to stdout are 
+               suppressed.
+------------------------------------
+
+void warp_frac2d_f77_(double *arr, double *delx, double *dely, double *outarr,
+     i4 *nx, i4*ny, i4 *transp, i4 *verbose)
+
+PURPOSE:  To apply a non-integer, non-uniform shift of delx,dely to an image.
+          Call from Fortran.
+
+USAGE:  call warp_frac2d_f77(arr,delx,dely,outarr,nx,ny,transp,verbose)
+
+arr:           (input) real*8 array of dimension (nx,ny)
+               containing the image to be operated on by the 
+               warp_frac2d_f77 subroutine.
+
+delx:          (input) real*8 array of dimension (nx,ny)
+               of the shift in x to apply to the input image arr.  
+
+dely:          (input) real*8 array of dimension (nx,ny)
+               of the shift in y to apply to the input image arr.  
+
+outarr:        (output) real*8 array of dimension (nx,ny)
+               containing the warped image computed by warp_frac2d_f77.
+
+nx:            (input) integer*4 variable of the number of pixels across 
+               the image in the x-direction.
+
+ny:            (input) integer*4 variable of the number of pixels across 
+               the image in the y-direction.
+
+transp:        (input) integer*4 variable indicating whether input image is 
+               stored in column-major (1st index varies fastest) or row-major
+               (2nd index varies fastest) order.  Typically, 2D-images
+               constructed in IDL or Fortran are stored in column-major order.
+               If (transp .eq. 0) then row-major order is assumed, but if
+               (transp .eq. 1) column major order is assumed.
+               From a Fortran program you'll probably want to set transp=1 .
+
+verbose:       (input) integer*4 variable of the verbosity flag.  
+               If (verbose .eq. 0) then shift_frac2d messages to stdout are 
+               suppressed.

@@ -1,0 +1,315 @@
+.\" Process this file with
+.\" groff -man -Tascii foo.1
+.\"
+.TH FLCT 1.06     "JANUARY 2018" Unix/Linux "User Manuals"
+.SH NAME
+flct \- perform local correlation tracking between 2 images
+.SH SYNOPSIS
+.B flct 
+.I in-file out-file deltat deltas sigma 
+.B [
+.I -t thresh -k kr -s N[pP][qQ][i] -pc latmin latmax -h -bc -q
+.B ]
+.B ...
+.SH DESCRIPTION
+.B flct
+finds a 2-D 
+velocity field from which an initial image (image1) evolves into a 2nd image
+(image2) over a time deltat.  The technique "FLCT", was initially desribed
+in section 3 of 
+Welsch B. T., Fisher G. H.,, Abbett W. P., and Regnier, S. 2004 ApJ 610, 1148.
+Following this, an updated writeup of the technique reflecting improvements
+to the code was published by
+G. H. Fisher and B. T.  Welsch in PASP conf. series vol 383, p 373 (2008)
+(publicly available at http://arxiv.org/abs/0712.4289 ).  The current
+technique can be summarized as follows:
+
+For each pixel location in each of the 2 images, first form smaller
+sub-images that are centered on the given pixel location, perform a mean
+subtraction of each subimage, and then multiply each of these subimages with
+a 2-D gaussian of width 
+.I sigma
+pixels, centered at the given pixel location.  Then compute the
+cross-correlation function between the 2 resulting 
+truncated images, and find the
+pixel shifts in x and y that maximize that function.  The pixel shifts are
+converted to velocity units by the magnitude of the time separation
+.I deltat
+and the unit of length along the edge of a single pixel,
+.I deltas.
+The cross-correlation function is computed using standard Fourier Transform
+techniques, employing version 3 of
+the 
+.B FFTW (http://www.fftw.org) 
+package.  Second-order
+Taylor expansion of the solution is done to find the sub-pixel
+location of the peak of the cross-correlation function.
+
+When
+.I sigma
+is set to zero, a special case, the cross-correlation function
+of the two full images is computed, without multiplying by the gaussian.
+The net shift in x and y between the two full images is then printed to stdout,
+and the output file
+.I out-file
+contains single values for the shifts in the output velocity arrays.
+
+If desired, the IDL procedure
+.I shift_frac2d,
+which is included in the 
+.I flct
+distribution, can then be used to remove this overall
+shift from image2.  
+.I shift_frac2d
+works in the same was as the IDL shift function, but allows for non-integer
+shifts.
+
+The two input images are read from 
+.I in-file
+, which is a binary-format file that can be written with the IDL
+procedure 
+.B vcimage2out.pro,
+.I out-file 
+contains the resulting 2-D arrays of vx, vy, and vm 
+(the x and y components of the
+velocity, and a mask array set to 0 for those locations where no velocity is 
+computed, 1 where it is, and 0.5 where it is interpolated -- see discussion
+of interpolation in the section on the "skip" option).  The 
+output file can be read with the IDL
+procedure
+.B vcimage3in.pro.
+The data in
+.I in-file
+and
+.I out-file
+is stored in binary, large-endian byte order, and
+.B flct
+and the IDL I/O procedures to read and write the files should 
+be platform independent.
+
+.SH OPTIONS
+.IP -t\ thresh
+Do not compute the velocity at a given pixel if the average absolute value
+between the 2 images at that location is less than
+.I thresh.
+If
+.I thresh
+is between 0 and 1, 
+.I thresh
+is assumed given in units relative to the largest absolute value of
+the image averages.  To force a 
+.I thresh
+value between 0 and 1 to be considered in "absolute" units, append an
+"a" to the numerical value of 
+.I thresh.  
+If the velocity isn't computed, the mask array is set to 0 at
+that location (it is 1 otherwise).
+
+.IP -k\ kr
+Perform gaussian, low pass filtering on the sub-images that are used
+to construct the cross-correlation function.  The value of
+.I kr
+is expressed in units of the maximum wavenumber (Nyquist frequency) in each 
+direction
+of the sub-image.  Specifically, the complex amplitude of the (kx,ky) 
+Fourier mode of each sub-image
+is multiplied by exp(-(kx/kxr)^2-(ky/kyr)^2), where kxr =
+kr*kx_max and kyr=kr*ky_max, and where kx_max, ky_max are the Nyquist
+frequencies of the sub-image.
+
+This option is most useful when the images contain 
+significant amounts of uncorrelated, pixel-to-pixel noise-like structure.  
+Empirically,
+values of 
+.I kr
+in the range of 0.2 to 0.5 seem to be most useful, with lower values
+resulting in stronger filtering.
+
+.IP -s\ N[pP][qQ][i]
+
+Only compute the velocity every 
+.I N 
+pixels in both the x and y directions.  This "skip" option is useful when the
+images are very large and one does not need the velocity computed at every
+location in the two images.  The sub-options
+.I pP
+.I qQ
+and
+.I i
+are each optional, but if present, they must occur in the stated order.
+The subparameter 
+.I pP
+where P is an integer, is the offset for the start of computation in the
+x-direction of the array, and similarly
+.I qQ
+where Q is an integer, is the offset for the start of computation in the
+y-direction of the array.  The default values of P and Q are zero (no p or
+q present in the skip string).
+P and Q must be smaller in absolute value than the skip integer N.  If P or
+Q are negative, they are reset to N-|P| or N-|Q|.
+The suboption
+.I i
+determines if cubic convolution interpolation is to be done on the points
+that were skipped, using values from the points that were computed.  If
+interpolation is done on a given gridpoint, then the
+mask array vm that is written out to 
+.I out-file
+contains a value of 0.5 for those points that were interpolated.
+The skip string argument must not contain any blanks.
+
+Empirically, setting 
+.I N
+> 
+.I sigma 
+/ 2 pixels and then interpolating compares poorly with calculations performed
+at every gridpoint.
+
+If using the skip option while also using the "Plate Carree" option (see
+below), you must also use the interpolation sub-option described above.
+
+.IP -h
+If this "high resolution" flag is set, cubic convolution interpolation 
+is performed to 0.1 pixel precision before Taylor expansion is done to
+find the location of the peak.  
+
+We have DISABLED this option because it
+is slower and less accurate than the default method.
+
+.IP -pc\ latmin\ latmax
+If this "Plate Carree" option is set, then the input images are assumed to be
+in Plate Carree coordinates (uniformly spaced in longitude and latitude).  In
+this case, the images are interpolated to a Mercator Projection, then FLCT
+is run, and the resulting velocities are interpolated back to Plate Carree
+coordinates, with cos(latitude) modulation.  The limits latmin and latmax
+are assumed to be given in radians, unless they end in 'd', in which case
+they are assumed to be in degrees, and will then be converted to radians.
+Because of possible artifacts in low-signal regions of the image
+due to the interpolation algorithm, we strongly recommend using the 
+thresholding option ("-t thresh") when using the Plate Carree option.
+
+If sigma is set to 0 when the Plate Carree option is set, then single values
+of the x and y shifts are returned, and a single value of 0.5 is returned as
+the mask value.  The x and y shifts are modulated by the cosine
+of the average latitude, coinciding with the centroid of the image in pixel
+space.
+
+.IP -bc
+If this flag is set, an attempt is made to correct the bias
+that under-estimates velocity amplitudes.  This bias is intrinsic to the FLCT
+algorithm. The bias correction algorithm that is implemented uses the Hessian
+determinant, and the assumed value of sigma, to adjust the x-and-y velocities.
+More detail is given in the file 
+.B bias_correction_in_flct.txt 
+in the FLCT distribution.
+
+.IP -q
+If this flag is set, no non-error output is sent to
+.B stdout.
+
+.SH EXAMPLES
+
+.B example using a shifted image in an IDL session, with sigma=15:
+
+.RS
+IDL>f1=randomu(seed,101,101)
+
+IDL>f2=shift_frac2d(f1,1.,-1.)
+
+IDL>vcimage2out,f1,f2,'testin.dat'
+
+IDL>$flct testin.dat testout.dat 1. 1. 15.
+
+IDL>vcimage3in,vx,vy,vm,'testout.dat'
+
+IDL>shade_surf,vx
+
+IDL>shade_surf,vy
+.RE
+
+.B Same as above, but only computing every 5 pixels, and then interpolating:
+
+.RS
+IDL>$flct testin.dat testout.dat 1. 1. 15. -s 5i
+.RE
+
+.B Same as above, but only computing every 5 pixels, with 1 pixel x and 2 pixel
+.B y offsets, and then interpolating:
+
+.RS
+IDL>$flct testin.dat testout.dat 1. 1. 15. -s 5p1q2i
+.RE
+ 
+.B Remove a net shift between images f1 and f2, using sigma=0 (result into f3):
+
+.RS
+IDL>vcimage2out,f1,f2,'testin.dat'
+
+IDL>$flct testin.dat testout.dat 1. 1. 0 -k 0.5
+
+IDL>vcimage3in,delx,dely,delm,'testout.dat'
+
+IDL>f3=shift_frac2d(f2,-delx,-dely)
+.RE
+
+.B Same as 1st example, but using low-pass filtering, run outside of IDL:
+
+.RS
+flct testin.dat testout.dat 1. 1. 15. -k 0.25
+.RE
+
+.B Same as previous, but only compute vel. for avg abs. image values above 0.5:
+
+.RS
+flct testin.dat testout.dat 1. 1. 15. -t 0.5a
+.RE
+ 
+.B Print out short summary of documentation:
+
+.RS
+flct
+.RE
+
+.SH FILES
+
+There are no configuration files.
+
+.SH KNOWN LIMITATIONS
+.B flct
+is unable to find flows that are normal to image gradients.  This is a defect
+of the LCT concept.
+
+.B flct 
+cannot determine velocities on scales below the
+scale size of structures in the images.  This is a defect of the LCT
+concept.
+
+Images that have minimal structure can give nonsensical velocity results.
+
+Results can depend on value of sigma.  User must experiment to determine
+best choice of sigma.  
+
+Velocities corresponding to shifts less than 0.1-0.2 pixels are not always 
+detected.
+It may be necessary to increase the amount of time between images, depending
+on the noise level in the images.  Sometimes using the filtering option helps.
+
+Velocities computed within
+.I sigma
+pixels of the image edges can be unreliable.
+
+Noisy images can result in spurious velocity results unless a suitable
+threshold value
+.I thresh
+is chosen.
+
+.SH AUTHORS
+George H. Fisher, SSL UC Berkeley <fisher at ssl dot berkeley dot edu>
+Brian T. Welsch, SSL UC Berkeley <welsch at ssl dot berkeley dot edu>
+.SH "SEE ALSO"
+source code of
+.B vcimage2out.pro 
+(IDL procedure), source code of
+.B vcimage3in.pro 
+(IDL procedure), and source code of
+.B shift_frac2d.pro
+(IDL procedure).
