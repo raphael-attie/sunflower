@@ -1,0 +1,314 @@
+THE ORIGIN OF BIASED VELOCITY ESTIMATION IN FLCT AND A PROCEDURE TO FIX IT
+
+George H. Fisher (SSL/UCB) and Brian T. Welsch (U. Wisconsin GB)
+
+The current implementation of the FLCT technique to estimate velocities from
+changes in two images taken at two slightly different times
+is described in Fisher and Welsch (2008 ASP Conf. Series, 
+vol. 383, p. 373, (also file flct_technique.pdf), henceforth FW2008).  
+In a nutshell, for each pixel location in the pair of images, sub-images 
+S_1 and S_2 are constructed by convolving the two images I_1 and I_2 with 
+a Gaussian windowing function, of width sigma pixels, so that for each image, 
+the Gaussian window function is centered on
+the pixel of interest.  This windowing operation allows the velocity 
+calculation to be "localized" to the pixel of interest, with the understanding 
+that velocity components on size scales small compared to sigma will be 
+integrated away in the convolution.  The gaussian form for the windowing
+function was chosen because it usually results in a smooth velocity estimate 
+map over the domain of the images.  Mathematically, the relationship is 
+described in equations (1) and (2) of FW2008.  During the early development 
+stages of FLCT, we considered the "top-hat" function as an alternative
+windowing function (equal to 1 inside a radius of sigma, and 0 outside), 
+but we found this resulted in discontinuous velocity maps, owing to the 
+importance of intense image features close to the edge of the window 
+that would suddenly appear or disappear from the sub-images.
+
+Empirically, it has been found by ourselves and many other researchers
+that the amplitudes of v_x and v_y found by FLCT are frequently
+less than what one expects. This is particularly evident if one creates
+the 2nd image from the first one by directly solving the advection equation 
+with a known flow-field, and then compares velocities or shifts returned 
+from FLCT with those assumed in the advection equation.
+The degree of this velocity "under-estimation" can vary between
+insignificant in some cases, to disturbingly large in other cases.
+
+Here, we describe why we believe velocity under-estimation
+occurs, and then suggest and implement an experimental algorithm 
+to correct it.  This analysis also suggests an important constraint on the
+choice of the windowing parameter sigma.
+
+Imagine that in a region surrounding pixel x_i,y_j that the image field I_2
+is shifted by Delta-x and Delta-y from the image field I_1:
+
+I_2(x',y')=I_1 (x' - Delta-x, y' - Delta-y). (1)
+
+Here, (x',y') represent distance away from the local origin, x_i,y_j.
+If the Gaussian windowing function for the sub-image S_2 were *also* shifted
+by Delta-x, Delta-y, then the cross-correlation function for the two sub-images
+would exhibit a peak at Delta-x,Delta-y, and the FLCT algorithm, which finds
+where the peak of the cross-correlation function is located, would return the
+correct local shift values, Delta-x and Delta-y.
+
+However, that is not what is done:  Instead, *both* images are convolved with
+the same unshifted Gaussian windowing function.  The obvious solution to
+this problem would be to properly shift the Gaussian windowing function for the 
+2nd image.  However, that is impossible, since we are tring to find 
+Delta-x, and Delta-y in the first place! But, we can make progress by
+trying to understand what FLCT is actually doing, versus what we would like 
+it to do.
+
+Imagine that in the ideal case, we did convolve the 2nd image with a gaussian
+window function shifted by Delta-x,Delta-y from our local origin.  
+In that case, let us approximate the shape of the cross-correlation function 
+as another gaussian, which we'll write 
+
+f(x,y)=exp[-((x - Delta-x)^2 + (y - Delta-y)^2)) / gamma^2] (2),
+
+a gaussian which is centered at Delta-x,Delta-y, with width gamma, as a function
+of the x-and-y lags, x and y.
+
+But in reality, what we have for sub-image S_2 is multiplication of the
+unshifted Gaussian in the 2nd expression of equation (1) of FH2008.  Let's
+re-write this in terms of the shifted gaussian, plus additional terms:
+
+S_2(x,y) = I_1(x-Delta_x,y-Delta_y)*exp[-((x-Delta-x)^2+(y-Delta-y)^2)/sigma^2]
+     * exp[(- Delta-x/sigma^2(2 x - Delta-x)]
+     * exp[(- Delta-y/sigma^2(2 y - Delta-y)]. (3)
+
+Thus, S_2(x,y) can be written as a shift of S_1, multiplied by the 2nd and
+3rd lines of equation (3), which represent additional multiplicative terms.
+These terms have no dependence on the integration variables that
+occur in the definition of the cross-correlation function in equation (2) of
+FH2008 (Note: Confusingly, that equation uses x and y as the integration 
+variables and delta-x and delta-y as the lag variables; here we are 
+using x and y for the lag variables, and some other notation like x' and y'
+for the integration variables).
+
+The result of this is that instead of FLCT finding the location of the
+peak values Delta-x and Delta-y, it finds the location of the peak of 
+the function
+
+exp[(- Delta-x/sigma^2(2 x - Delta-x)] * exp[(- Delta-y/sigma^2(2 y - Delta-y)]
+* exp[ - (x - Delta-x)^2/gamma^2 -(y - Delta-y)^2/gamma^2 ], (4)
+
+where the 2nd line in equation (4) is the gaussian approximating the correctly 
+shifted cross-correlation function that is defined in equation (2).
+
+Setting the first derivative of the quantity in equation (4) with respect 
+to x to 0, we find
+
+-2 * Delta-x / sigma^2 - 2 ( x - Delta-x) / gamma^2 = 0 (5)
+
+and setting the first derivative of this quantity with respect to y to 0, 
+we find
+
+-2 * Delta-y / sigma^2 - 2 ( y - Delta-y) / gamma^2 = 0. (6)
+
+The solution to equation (5) can be written
+
+\Delta-x = x / (1 - gamma^2/sigma^2), (7)
+
+and the solution to equation (6) is
+
+\Delta-y = y / (1 - gamma^2/sigma^2). (8)
+
+Here, x and y are the locations of the peak of the function in equation (4), 
+and these values are what FLCT finds.  Equations (7) and (8) show that provided 
+gamma^2/sigma^2 < 1, x and y are always smaller in amplitude than 
+the true shifts, Delta-x and Delta-y.
+
+Equations (7) and (8) also reveal that the ratio gamma^2/sigma^2 is an 
+important quantity determining the behavior of FLCT:  The smaller this 
+ratio, the more accurate the FLCT results are.  If this ratio exceeds unity,
+the correction expressions formally become singular, but we believe that 
+what this says is that above this limit, FLCT results are unreliable.  
+This consideration favors larger values of sigma.  On the other hand, 
+sigma also determines the size scale of velocity flows 
+that can be detected, with smaller values of sigma allowing for a broader
+possible range of velocity scales, including smaller size scales, that can be 
+determined.  Thus a choice of sigma needs to balance both of these 
+considerations.
+
+HOW DO WE FIND THE QUANTITY gamma^2?
+
+The above analysis of bias is somewhat over-simplified.  The region near 
+peak of the cross-correlation
+function is generally not a simple, azimuthally symmetric gaussian.  Instead,
+conditions near the peak are specified by the values of all of the 2nd 
+derivatives at the peak, which here we'll denote f_xx, f_yy, and f_xy, 
+the 2nd derivative with respect to the x-lag, the 2nd derivative with respect 
+to the y-lag, and the cross partial derivative with respect to the 
+x-and y-lags, respectively.
+
+The 2nd derivatives at the peak constitute the array elements of the
+2D "Hessian" matrix, which we denote
+
+M = (f_xx  f_xy)
+    (f_xy  f_yy).  (9)
+
+Generally speaking, f_xx and f_yy will be negative if the function is at a
+peak, but an additional statement is that the Hessian determinant,
+
+H = f_xx * f_yy - f_xy^2 (10)
+
+is positive if we are at the peak of the function f.  Furthermore, H is
+invariant under a rotation of the coordinate system.  Eigenvalues of
+M can be found, and the corresponding eigenvectors provide coordinate
+axes which diagonalize M.
+
+The eigenvalues lambda_1, lambda_2 for M are:
+
+lambda_1=(0.5*f_xx + 0.5*f_yy) + sqrt[(0.5*f_xx-0.5*f_yy)^2+f_xy^2] (11)
+lambda_2=(0.5*f_xx + 0.5*f_yy) - sqrt[(0.5*f_xx-0.5*f_yy)^2+f_xy^2] (12)
+
+The ratio of the two eigenvalues indicates the eccentricity, or "ovalicity"
+of the cross-correlation function near the peak.  The product of the 
+eigenvalues is simply equal to the Hessian determinant H, meaning we can 
+regard H^{1/2} as a geometric mean of the maximum and minimum of the 2nd 
+derivatives represented by the two eigenvalues.  The Hessian determinant H 
+therefore is an excellent candidate for defining a quantity we can use to 
+determine the quantity gamma^2 in equations (7) and (8).
+
+But first, we note that H has units of length^{-4}, whereas gamma^2 has units
+of length^2.  Second, we note that the cross-correlation function can (and
+does!) have an arbitrary amplitude, where our assumptions in equation (2)
+assume a maximum value of unity.
+
+So first, we define a normalized version of H, H_n, in which the peak of the
+cross-correlation function is normalized to unity:
+
+H_n = f_xx * f_yy / f_p^2 - f_xy^2/f_p^2 (13),
+
+where f_p is the peak value of the un-normalized cross-correlation function
+computed within FLCT.  (H_n)^{1/2} is the geometric mean between the
+maximum and minimum values of the normalized 2nd derivatives taken in 
+the directions of the two eigenvectors.
+
+Second, we note that we can match the units of gamma^2, by taking (H_n)^{-1/2}:
+
+gamma^2 = (H_n)^{-1/2}. (14)
+
+Using equation (14) in equations (7) and (8), we evaluated shifts in a test
+case, in which we used an HMI magnetogram image of AR 11158 to create a
+second image, in which a + 0.5 pixel uniform shift is applied in the 
+x-direction, and a -0.5 pixel uniform shift is applied in the y-direction.  
+The warp program, included in this distribution, was used to create the 
+2nd image.  Equations (7) and (8) greatly improved the biases returned by FLCT. 
+But we found that the behavior of equations (7) and (8) could be
+further improved by adding an empirical factor of 0.8 in the denominator of 
+equations (7) and (8):
+
+Delta-x = x / (1. - 0.8*gamma^2/sigma^2), (15)
+
+and
+
+Delta-y = y / (1. - 0.8*gamma^2/sigma^2). (16)
+
+To avoid singularities, we cap the computed value of gamma^2/sigma^2 at
+0.95.
+
+The values of gamma^2/sigma^2 can be affected by other FLCT parameters.  For
+example, the width of the cross-correlation function is strongly affected by
+the use of filtering, and the choice of the filter parameter.  In using the
+filter parameter ("-k kr" in the command-line, where kr is typically in the
+range 0.25-1.0), stronger filtering (lower values of kr) can result in
+substantially broader cross-correlation functions, and thus larger values of
+gamma^2/sigma^2.  FLCT versions 1.06 (and later) print out the mean value
+of gamma^2/sigma^2 as a diagnostic when run from the command-line.
+
+HOW TO IMPLEMENT BIAS CORRECTION IN FLCT
+
+Equations (15) and (16), along with equation (14) defining gamma^2 in terms
+of (H_n)^{-1/2} are currently used to "correct" the velocities or 
+shifts computed in FLCT, if the bias correction algorithm is chosen in FLCT.  
+If one is using the FLCT executable program, bias correction can be turned 
+on by using the "-bc" command-line option.  If using the C or Fortran callable
+flct function, this option is enabled by setting the integer flag "biascor" to
+1 or any other non-zero value when calling the function (see documentation
+in the file libflct_usage.txt in the "doc" folder).
+
+QUANTITATIVE ASSESSMENT OF BIAS CORRECTION IN FLCT
+
+Detailed results showing a comparison of mean and median values of vx, vy,
+along with standard deviations, both with and without bias correction, and
+using our half-pixel shift test case, are shown below in Table 1.
+
+A few trends are worth noting: (1) Bias correction results in better agreement
+with the applied shifts, for both the mean and median measurements.  (2)
+Random errors, as measured by the standard deviation, increase as a function
+of gamma^2/sigma^2.  We find a correlation, with the standard deviation
+having a power-law dependence on gamma^2/sigma^2 with a power law index of
+approximately 0.8 to 0.90.  (3) If the mean value of gamma^2/sigma^2 is 
+smaller than about 0.2, bias correction results in a modest, but systematic
+*decrease* in the standard deviation, meaning that the random error is
+somewhat reduced though bias correction, in addition to having the average 
+value be more accurate.  (4) However, for the largest mean values of 
+gamma^2/sigma^2 in our table, the standard deviation is *increased* 
+by applying bias correction.
+
+Table 1.
+
+Threshold = 250G in all cases (-t 250).  Test images are an HMI magnetogram
+image of AR11158 (image 1), and a +0.5 pixel uniform shift in x, and 
+a -0.5 uniform shift in y of image 1, applied using the warp executable 
+(for image 2).  
+
+Notations used in Table:  
+
+g2os2 =  gamma^2/sigma^2 (see equations 14,15,16).  The value given is the
+         mean value for all points above threshold in the images.
+Mn(vx) = mean of vx (for those pixels above threshold only)
+Md(vx) = median of vx (for those pixels above threshold only)
+Sd(vx) = standard deviation of vx (for those pixels above threshold only)
+Mn(vy) = mean of vy (for those pixels above threshold only)
+Md(vy) = median of vy (for those pixels above threshold only)
+Sd(vy) = standard deviation of vy (for those pixels above threshold only)
+sig=5  - (sigma=5 pixels)
+sig=10 - (sigma=10 pixels)
+sig=20 - (sigma=20 pixels)
+sig=40 - (sigma=40 pixels)
+no_flt = no filtering used.
+-k 0.5 = filtering used, kr=0.5
+-k .25 = filtering used, kr=0.25
+no biascor = no bias correction applied
+Biascor = bias correction applied
+
+
+              | g2os2 | Mn(vx) | Md(vx) | Sd(vx) | Mn(vy) | Md(vy) | Sd(vy)|
+____________________________________________________________________________
+sig=5, no_flt |       |        |        |        |        |        |       |
+no biascor    | 0.288 | 0.316  | 0.341  | 0.123  | -0.331 | -0.354 | 0.115 |
+____________________________________________________________________________
+sig=5, no_flt |       |        |        |        |        |        |       |
+Biascor       | 0.288 | 0.404  | 0.437  | 0.137  | -0.425 | -0.450 | 0.132 |
+____________________________________________________________________________
+sig=10,no_flt |       |        |        |        |        |        |       |
+no biascor    | 0.171 | 0.396  | 0.429  | 0.092  | -0.414 | -0.436 | 0.075 |
+____________________________________________________________________________
+sig=10,no_flt |       |        |        |        |        |        |       |
+Biascor       | 0.171 | 0.454  | 0.479  | 0.078  | -0.479 | -0.490 | 0.067 |
+____________________________________________________________________________
+sig=20,no_flt |       |        |        |        |        |        |       |
+no biascor    | 0.091 | 0.449  | 0.463  | 0.049  | -0.470 | -0.477 | 0.041 |
+____________________________________________________________________________
+sig=20,no_flt |       |        |        |        |        |        |       |
+Biascor       | 0.091 | 0.483  | 0.487  | 0.032  | -0.506 | -0.507 | 0.027 |
+____________________________________________________________________________
+sig=40,no_flt |       |        |        |        |        |        |       |
+No biascor    | 0.034 | 0.483  | 0.479  | 0.021  | -0.495 | -0.493 | 0.018 |
+____________________________________________________________________________
+sig=40,no_flt |       |        |        |        |        |        |       |
+Biascor       | 0.034 | 0.496  | 0.497  | 0.018  | -0.509 | -0.509 | 0.016 |
+____________________________________________________________________________
+sig=10, -k 0.5|       |        |        |        |        |        |       |
+No biascor    | 0.215 | 0.375  | 0.410  | 0.098  | -0.398 | -0.420 | 0.081 |
+____________________________________________________________________________
+sig=10, -k 0.5|       |        |        |        |        |        |       |
+Biascor       | 0.215 | 0.447  | 0.478  | 0.086  | -0.480 | -0.493 | 0.077 |
+____________________________________________________________________________
+sig=10, -k .25|       |        |        |        |        |        |       |
+No biascor    | 0.303 | 0.340  | 0.363  | 0.110  | -0.370 | -0.388 | 0.097 |
+____________________________________________________________________________
+sig=10, -k .25|       |        |        |        |        |        |       |
+Biascor       | 0.303 | 0.441  | 0.468  | 0.111  | -0.487 | -0.499 | 0.111 |
+____________________________________________________________________________
