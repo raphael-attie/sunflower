@@ -1167,6 +1167,8 @@ class Calibrator:
         :return: if no_tracking is False (default), export ball position from top-side and bottom-side tracking
         """
 
+        print(f'balltrack_rate() at rate_idx = {rate_idx}')
+
         drift_images = self.drift_series(rate_idx)
 
         # Ball parameters
@@ -1202,15 +1204,16 @@ class Calibrator:
         :return: list of ballpos arrays for top-side and bottom side tracking at all drift rates.
         """
 
+        print(f'balltrack_all_rates() on {len(self.drift_rates)} different drift rates:')
+        print(self.drift_rates)
         rate_idx_list = range(len(self.drift_rates))
 
         if self.nthreads < 2:
             ballpos_top_list, ballpos_bottom_list = zip(*map(self.balltrack_rate, rate_idx_list))
         else:
-            pool = Pool(processes=self.nthreads)
-            ballpos_top_list, ballpos_bottom_list = zip(*pool.map(self.balltrack_rate, rate_idx_list))
-            pool.close()
-            pool.join()
+            with Pool(processes=self.nthreads) as pool:
+                print(f'starting multiprocessing pool with {self.nthreads} workers')
+                ballpos_top_list, ballpos_bottom_list = zip(*pool.map(self.balltrack_rate, rate_idx_list))
 
         if self.save_ballpos_list:
             np.savez(os.path.join(self.outputdir, 'ballpos_list.npz'),
@@ -1539,7 +1542,6 @@ def make_lanes_visualization(vx, vy, nsteps, maxstep):
 def balltrack_calibration(bt_params, drift_rates, trange, fov_slices, reprocess_bt, outputdir, kernel, fwhm, dims,
                           drift_dir=None, images=None, basename='drift', save_ballpos_list=True, csvfile=None, verbose=False, nthreads=1):
 
-
     if 'index' not in bt_params:
         print('bt_params missing "index" key')
         sys.exit(1)
@@ -1577,8 +1579,6 @@ def balltrack_calibration(bt_params, drift_rates, trange, fov_slices, reprocess_
         ballpos_top_list = npzfile['ballpos_top_list']
         ballpos_bottom_list = npzfile['ballpos_bottom_list']
 
-
-
     vx_headers_top = ['vx_top {:1.2f}'.format(vx[0]) for vx in drift_rates]
     vx_headers_bottom = ['vx_bottom {:1.2f}'.format(vx[0]) for vx in drift_rates]
     # Concatenate headers
@@ -1615,6 +1615,7 @@ def balltrack_calibration(bt_params, drift_rates, trange, fov_slices, reprocess_
                         vx_bot=vxs_bot[idx0],
                         vy_bot=vys_bot[idx0])
 
+    print(f'saved dictionnary at {npzf}')
 
     return dict_results
 

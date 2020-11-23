@@ -18,7 +18,7 @@ class MBT:
     def __init__(self, nt=1, rs =2, am=1, dp=0.3, td=5, zdamping=1,
                  ballspacing=10, intsteps=15, mag_thresh=30, mag_thresh_sunspots=400, noise_level=20, polarity=1,
                  track_emergence=False, emergence_box=10, datafiles=None, data=None, prep_function=None, local_min=False,
-                 outputdir=None, fig_dir = None, do_plots=False):
+                 outputdir=None, fig_dir = None, do_plots=False, verbose=True):
 
         self.datafiles = datafiles
         self.outputdir = outputdir
@@ -35,6 +35,10 @@ class MBT:
         self.polarity=polarity
         # Load 1st image
         self.image = load_data(self.datafiles, 0)
+        if prep_function is not None:
+            self.image, self.surface = prep_function(self.image)
+        else:
+            self.surface = prep_data(self.image)
 
         self.nx = self.image.shape[1]
         self.ny = self.image.shape[0]
@@ -94,14 +98,11 @@ class MBT:
         self.emergence_box = emergence_box
 
         # Initialization of ball positions
-        if prep_function is not None:
-            self.surface = prep_function(self.image)
-            self.image = self.surface
-        else:
-            self.surface = prep_data(self.image)
+
 
         #self.xstart, self.ystart = get_local_extrema_ar(self.image, self.surface, self.polarity, self.ballspacing, self.mag_thresh, self.mag_thresh_sunspots, local_min=self.local_min)
-        self.xstart, self.ystart = get_local_extrema(self.image, self.polarity, self.ballspacing, self.mag_thresh, local_min=self.local_min)
+        self.xstart, self.ystart = get_local_extrema(self.image, self.polarity, self.ballspacing, self.mag_thresh,
+                                                     local_min=self.local_min)
         self.nballs = self.xstart.size
         self.zstart = blt.put_balls_on_surface(self.surface, self.xstart, self.ystart, self.rs, self.dp)
 
@@ -114,7 +115,7 @@ class MBT:
         self.unique_valid_balls = np.arange(self.nballs)
         self.do_plots = do_plots
         self.fig_dir = fig_dir
-
+        self.verbose = verbose
 
     def track_all_frames(self):
 
@@ -123,13 +124,12 @@ class MBT:
 
         for n in range(0, self.nt):
 
-            print('Frame n={:d}: {:s}'.format(n, self.datafiles[n]))
-
+            if self.verbose:
+                print(f'Frame n={n}: {str(self.datafiles[n])}')
 
             self.image = load_data(self.datafiles, n)
             if self.prep_function is not None:
-                self.surface = self.prep_function(self.image)
-                self.image = self.surface
+                self.image, self.surface = self.prep_function(self.image)
             else:
                 self.surface = prep_data(self.image)
 
@@ -137,7 +137,7 @@ class MBT:
                 self.populate_emergence()
             # The current position "pos" and velocity "vel" are attributes of bt.
             # They are integrated in place.
-            if n==0:
+            if n == 0:
                 old_surface = self.surface.copy()
 
             for i in range(self.intsteps):
@@ -170,6 +170,7 @@ class MBT:
 
         # Trim the array down to the actual number of balls used so far.
         # That number has been incremented each time new balls were added, in self.populate_emergence
+        print(f'self.nballs = {self.nballs}')
         self.ballpos = self.ballpos[:, 0:self.nballs, :]
         self.balls_age_t = self.balls_age_t[0:self.nballs, :]
         self.valid_balls_mask_t = self.valid_balls_mask_t[0:self.nballs, :]
@@ -198,8 +199,8 @@ class MBT:
 
         for i in range(self.intsteps):
             pos, vel, force = blt.integrate_motion(self, self.surface, return_copies=True)
-            self.ballpos_inter[...,i] = pos
-            self.vel_inter[...,i] = vel
+            self.ballpos_inter[..., i] = pos
+            self.vel_inter[..., i] = vel
             self.force_inter.append(force)
 
 
@@ -285,7 +286,7 @@ def mballtrack_main(**kwargs):
 
 def load_data(datafiles, n):
     _, ext = os.path.splitext(datafiles[0])
-    if ext == '.fits':
+    if ext == '.fits' or ext == '.fts':
         image = fitstools.fitsread(datafiles, tslice=n).astype(DTYPE)
         return image
     elif ext == '.npz':

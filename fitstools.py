@@ -11,7 +11,7 @@ def fitsread(files, xslice=slice(None), yslice=slice(None), tslice=slice(None), 
         if cube:
             with fitsio.FITS(files) as fitsfile:
                 if fitsfile[0].has_data():
-                    data = np.squeeze(np.moveaxis(fitsfile[0][tslice, yslice, xslice], 0, 2) )
+                    data = np.squeeze(np.moveaxis(fitsfile[0][tslice, yslice, xslice], 0, 2))
                 else:
                     data = np.squeeze(np.moveaxis(fitsfile[1][tslice, yslice, xslice], 0, 2))
         else:
@@ -27,7 +27,7 @@ def fitsread(files, xslice=slice(None), yslice=slice(None), tslice=slice(None), 
             sample = fitsio.read(fitsfiles[0])
             data = np.empty([*sample.shape, len(fitsfiles)], np.float32)
             for i, datafile in enumerate(fitsfiles):
-                  data[:, :, i] = fitsio.read(datafile)
+                data[:, :, i] = fitsio.read(datafile)
     return data
 
 
