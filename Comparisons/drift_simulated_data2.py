@@ -13,7 +13,6 @@ import fitstools
 
 def shift_series(images, outputdir):
     # Velocity offset. Will be applied to both x and y axis
-    nframes = 80
     dv = 0.04
     vx_rates = np.arange(-0.2, 0.21, dv)
     vx_rates[int(len(vx_rates)/2)] = 0
@@ -21,17 +20,16 @@ def shift_series(images, outputdir):
         outputdir_dt = os.path.join(outputdir, 'drift_{:02d}'.format(i))
         if not os.path.exists(outputdir_dt):
             os.makedirs(outputdir_dt)
-        for n in range(nframes):
-            image = images[...,n]
+        for n, image in enumerate(images):
             shifted_image = filters.translate_by_phase_shift(image, n*rate, 0)
             filename = os.path.join(outputdir_dt, 'im_shifted_{:02d}.fits'.format(n))
             fitsio.write(filename, shifted_image)
 
 
 # Create series of translated simulated HMI-like continuum images
-outputdir = '/Users/rattie/Data/sanity_check/simulation_series/'
-files = sorted(glob.glob('/Users/rattie/Data/Ben/SteinSDO/SDO_int*.fits'))
-images_sim = np.moveaxis(np.array([fitstools.fitsread(f, cube=False) for f in files]), 0, -1)
+outputdir = os.path.join(os.environ['DATA'], 'sanity_check/stein_series/')
+files = sorted(glob.glob(os.path.join(os.environ['DATA'], 'Ben/SteinSDO/SDO_int*.fits')))
+images_sim = np.array([fitstools.fitsread(f, cube=False) for f in files])
 shift_series(images_sim, outputdir)
 
 # Create series of translated real HMI continuum images
