@@ -9,13 +9,13 @@
 ; Output: Transverse velocity fields in 
 ; 
 ; ==============================================================================
-PRO flct_drift_stein_raphael_v106, t1, t2, sigma=sigma, BC=bc
+PRO flct_drift_stein_raphael_v106, d1, d2, nb_images, sigma=sigma, BC=bc
 ; ==============================================================================
 
 ; //////////////////////////////////////////////////////////////////////////////
 ; (0) Original simulation parameters (DO NOT CHANGE !!!)
 ; //////////////////////////////////////////////////////////////////////////////
-
+; FWHM = 1.67 * sigma
 ; Dimensions of the Nordlund & Stein (2012) simulation
 nx_stein=1008L
 ny_stein=1008L
@@ -63,9 +63,6 @@ ny=263L
 ; m per pixel
 dx=dx_sdo*1E3
 dy=dy_sdo*1E3
-; Number of drifts to test
-nb_tests=11
-nb_images=30
 
 ; ------------------------------------------------------------------------------
 ; (2) Fourier-based Local Correlation Tracking
@@ -81,15 +78,14 @@ vy_flct=FLTARR(nx,ny)
 data_dir = '/Users/rattie/Data/sanity_check/stein_series/'
 ; Output
 
-output_dir = '/Users/rattie/Data/sanity_check/stein_series_FLCT_106/output_FLCT_sigma'+STRTRIM(sigma,1)
+output_dir = '/Users/rattie/Data/sanity_check/stein_series/output_FLCT_sigma'+STRTRIM(sigma,1)
 IF KEYWORD_SET(BC) THEN output_dir = output_dir + '_bias_correction'
 
 FILE_MKDIR, output_dir
 
 ; Loop over all drifts to test
-;FOR t=0, nb_tests-1 DO BEGIN
-FOR t=t1, t2 DO BEGIN
-  drift_label=string(t, FORMAT='(I02)')
+FOR d=d1, d2 DO BEGIN
+  drift_label=string(d, FORMAT='(I02)')
   filenames=FILE_SEARCH(data_dir + '/drift_'+drift_label+'/im_shifted_*')
   subdir = output_dir+'/drift_unfiltered_'+drift_label
   FILE_MKDIR, subdir
@@ -120,11 +116,6 @@ FOR t=t1, t2 DO BEGIN
     WRITEFITS, subdir+'/FLCT_vx1_'+file_index+'.fits', vx_flct_all(*,*,i)
     WRITEFITS, subdir+'/FLCT_vy1_'+file_index+'.fits', vy_flct_all(*,*,i)
   ENDFOR
-  vx_flct=MEAN(vx_flct_all, DIMENSION=3)
-  vy_flct=MEAN(vy_flct_all, DIMENSION=3)
-  ; Output (average)
-  WRITEFITS, subdir+'/FLCT_vx1_000-' + file_index + '.fits', vx_flct
-  WRITEFITS, subdir+'/FLCT_vy1_000-' + file_index + '.fits', vy_flct
 ENDFOR
 
 spawn,'rm TemporaryInputFile.dat'

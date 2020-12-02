@@ -1,5 +1,5 @@
 
-PRO flct_drift_hmi_raphael, t1, t2, sigma=sigma, BC=bc
+PRO flct_drift_hmi_raphael, d1, d2, nb_images, sigma=sigma, BC=bc
 ; ==============================================================================
 ; Date: 1-Nov-2019
 ; Author: Raphael Attie (NASA GSFC)
@@ -20,14 +20,13 @@ PRO flct_drift_hmi_raphael, t1, t2, sigma=sigma, BC=bc
 ; Parent data directory
 data_dir = '/Users/rattie/Data/sanity_check/hmi_series/'
 ; Output
-output_dir = '/Users/rattie/Data/sanity_check/hmi_series_FLCT_106/output_FLCT_sigma'+STRTRIM(sigma,1)
+output_dir = '/Users/rattie/Data/sanity_check/hmi_series/output_FLCT_sigma'+STRTRIM(sigma,1)
 ; ------------------------------------------------------------------------------
 ; (1) Input data properties
 ; ------------------------------------------------------------------------------
 ; Dimensions of the images
 nx=512L
 ny=512L
-nb_images = 40
 ; ------------------------------------------------------------------------------
 ; (2) Fourier-based Local Correlation Tracking
 ; ------------------------------------------------------------------------------
@@ -44,7 +43,7 @@ IF KEYWORD_SET(BC) THEN output_dir = output_dir + '_bias_correction'
 FILE_MKDIR, output_dir
 
 ; Loop over all drifts to test
-FOR t=t1, t2 DO BEGIN
+FOR t=d1, d2 DO BEGIN
   drift_label=string(t, FORMAT='(I02)')
   filenames=FILE_SEARCH(data_dir + '/drift_'+drift_label+'/im_shifted_*')
   subdir = output_dir+'/drift_unfiltered_'+drift_label
@@ -65,23 +64,17 @@ FOR t=t1, t2 DO BEGIN
     	PRINT, 'calling FLCT without bias correction'
     	spawn,'./flct TemporaryInputFile.dat TemporaryOutputFile.dat 1. 1. ' + strtrim(sigma,1)  ;+' -k 0.35' 
     ENDELSE
-    	
-    
+    	 
     ; Velocity fields
     vcimage3in,vxtest,vytest,vmtest,'TemporaryOutputFile.dat'
-    vx_flct_all(*,*,i)=vxtest
-    vy_flct_all(*,*,i)=vytest
     ; Output
     file_index=string(i, FORMAT='(I03)')
-    WRITEFITS, subdir+'/FLCT_vx1_'+file_index+'.fits', vx_flct_all(*,*,i)
-    WRITEFITS, subdir+'/FLCT_vy1_'+file_index+'.fits', vy_flct_all(*,*,i)
+    WRITEFITS, subdir+'/FLCT_vx1_'+file_index+'.fits', vxtest
+    WRITEFITS, subdir+'/FLCT_vy1_'+file_index+'.fits', vytest
   ENDFOR
-  vx_flct=MEAN(vx_flct_all, DIMENSION=3)
-  vy_flct=MEAN(vy_flct_all, DIMENSION=3)
-  ; Output (average)
-  WRITEFITS, subdir+'/FLCT_vx1_000-' + file_index + '.fits', vx_flct
-  WRITEFITS, subdir+'/FLCT_vy1_000-' + file_index + '.fits', vy_flct
 ENDFOR
 
+spawn,'rm TemporaryInputFile.dat'
+spawn,'rm TemporaryOutputFile.dat'
 
 end  
