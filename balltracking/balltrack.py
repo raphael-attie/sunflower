@@ -347,7 +347,7 @@ def track_instance(params, side_direction, datafiles=None, data=None):
     a complete flow tracking.
 
     :params: all ball parameters relevant to the BT class.
-    :param side_direction: tracking mode and tracking direction, e.g. ('top', 'forward').
+    :param side_direction: tracking mode and tracking direction, e.g. ('top', 'forward'), ('bottom', 'backward')...
     :param datafiles: path to data cube file or series of files.
     :param data: for calibration only. numpy data arrays of drifting data surface.
     :return:
@@ -1119,7 +1119,7 @@ class Calibrator:
 
         if self.read_write_drift_images:
             # Files supposed to be created or to be read if already exist.
-            filepaths = [Path(os.path.join(self.subdirs[rate_idx], '{:s}_{:02d}.fits'.format(self.basename, i))) for i in range(*self.trange)]
+            filepaths = [Path(os.path.join(self.subdirs[rate_idx], '{:s}_{:04d}.fits'.format(self.basename, i))) for i in range(*self.trange)]
 
             if self.images is None and check_file_series(filepaths):
                 # does not save much time compared to the total time of balltracking, should I bother?
@@ -1133,7 +1133,7 @@ class Calibrator:
                     drift_images[:, :, i] = fitsio.read(str(f))
             elif self.images is not None:
                 # Use the self.images to create the drift images out of them
-                os.makedirs(self.subdirs[rate_idx], exist_ok=True)
+                # os.makedirs(self.subdirs[rate_idx], exist_ok=True)
                 print("Creating drift images at rate: [{:.2f}, {:.2f}] px/frame".format(self.drift_rates[rate_idx][0], self.drift_rates[rate_idx][1]))
                 drift_images = create_drift_series(self.images, self.drift_rates[rate_idx], filepaths=filepaths, filter_function=self.filter_function)
             else:

@@ -10,7 +10,7 @@ if __name__ == '__main__':
 
     # Get the intensity files
     datafiles = sorted(glob.glob(os.path.join(os.environ['DATA'], 'Ben/SteinSDO/SDO_int*.fits')))
-    outputdir = os.path.join(os.environ['DATA'], 'Ben/SteinSDO/balltrack2')
+    outputdir = os.path.join(os.environ['DATA'], 'Ben/SteinSDO/balltrack3')
     reprocess_bt = True
     ncores_balltrack = 4
     ncores_calibration = 6
@@ -30,10 +30,10 @@ if __name__ == '__main__':
                                     'sigma_factor': 1.5,
                                     'fourier_radius': 1.0})
 
-    bt_params = {'top':bt_params_top, 'bottom':bt_params_bottom,
+    bt_params = {'top': bt_params_top, 'bottom': bt_params_bottom,
                  'nframes': 364,
-                 'outputdir':outputdir,
-                 'output_prep_data':False,
+                 'outputdir': outputdir,
+                 'output_prep_data': False,
                  'verbose': False}
 
 
@@ -46,7 +46,7 @@ if __name__ == '__main__':
 
     # Make velocity flow fields
 
-    caldf = pd.read_csv(os.path.expanduser('~/Data/sanity_check/stein_series/correlation_dataframe.csv'))
+    caldf = pd.read_csv(os.path.join(os.environ['DATA'], 'sanity_check/stein_series/correlation_dataframe.csv'))
     row_top = caldf[(caldf.rs == bt_params_top['rs'])
                 & (caldf.ballspacing==bt_params_top['ballspacing'])
                 & (caldf.intsteps==bt_params_top['intsteps'])

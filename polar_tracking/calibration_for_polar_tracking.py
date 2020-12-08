@@ -53,7 +53,7 @@ if __name__ == '__main__':
     fov_slices = np.s_[trim:dims[0] - trim, trim:dims[1] - trim]
     kernel = 'gaussian'
 
-    for idx in range(1,nevents):
+    for idx in range(1, nevents):
         #idx = 0
         print('Calibrating flows on datacube: ', datacubefiles[idx])
         # Load the nt images
