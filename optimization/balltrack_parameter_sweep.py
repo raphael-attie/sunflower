@@ -4,14 +4,10 @@ if module_path not in sys.path:
     sys.path.append(module_path)
 import numpy as np
 import balltracking.balltrack as blt
-import multiprocessing
 from multiprocessing import Pool
 from functools import partial
-import time
-import pandas as pd
 from collections import OrderedDict
 import fitstools
-import argparse
 
 if __name__  == '__main__':
 

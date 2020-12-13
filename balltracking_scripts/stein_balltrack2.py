@@ -50,18 +50,18 @@ if __name__ == '__main__':
 
     caldf = pd.read_csv(os.path.join(os.environ['DATA'], 'sanity_check/stein_series/correlation_dataframe2.csv'))
     row_top = caldf[(caldf.rs == bt_params_top['rs'])
-                & (caldf.ballspacing==bt_params_top['ballspacing'])
-                & (caldf.intsteps==bt_params_top['intsteps'])
-                & np.isclose(caldf.dp, bt_params_top['dp'])
-                & np.isclose(caldf.sigma_factor, bt_params_top['sigma_factor'])
-                & np.isclose(caldf.fourier_radius, bt_params_top['fourier_radius'])]
+                    & (caldf.ballspacing==bt_params_top['ballspacing'])
+                    & (caldf.intsteps==bt_params_top['intsteps'])
+                    & np.isclose(caldf.dp, bt_params_top['dp'])
+                    & np.isclose(caldf.sigma_factor, bt_params_top['sigma_factor'])
+                    & np.isclose(caldf.fourier_radius, bt_params_top['fourier_radius'])]
 
     row_bottom = caldf[(caldf.rs == bt_params_bottom['rs'])
-                    & (caldf.ballspacing == bt_params_bottom['ballspacing'])
-                    & (caldf.intsteps == bt_params_bottom['intsteps'])
-                    & np.isclose(caldf.dp, bt_params_bottom['dp'])
-                    & np.isclose(caldf.sigma_factor, bt_params_bottom['sigma_factor'])
-                    & np.isclose(caldf.fourier_radius, bt_params_bottom['fourier_radius'])]
+                       & (caldf.ballspacing == bt_params_bottom['ballspacing'])
+                       & (caldf.intsteps == bt_params_bottom['intsteps'])
+                       & np.isclose(caldf.dp, bt_params_bottom['dp'])
+                       & np.isclose(caldf.sigma_factor, bt_params_bottom['sigma_factor'])
+                       & np.isclose(caldf.fourier_radius, bt_params_bottom['fourier_radius'])]
 
 
     cal_top = row_top.p_top_0.values[0]
