@@ -1,11 +1,14 @@
 from importlib import reload
 import os
 import numpy as np
-import fitsio
 from astropy.io import fits
+from astropy.io.fits import getdata
+import importlib
+# Check fitsio is installed and import if it does
+if importlib.util.find_spec("fitsio") is not None:
+    import fitsio
 
-
-def fitsread(files, xslice=slice(None), yslice=slice(None), tslice=slice(None), cube=True):
+def fitsread(files, xslice=slice(None), yslice=slice(None), tslice=slice(None), cube=True, astropy=False, header=False):
 
     if isinstance(files, str):
         if cube:
@@ -16,7 +19,16 @@ def fitsread(files, xslice=slice(None), yslice=slice(None), tslice=slice(None), 
                     data = np.squeeze(np.moveaxis(fitsfile[1][tslice, yslice, xslice], 0, 2))
         else:
             #Load as single file and single image
-            data = fitsio.read(files)
+            if astropy:
+                if header:
+                    data, hdr = getdata(files, header=True)
+                    return data, hdr
+                else:
+                    data = getdata(files)
+                    
+            else:
+                data = fitsio.read(files)
+            
     else:
         fitsfiles = files[tslice]
         if isinstance(tslice, int):
