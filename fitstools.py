@@ -30,12 +30,15 @@ def fitsread(files, xslice=slice(None), yslice=slice(None), tslice=slice(None), 
                 data = fitsio.read(files)
             
     else:
-        fitsfiles = files[tslice]
         if isinstance(tslice, int):
             # There's only 1 file to read.
-            data = fitsio.read(fitsfiles)
+            if astropy:
+                data = getdata(files[tslice])
+            else:
+                data = fitsio.read(files[tslice])
         else: # Assume and read list of files
             # Load sample to get dimensions
+            fitsfiles = files[tslice]
             sample = fitsio.read(fitsfiles[0])
             data = np.empty([*sample.shape, len(fitsfiles)], np.float32)
             for i, datafile in enumerate(fitsfiles):

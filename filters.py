@@ -1,6 +1,5 @@
 import numpy as np
-from skimage.measure import compare_ssim as ssim
-
+from skimage.metrics import structural_similarity as ssim
 
 def han1d_hpf(n, T, rc):
     # 1D hanning filter

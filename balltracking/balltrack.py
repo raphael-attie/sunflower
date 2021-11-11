@@ -9,12 +9,11 @@ import numpy.ma as ma
 from numpy import pi, cos, sin
 import csv
 import matplotlib
-matplotlib.use('agg')
+# matplotlib.use('agg')
 import matplotlib.pyplot as plt
 from scipy.ndimage.filters import gaussian_filter
 import cython_modules.interp as cinterp
 import filters
-import fitsio
 import fitstools
 from multiprocessing import Pool
 from functools import partial
@@ -104,8 +103,12 @@ class BT:
         self.k_force = self.am / (self.dp**2 * pi * self.rs**2)
         # Damping
         self.td = 1.0
+        self.tdx = self.td
+        self.tdy = self.td
         self.zdamping = 0.3
         self.e_td = np.exp(-1/self.td)
+        self.e_tdx = self.e_td
+        self.e_tdy = self.e_td
         self.e_tdz = np.exp(-1/self.zdamping)
 
         # Rescaling factor for the standard deviation
@@ -601,8 +604,8 @@ def integrate_motion(bt, surface, return_copies=False):
     vzt += fzt
     # Integrate position including effect of a damped velocity
     # Damping is added arbitrarily for the stability of the code.
-    xt += vxt * bt.td * (1 - bt.e_td)
-    yt += vyt * bt.td * (1 - bt.e_td)
+    xt += vxt * bt.tdx * (1 - bt.e_tdx)
+    yt += vyt * bt.tdy * (1 - bt.e_tdy)
     zt += vzt * bt.zdamping * (1 - bt.e_tdz)
 
     bt.pos[0, bt.new_valid_balls_mask] = xt
@@ -1127,10 +1130,10 @@ class Calibrator:
                       .format(self.drift_rates[rate_idx][0], self.drift_rates[rate_idx][1]))
 
                 # Get a sample for the size
-                sample = fitsio.read(str(filepaths[0]))
+                sample = fitstools.fitsread(str(filepaths[0]), cube=false, astropy=True) #fitsio.read(str(filepaths[0]))
                 drift_images = np.zeros([sample.shape[0], sample.shape[1], self.nframes])
                 for i, f in enumerate(filepaths):
-                    drift_images[:, :, i] = fitsio.read(str(f))
+                    drift_images[:, :, i] = fitstools.fitsread(str(f), cube=false, astropy=True) #fitsio.read(str(f))
             elif self.images is not None:
                 # Use the self.images to create the drift images out of them
                 # os.makedirs(self.subdirs[rate_idx], exist_ok=True)
@@ -1251,7 +1254,7 @@ def drift_series(images, drift_rate, subdir, use_existing=True):
         # but it significantly reduces disk usage compared to creating the images all over again.
         print("Reading existing drift images at rate: [{:.2f}, {:.2f}] px/frame".format(drift_rate[0], drift_rate[1]))
         for i in range(nfiles):
-            drift_images[:, :, i] = fitsio.read(str(filepaths[i]))
+            drift_images[:, :, i] = fitstools.fitsread(str(filepaths[i]), cube=False, astropy=True) #fitsio.read(str(filepaths[i]))
     else:
         print("Creating drift images at rate: [{:.2f}, {:.2f}] px/frame".format(drift_rate[0], drift_rate[1]))
         for i in range(nfiles):

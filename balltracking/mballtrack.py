@@ -15,13 +15,14 @@ from scipy.ndimage import gaussian_filter
 
 DTYPE = np.float32
 class MBT:
-    def __init__(self, nt=1, rs =2, am=1, dp=0.3, td=5, zdamping=1,
+    def __init__(self, nt=1, rs =2, am=1, dp=0.3, td=5, tdx=5, tdy=5, zdamping=1,
                  ballspacing=10, intsteps=15, mag_thresh=30, mag_thresh_sunspots=400, noise_level=20, polarity=1,
                  track_emergence=False, emergence_box=10, datafiles=None, data=None, prep_function=None, local_min=False,
-                 outputdir=None, fig_dir = None, do_plots=False, verbose=True):
+                 outputdir=None, fig_dir = None, do_plots=False, astropy=False, verbose=True):
 
         self.datafiles = datafiles
         self.outputdir = outputdir
+        self.astropy = astropy
         self.data = data
         self.nt = nt
         self.intsteps = intsteps
@@ -34,11 +35,12 @@ class MBT:
         self.ballspacing = ballspacing
         self.polarity=polarity
         # Load 1st image
-        self.image = load_data(self.datafiles, 0)
-        if prep_function is not None:
-            self.image, self.surface = prep_function(self.image)
-        else:
-            self.surface = prep_data(self.image)
+        self.image = load_data(self.datafiles, 0, astropy=self.astropy)
+        if prep_function is None:
+            prep_function = prep_data
+
+        self.surface = prep_function(self.image)
+        self.init_surface = self.surface
 
         self.nx = self.image.shape[1]
         self.ny = self.image.shape[0]
@@ -56,8 +58,12 @@ class MBT:
         self.k_force = self.am / (self.dp**2 * pi * self.rs**2)
         # Damping
         self.td = td
+        self.tdx = tdx
+        self.tdy = tdy
         self.zdamping = zdamping
         self.e_td = np.exp(-1/self.td)
+        self.e_tdx = np.exp(-1/self.tdx)
+        self.e_tdy = np.exp(-1/self.tdy)
         self.e_tdz = np.exp(-1/self.zdamping)
         # Deepest height below surface level at which ball can fall down.
         self.min_ds = 4 * self.rs
@@ -127,11 +133,11 @@ class MBT:
             if self.verbose:
                 print(f'Frame n={n}: {str(self.datafiles[n])}')
 
-            self.image = load_data(self.datafiles, n)
+            self.image = load_data(self.datafiles, n, astropy=self.astropy)
             if self.prep_function is not None:
-                self.image, self.surface = self.prep_function(self.image)
+                self.surface = self.prep_function(self.image)
             else:
-                self.surface = prep_data(self.image)
+                self.surface = prep_function(self.image)
 
             if self.track_emergence and n > 0:
                 self.populate_emergence()
@@ -141,7 +147,6 @@ class MBT:
                 old_surface = self.surface.copy()
 
             for i in range(self.intsteps):
-
                 #print('intermediate step i=%d'%i)
                 if self.do_plots:
                     if self.polarity == 1:
@@ -151,8 +156,9 @@ class MBT:
 
                     plot_balls_over_frame(self.image, self.pos[0, :], self.pos[1, :], fig_title)
                 # Interpolate surface
-                surface_i = (old_surface*(self.intsteps - i) + self.surface * i)/self.intsteps
-                blt.integrate_motion(self, surface_i)
+                # surface_i = (old_surface*(self.intsteps - i) + self.surface * i)/self.intsteps
+                # blt.integrate_motion(self, surface_i)
+                blt.integrate_motion(self, self.surface)
             old_surface = self.surface.copy()
             # if self.do_plots:
             #     fig_title = '/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/mballtrack/frame_%d_%d.png'%(n,self.intsteps)
@@ -183,8 +189,8 @@ class MBT:
 
             print('Frame n=%d'%n)
 
-            self.image = load_data(self.datafiles, n)
-            self.surface = prep_data(self.image)
+            self.image = load_data(self.datafiles, n, astropy=self.astropy)
+            self.surface = prep_function(self.image)
 
             if self.track_emergence and n > 0:
                 self.populate_emergence()
@@ -284,16 +290,15 @@ def mballtrack_main(**kwargs):
     return mbt_p, mbt_n
 
 
-def load_data(datafiles, n):
+def load_data(datafiles, n, astropy=False):
     _, ext = os.path.splitext(datafiles[0])
-    if ext == '.fits' or ext == '.fts':
-        image = fitstools.fitsread(datafiles, tslice=n).astype(DTYPE)
-        return image
-    elif ext == '.npz':
+    if ext in ('npz', 'npy'):
         image = load_npz(datafiles, n)
         return image
     else:
-        sys.exit("invalid file extension. Must be either .fits or .npz")
+        # If the file is a fits cube, will read only one slice without reading the whole cube in memory - does not work with astropy.io.fits, only with fitsio
+        image = fitstools.fitsread(datafiles, tslice=n, astropy=astropy).astype(DTYPE)
+        return image
 
 
 def load_npz(datafiles, n):
@@ -315,7 +320,7 @@ def get_local_extrema(image, polarity, min_distance, threshold, local_min=False)
     """
 
     # Get a mask of where to look for local maxima.
-    if isinstance(threshold, int):
+    if isinstance(threshold, int) or isinstance(threshold, float):
         if polarity >= 0:
             mask_thresh = image >= threshold
         else:
@@ -333,11 +338,11 @@ def get_local_extrema(image, polarity, min_distance, threshold, local_min=False)
         # reverse the scale of the image so the local min are searched as local max
         image2 = image.max() - image
         ystart, xstart = np.array(
-        peak_local_max(np.abs(image2), indices=True, min_distance=min_distance, labels=mask_thresh)).T
+        peak_local_max(np.abs(image2), min_distance=min_distance, labels=mask_thresh)).T
     else:
         #se = disk(round(min_distance/2))
         #ystart, xstart = np.array( peak_local_max(np.abs(image), indices=True, footprint=se,labels=mask_maxi)).T
-        ystart, xstart = np.array(peak_local_max(np.abs(image), indices=True, min_distance=min_distance, labels=mask_thresh)).T
+        ystart, xstart = np.array(peak_local_max(np.abs(image), min_distance=min_distance, labels=mask_thresh)).T
 
     # Because transpose only creates a view, and this is eventually given to a C function, it needs to be copied as C-ordered
     return xstart.copy(order='C'), ystart.copy(order='C')
@@ -534,11 +539,11 @@ def marker_watershed(data, x, y, threshold, polarity, invert=True):
     labels -=1
     return labels, markers, borders
 
-def watershed_series(datafile, nframes, threshold, polarity, ballpos, verbose=False, prep_function=None, invert=True):
+def watershed_series(datafile, nframes, threshold, polarity, ballpos, verbose=False, prep_function=None, invert=True, astropy=False):
 
     # Load a sample to determine shape
     #data = fitstools.fitsread(datafile, tslice=0)
-    data = load_data(datafile, 0)
+    data = load_data(datafile, 0, astropy=astropy)
     if prep_function is not None:
         data = prep_function(data)
 
@@ -551,7 +556,7 @@ def watershed_series(datafile, nframes, threshold, polarity, ballpos, verbose=Fa
         if verbose:
             print('Watershed series frame n = %d'%n)
         #data = fitstools.fitsread(datafile, tslice=n)
-        data = load_data(datafile, n)
+        data = load_data(datafile, n, astropy=astropy)
         # Get a view of (x,y) coords at frame #i (use slice instead of fancy indexing). Either with slice(0,1) or 0:2
         # I'll use slice for clarity
         # positions = ballpos[slice(0,1),:,n]
