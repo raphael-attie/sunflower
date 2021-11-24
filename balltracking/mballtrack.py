@@ -17,8 +17,8 @@ DTYPE = np.float32
 class MBT:
     def __init__(self, nt=1, rs =2, am=1, dp=0.3, td=5, tdx=5, tdy=5, zdamping=1,
                  ballspacing=10, intsteps=15, mag_thresh=30, mag_thresh_sunspots=400, noise_level=20, polarity=1,
-                 track_emergence=False, emergence_box=10, datafiles=None, data=None, prep_function=None, local_min=False,
-                 outputdir=None, fig_dir = None, do_plots=False, astropy=False, verbose=True):
+                 init_pos=None, track_emergence=False, emergence_box=10, datafiles=None, data=None, 
+                 prep_function=None, local_min=False, outputdir=None, fig_dir = None, do_plots=False, astropy=False, verbose=True):
 
         self.datafiles = datafiles
         self.outputdir = outputdir
@@ -69,7 +69,11 @@ class MBT:
         self.min_ds = 4 * self.rs
 
         # Maximum number of balls that can possibly be used
-        self.nballs_max = int(self.nx *self.ny / 2)
+        if init_pos is None:
+            self.nballs_max = int(self.nx *self.ny / 2)
+        else:
+            self.nballs_max = init_pos.shape[1]
+        print(f'nballs_max = {self.nballs_max}')
         # Current position, force and velocity components, updated after each frame
         self.pos = np.full([3, self.nballs_max], -1, dtype=DTYPE)
         self.vel = np.zeros([3, self.nballs_max], dtype=DTYPE)
@@ -103,19 +107,22 @@ class MBT:
         self.track_emergence = track_emergence
         self.emergence_box = emergence_box
 
-        # Initialization of ball positions
-
-
-        #self.xstart, self.ystart = get_local_extrema_ar(self.image, self.surface, self.polarity, self.ballspacing, self.mag_thresh, self.mag_thresh_sunspots, local_min=self.local_min)
-        self.xstart, self.ystart = get_local_extrema(self.image, self.polarity, self.ballspacing, self.mag_thresh,
-                                                     local_min=self.local_min)
-        self.nballs = self.xstart.size
+        if init_pos is None:
+            # Initialization of ball positions
+            #self.xstart, self.ystart = get_local_extrema_ar(self.image, self.surface, self.polarity, self.ballspacing, self.mag_thresh, self.mag_thresh_sunspots, local_min=self.local_min)
+            self.xstart, self.ystart = get_local_extrema(self.image, self.polarity, self.ballspacing, self.mag_thresh,
+                                                         local_min=self.local_min)
+        else:
+            self.xstart = init_pos[0,:]
+            self.ystart = init_pos[1,:]
+            
         self.zstart = blt.put_balls_on_surface(self.surface, self.xstart, self.ystart, self.rs, self.dp)
-
+        
+        self.nballs = self.xstart.size
         self.pos[0, 0:self.nballs] = self.xstart.copy()
         self.pos[1, 0:self.nballs] = self.ystart.copy()
         self.pos[2, 0:self.nballs] = self.zstart.copy()
-
+  
         self.new_valid_balls_mask = np.zeros([self.nballs_max], dtype=bool)
         self.new_valid_balls_mask[0:self.nballs] = True
         self.unique_valid_balls = np.arange(self.nballs)
@@ -124,7 +131,7 @@ class MBT:
         self.verbose = verbose
 
     def track_all_frames(self):
-
+        print(f'Tracking with {self.nballs} initial balls')
         if self.do_plots:
             os.makedirs(self.fig_dir, exist_ok=True)
 
@@ -156,9 +163,9 @@ class MBT:
 
                     plot_balls_over_frame(self.image, self.pos[0, :], self.pos[1, :], fig_title)
                 # Interpolate surface
-                # surface_i = (old_surface*(self.intsteps - i) + self.surface * i)/self.intsteps
-                # blt.integrate_motion(self, surface_i)
-                blt.integrate_motion(self, self.surface)
+                surface_i = (old_surface*(self.intsteps - i) + self.surface * i)/self.intsteps
+                blt.integrate_motion(self, surface_i)
+                # blt.integrate_motion(self, self.surface)
             old_surface = self.surface.copy()
             # if self.do_plots:
             #     fig_title = '/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/mballtrack/frame_%d_%d.png'%(n,self.intsteps)
@@ -176,7 +183,7 @@ class MBT:
 
         # Trim the array down to the actual number of balls used so far.
         # That number has been incremented each time new balls were added, in self.populate_emergence
-        print(f'self.nballs = {self.nballs}')
+        print(f'Total number of balls used self.nballs = {self.nballs}')
         self.ballpos = self.ballpos[:, 0:self.nballs, :]
         self.balls_age_t = self.balls_age_t[0:self.nballs, :]
         self.valid_balls_mask_t = self.valid_balls_mask_t[0:self.nballs, :]
@@ -337,12 +344,11 @@ def get_local_extrema(image, polarity, min_distance, threshold, local_min=False)
     if local_min:
         # reverse the scale of the image so the local min are searched as local max
         image2 = image.max() - image
-        ystart, xstart = np.array(
-        peak_local_max(np.abs(image2), min_distance=min_distance, labels=mask_thresh)).T
+        ystart, xstart = peak_local_max(np.abs(image2), min_distance=min_distance, labels=mask_thresh).T
     else:
         #se = disk(round(min_distance/2))
         #ystart, xstart = np.array( peak_local_max(np.abs(image), indices=True, footprint=se,labels=mask_maxi)).T
-        ystart, xstart = np.array(peak_local_max(np.abs(image), min_distance=min_distance, labels=mask_thresh)).T
+        ystart, xstart = peak_local_max(np.abs(image), min_distance=min_distance, labels=mask_thresh).T
 
     # Because transpose only creates a view, and this is eventually given to a C function, it needs to be copied as C-ordered
     return xstart.copy(order='C'), ystart.copy(order='C')
@@ -382,9 +388,9 @@ def get_local_extrema_ar(image, polarity, min_distance, threshold, threshold2, l
     #                                            footprint= se,
     #                                            labels=mask_maxi_sunspots), dtype=DTYPE).T
 
-    ystart2, xstart2 = np.array(peak_local_max(np.abs(image), indices=True,
+    ystart2, xstart2 = peak_local_max(np.abs(image), indices=True,
                                                min_distance=min_distance,
-                                               labels=mask_maxi_sunspots), dtype=DTYPE).T
+                                               labels=mask_maxi_sunspots).T
 
     xstart = np.concatenate((xstart1, xstart2))
     ystart = np.concatenate((ystart1, ystart2))
