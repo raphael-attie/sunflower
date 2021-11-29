@@ -18,7 +18,7 @@ class MBT:
     def __init__(self, nt=1, rs =2, am=1, dp=0.3, td=5, tdx=5, tdy=5, zdamping=1,
                  ballspacing=10, intsteps=15, mag_thresh=30, mag_thresh_sunspots=400, noise_level=20, polarity=1,
                  init_pos=None, track_emergence=False, emergence_box=10, datafiles=None, data=None, 
-                 prep_function=None, local_min=False, outputdir=None, fig_dir = None, do_plots=False, astropy=False, verbose=True):
+                 prep_function=None, local_min=False, outputdir=None, fig_dir = None, do_plots=False, astropy=False, fov=None, verbose=True):
 
         self.datafiles = datafiles
         self.outputdir = outputdir
@@ -34,8 +34,10 @@ class MBT:
         # Ballspacing is the minimum initial distance between the balls.
         self.ballspacing = ballspacing
         self.polarity=polarity
+        # FOV
+        self.fov = fov
         # Load 1st image
-        self.image = load_data(self.datafiles, 0, astropy=self.astropy)
+        self.image = load_data(self.datafiles, 0, astropy=self.astropy, fov=fov)
         if prep_function is None:
             prep_function = prep_data
 
@@ -140,7 +142,7 @@ class MBT:
             if self.verbose:
                 print(f'Frame n={n}: {str(self.datafiles[n])}')
 
-            self.image = load_data(self.datafiles, n, astropy=self.astropy)
+            self.image = load_data(self.datafiles, n, astropy=self.astropy, fov=self.fov)
             if self.prep_function is not None:
                 self.surface = self.prep_function(self.image)
             else:
@@ -196,7 +198,7 @@ class MBT:
 
             print('Frame n=%d'%n)
 
-            self.image = load_data(self.datafiles, n, astropy=self.astropy)
+            self.image = load_data(self.datafiles, n, astropy=self.astropy, fov=self.fov)
             self.surface = prep_function(self.image)
 
             if self.track_emergence and n > 0:
@@ -297,14 +299,18 @@ def mballtrack_main(**kwargs):
     return mbt_p, mbt_n
 
 
-def load_data(datafiles, n, astropy=False):
+def load_data(datafiles, n, astropy=False, fov=None):
     _, ext = os.path.splitext(datafiles[0])
     if ext in ('npz', 'npy'):
         image = load_npz(datafiles, n)
+        if fov is not none:
+            image = image[fov]
         return image
     else:
         # If the file is a fits cube, will read only one slice without reading the whole cube in memory - does not work with astropy.io.fits, only with fitsio
         image = fitstools.fitsread(datafiles, tslice=n, astropy=astropy).astype(DTYPE)
+        if fov is not None:
+            image = image[fov]
         return image
 
 
@@ -545,11 +551,11 @@ def marker_watershed(data, x, y, threshold, polarity, invert=True):
     labels -=1
     return labels, markers, borders
 
-def watershed_series(datafile, nframes, threshold, polarity, ballpos, verbose=False, prep_function=None, invert=True, astropy=False):
+def watershed_series(datafile, nframes, threshold, polarity, ballpos, verbose=False, prep_function=None, invert=True, astropy=False, fov=None):
 
     # Load a sample to determine shape
     #data = fitstools.fitsread(datafile, tslice=0)
-    data = load_data(datafile, 0, astropy=astropy)
+    data = load_data(datafile, 0, astropy=astropy, fov=fov)
     if prep_function is not None:
         data = prep_function(data)
 
@@ -562,7 +568,7 @@ def watershed_series(datafile, nframes, threshold, polarity, ballpos, verbose=Fa
         if verbose:
             print('Watershed series frame n = %d'%n)
         #data = fitstools.fitsread(datafile, tslice=n)
-        data = load_data(datafile, n, astropy=astropy)
+        data = load_data(datafile, n, astropy=astropy, fov=fov)
         # Get a view of (x,y) coords at frame #i (use slice instead of fancy indexing). Either with slice(0,1) or 0:2
         # I'll use slice for clarity
         # positions = ballpos[slice(0,1),:,n]
