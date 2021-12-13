@@ -3,3 +3,4 @@ Lars/
 scratch_notebooks/
 __pycache__/
 .ipynb_checkpoints
+.idea

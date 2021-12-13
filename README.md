@@ -1,8 +1,8 @@
-![picture](figures/balltrack_figure.png)
+![picture](figures/Flow_map_paraview.png)
 # README #
 
 Python framework implementing the Balltracking ang Magnetic Balltracking algorithms for the data of the Helioseismic and Magnetic Imager (HMI) onboard the Solar Dynamics Observatory (SDO) 
-These algorithms track plasma motions from intensity continuum images (Balltracking) and from magnetograms (Magnetic Balltracking).
+These algorithms track plasma motions from intensity continuum image series (Balltracking) and series of magnetograms (Magnetic Balltracking).
 
 ### How do I get set up? ###
 
@@ -43,4 +43,5 @@ See examples (won't work as is, adapt to your data):
 
 ### Who do I talk to for help? ###
 
-Dr. Raphael Attie at NASA/Goddard Space Flight Center
+Dr. Raphael Attie, contractor at NASA/Goddard Space Flight Center with George Mason University (https://science.gsfc.nasa.gov/sed/bio/raphael.attie)
+
