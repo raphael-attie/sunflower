@@ -1,5 +1,4 @@
-"""
-This module hosts all the necessary functions to run balltracking.
+""" This module hosts all the necessary functions to run balltracking.
 A main program should execute "balltrack_all()".
 """
 import sys, os
@@ -9,7 +8,6 @@ import numpy.ma as ma
 from numpy import pi, cos, sin
 import csv
 import matplotlib
-# matplotlib.use('agg')
 import matplotlib.pyplot as plt
 from scipy.ndimage.filters import gaussian_filter
 import cython_modules.interp as cinterp
@@ -26,20 +24,21 @@ class BT:
     def __init__(self, nt, rs, ballspacing, dp, intsteps, sigma_factor, fourier_radius, mode, direction, datafiles=None, data=None,
                  output_prep_data=False, outputdir=None, verbose=False):
 
-        """
-        This is the class hosting all the parameters and intermediate results of balltracking.
+        """ This is the class hosting all the parameters and intermediate results of balltracking.
 
         :param nt: number of frames to process
         :param rs: balls radius
+        :param ballspacing: spacing between balls on initial grid (in pixels)
         :param dp: characteristic depth
         :param intsteps: number of intermediate integration steps between images
-        :param ballspacing: spacing between balls on initial grid (in pixels)
         :param sigma_factor: multiplier to the standard deviation
         :param fourier_radius: radius for image fourier filter in spatial domain units (pixels) instead of k-space.
         :param mode: string that determines which side of the data surface to track. Either 'top' or 'bottom'.
         :param direction: string that determines whether we track 'forward' or 'backward' in time.
-        :param datafiles: path to data fits cube or to series of fits files.
+        :param datafiles: path to data fits cube or series of fits files.
         :param data: numpy data cube whose dimensions are (y-axis, x-axis, time)
+        :param output_prep_data: whether write out the intermediary surface data. For sanity check.
+        :param outputdir: will write the arrays of tracked position to that directory
         """
 
         if output_prep_data & (outputdir is None):
@@ -135,7 +134,7 @@ class BT:
         self.ds    = np.zeros([self.bcols.shape[0]], dtype=DTYPE)
         # Hold the current surfance
         self.surface = np.zeros(self.sample.shape)
-        # Initialize deepest height at a which ball can fall down. Typically it will be set to a multiple of -surface.std().
+        # Initialize deepest height at which ball can fall down. Typically it will be set to a multiple of -surface.std().
         self.min_ds = -5
         # Mask of bad balls
         self.bad_balls_mask = np.zeros(self.nballs, dtype=bool)
@@ -153,12 +152,10 @@ class BT:
 
 
     def initialize(self):
-
-        ### Calculate offset (mean) and standard deviation from  a valid surface ####
-        # First, filter image to focus on the granulation
-        # Sigma-clip outlyers (e.g. sunspots)
-        # Get mean and standard deviation from the masked array, not affected by bad invalid values (sunspot, ...)
-        # Generate the data surface from the image with the masked mean and sigma
+        """Calculate offset (mean) and standard deviation from  a valid surface
+        First, filter image to focus on the granulation
+        Get mean and standard deviation from the masked array, not affected by bad invalid values (sunspot, ...)
+        Generate the data surface from the image with the masked mean and sigma"""
         self.surface, mean, sigma = prep_data2(self.sample, self.sigma_factor)
         self.mean = mean
         self.sigma = sigma
@@ -169,12 +166,11 @@ class BT:
         self.pos[2, :] = self.zstart.copy()
         # Setup the coarse grid: populate edges to avoid "leaks" of balls ~ balls falling off.
         # Although can't remember if that was actually ever used in the Matlab implementation
-        self.coarse_grid[0,:]   = 1
-        self.coarse_grid[:, 0]  = 1
-        self.coarse_grid[-1,:]  = 1
+        self.coarse_grid[0,:] = 1
+        self.coarse_grid[:, 0] = 1
+        self.coarse_grid[-1,:] = 1
         self.coarse_grid[:, -1] = 1
         return
-
 
     def track(self):
 
@@ -182,7 +178,6 @@ class BT:
         # If data is a fits cube, we just access a slice of it
 
         # Initialize
-
         self.initialize()
 
         for n in range(0, self.nt):
@@ -241,9 +236,6 @@ class BT:
             self.ballpos = np.flip(self.ballpos, 2)
             self.ballvel = np.flip(self.ballvel, 2)
 
-
-
-
     def get_bad_balls(self):
         # See discussion at https://stackoverflow.com/questions/44802033/efficiently-index-2d-numpy-array-using-two-1d-arrays
         # and https://stackoverflow.com/questions/36863404/accumulate-constant-value-in-numpy-array
@@ -287,23 +279,25 @@ class BT:
 
         return
 
-
     def replace_bad_balls(self, surface):
 
         nbadballs = self.bad_balls_mask.sum()
         # Get the mask of the valid balls that we are going to keep
         valid_balls_mask = np.logical_not(self.bad_balls_mask)
-        # Work more explicitly with views on coordinate and velocity arrays of valid balls for clarity (instead of working with pos[:, :, valid_balls_mask] directly)
+        # Work more explicitly with views on coordinate and velocity arrays of valid balls for clarity
+        # (instead of working with pos[:, :, valid_balls_mask] directly)
         xpos, ypos, zpos = self.pos[:, valid_balls_mask]
         # Get the 1D position on the coarse grid, clipped to the edges of that grid.
         _, _, coarse_pos_idx = coarse_grid_pos(self, xpos, ypos)
-        # Set these positions on the coarse grid as filled. Remember that to avoid putting new balls on the edge, the coarse_grid is pre-filled with ones at its edges
+        # Set these positions on the coarse grid as filled. Remember that to avoid putting new balls on the edge,
+        # the coarse_grid is pre-filled with ones at its edges
         # See discussion at https://stackoverflow.com/questions/44802033/efficiently-index-2d-numpy-array-using-two-1d-arrays
         coarse_grid = self.coarse_grid.copy()
         coarse_grid.ravel()[coarse_pos_idx] = 1
         y0_empty, x0_empty = np.where(coarse_grid == 0)
         nemptycells = x0_empty.size
-        # If there are more empty cells than there are bad balls to relocate, we only populate a maximum of nbadballs. That situation does not happen with appropriate choice of ball parameters.
+        # If there are more empty cells than there are bad balls to relocate, we only populate a maximum of nbadballs.
+        # That situation does not happen with appropriate choice of ball parameters.
         if nemptycells > nbadballs:
             # TODO: consider a random shuffle of the array prior to selecting a subset
             x0_empty = x0_empty[0:nbadballs]
@@ -315,7 +309,8 @@ class BT:
         xnew = self.ballspacing * x0_empty.astype(np.float32)#+ bt.rs
         ynew = self.ballspacing * y0_empty.astype(np.float32)#+ bt.rs
         znew = put_balls_on_surface(surface, xnew, ynew, self.rs, self.dp)
-        # Get the indices of bad balls in order to assign them to new positions. If nemptycells > nbadballs, this array indexing automatically truncates indexing limit to the size of bad_balls_mask.
+        # Get the indices of bad balls in order to assign them to new positions. If nemptycells > nbadballs,
+        # this array indexing automatically truncates indexing limit to the size of bad_balls_mask.
         bad_balls_idx = np.nonzero(self.bad_balls_mask)[0][0:nemptycells]
 
         # Relocate them in the empty cells. Only take as many bad balls as we have empty cells.
@@ -336,7 +331,8 @@ class BT:
         self.new_valid_balls_mask = new_valid_balls_mask
 
         # else:
-        #     # This case means the number of bad balls available for relocation is smaller than the number of empty cells where they can be relocated.
+        #     # This case means the number of bad balls available for relocation is smaller than the number of
+        #     empty cells where they can be relocated.
         #     # This means the continuity principle is not satisfied and needs investigation.
         #     raise SystemExit('The number of empy cells is greater than the number of bad balls.')
 
