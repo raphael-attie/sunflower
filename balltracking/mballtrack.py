@@ -29,7 +29,8 @@ class MBT:
         self.rs = rs
         self.dp = dp
         # data prep parameters
-        self.prep_function = prep_function
+        if prep_function is None:
+            self.prep_function = prep_data
         self.local_min = local_min
         # Ballspacing is the minimum initial distance between the balls.
         self.ballspacing = ballspacing
@@ -38,10 +39,7 @@ class MBT:
         self.fov = fov
         # Load 1st image
         self.image = load_data(self.datafiles, 0, astropy=self.astropy, fov=fov)
-        if prep_function is None:
-            prep_function = prep_data
-
-        self.surface = prep_function(self.image)
+        self.surface = self.prep_function(self.image)
         self.init_surface = self.surface
 
         self.nx = self.image.shape[1]
@@ -143,10 +141,7 @@ class MBT:
                 print(f'Frame n={n}: {str(self.datafiles[n])}')
 
             self.image = load_data(self.datafiles, n, astropy=self.astropy, fov=self.fov)
-            if self.prep_function is not None:
-                self.surface = self.prep_function(self.image)
-            else:
-                self.surface = prep_function(self.image)
+            self.surface = self.prep_function(self.image)
 
             if self.track_emergence and n > 0:
                 self.populate_emergence()
@@ -199,7 +194,7 @@ class MBT:
             print('Frame n=%d'%n)
 
             self.image = load_data(self.datafiles, n, astropy=self.astropy, fov=self.fov)
-            self.surface = prep_function(self.image)
+            self.surface = self.prep_function(self.image)
 
             if self.track_emergence and n > 0:
                 self.populate_emergence()
@@ -303,11 +298,12 @@ def load_data(datafiles, n, astropy=False, fov=None):
     _, ext = os.path.splitext(datafiles[0])
     if ext in ('npz', 'npy'):
         image = load_npz(datafiles, n)
-        if fov is not none:
+        if fov is not None:
             image = image[fov]
         return image
     else:
-        # If the file is a fits cube, will read only one slice without reading the whole cube in memory - does not work with astropy.io.fits, only with fitsio
+        # If the file is a fits cube, will read only one slice without reading the whole cube in memory
+        # does not work with astropy.io.fits, only with fitsio
         image = fitstools.fitsread(datafiles, tslice=n, astropy=astropy).astype(DTYPE)
         if fov is not None:
             image = image[fov]
@@ -325,9 +321,9 @@ def get_local_extrema(image, polarity, min_distance, threshold, local_min=False)
     Default to finding only local maxima. local_min = True will look only for local minima
 
     :param image: 2D frame displaying the features to track.
-    :param polarity: if data signed (e.g magnetograms), set which polarity is tracked
+    :param polarity: if data are signed (e.g magnetograms), set which polarity is tracked >= 0 for positive polarity
     :param min_distance: minimum distance to search between local extrema
-    :param threshold: values setting the limit for searching for local extrema. Can be a signed value or range of 2 values
+    :param threshold: values setting the limit for searching for local extrema. Can be a signed value or min & max
     :param local_min: if True, will look for local minima instead of local maxima
     :return: list of x- and y- coordinates of the local extrema
     """

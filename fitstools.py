@@ -4,9 +4,7 @@ import numpy as np
 from astropy.io import fits
 from astropy.io.fits import getdata
 import importlib
-# Check fitsio is installed and import if it does
-if importlib.util.find_spec("fitsio") is not None:
-    import fitsio
+
 
 def fitsread(files, xslice=slice(None), yslice=slice(None), tslice=slice(None), cube=True, astropy=False, header=False):
 

@@ -83,7 +83,7 @@ class BT:
         self.ycoords = np.arange(self.ny)
         # Image mesh
         self.meshx, self.meshy = np.meshgrid(self.xcoords, self.ycoords)
-        # Initialize horizontal positions
+        # Initialize ball positions
         self.xstart, self.ystart = initialize_mesh(self)
         self.zstart = np.zeros(self.xstart.shape, dtype=np.float32)
         self.nballs = self.xstart.size
