@@ -8,8 +8,8 @@ import fitstools
 import balltracking.balltrack as blt
 import matplotlib.pyplot as plt
 from skimage.feature import peak_local_max
-from skimage.morphology import watershed, disk
-from skimage.segmentation import find_boundaries
+from skimage.morphology import disk
+from skimage.segmentation import find_boundaries, watershed
 from scipy.ndimage import gaussian_filter
 
 
@@ -30,7 +30,8 @@ class MBT:
         self.dp = dp
         # data prep parameters
         if prep_function is None:
-            self.prep_function = prep_data
+            prep_function = prep_data
+        self.prep_function = prep_function
         self.local_min = local_min
         # Ballspacing is the minimum initial distance between the balls.
         self.ballspacing = ballspacing

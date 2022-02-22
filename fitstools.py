@@ -3,7 +3,7 @@ import os
 import numpy as np
 from astropy.io import fits
 from astropy.io.fits import getdata
-import importlib
+import fitsio
 
 
 def fitsread(files, xslice=slice(None), yslice=slice(None), tslice=slice(None), cube=True, astropy=False, header=False):

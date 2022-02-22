@@ -15,10 +15,12 @@ from balltracking import mballtrack as mblt
 from skimage.feature import peak_local_max
 # from cython_modules import interp
 
+
 plt.rcParams.update({'font.size': 12})
 dpi = 168
-
 DTYPE = np.float32
+
+
 def prep_data(image):
     image2 =np.abs(image)
     image3 = image2.max() - image2
@@ -27,8 +29,8 @@ def prep_data(image):
 
 
 # Data prepped by COR2_tracking_prep.ipynb
-datadir = PurePath('C:\\Data\\STEREO\\L7tum\\prep_fits')
-outputdir = PurePath('C:\\Data\\STEREO\\L7tum\\figures')
+datadir = PurePath(os.environ['DATA'], 'STEREO/L7tum/prep_fits')
+outputdir = PurePath(os.environ['DATA'], 'STEREO/L7tum/figures')
 datafiles = sorted(glob.glob(str(PurePath(datadir, '*.fits'))))
 nfiles = len(datafiles)
 nsamples = 10

@@ -5,3 +5,4 @@ cython_modules/__pycache__/
 cython_modules/build/
 *.pyc
 .ipynb_checkpoints
+.idea
