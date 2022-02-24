@@ -113,16 +113,6 @@ for b, blob in enumerate(blobs_dog):
     axs.text(x+1, y+1, blob_label, color='black', fontsize=8,
              bbox=dict(facecolor='yellow', alpha=0.4, edgecolor='black', pad=1), clip_on=True)
 
-for b, blob in enumerate(blobs_log):
-    blob_label = str(b)
-    y, x, sigma_rows, sigma_cols = blob
-    r1 = sigma_rows * np.sqrt(2) * 2
-    r2 = sigma_cols * np.sqrt(2) * 2
-    ell = Ellipse((x, y), r2, r1, linewidth=1, fill=False, color='red', linestyle='-')
-    axs.add_artist(ell)
-    # axs.text(x+1, y+1, blob_label, color='black', fontsize=8,
-    #          bbox=dict(facecolor='yellow', alpha=0.4, edgecolor='black', pad=1), clip_on=True)
-
 if n == 0:
     axs.plot(mbt.xstart, mbt.ystart, 'r+')
 
