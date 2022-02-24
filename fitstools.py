@@ -10,6 +10,7 @@ def fitsread(files, xslice=slice(None), yslice=slice(None), tslice=slice(None), 
 
     if isinstance(files, str):
         if cube:
+            # for now, in Windows, with python fitsio package not compiling, this won't work.
             with fitsio.FITS(files) as fitsfile:
                 if fitsfile[0].has_data():
                     data = np.squeeze(np.moveaxis(fitsfile[0][tslice, yslice, xslice], 0, 2))

@@ -18,7 +18,8 @@ class MBT:
     def __init__(self, nt=1, rs =2, am=1, dp=0.3, td=5, tdx=5, tdy=5, zdamping=1,
                  ballspacing=10, intsteps=15, mag_thresh=30, mag_thresh_sunspots=400, noise_level=20, polarity=1,
                  init_pos=None, track_emergence=False, emergence_box=10, datafiles=None, data=None, 
-                 prep_function=None, local_min=False, outputdir=None, fig_dir = None, do_plots=False, astropy=False, fov=None, verbose=True):
+                 prep_function=None, local_min=False, outputdir=None, fig_dir = None, do_plots=False, astropy=False,
+                 fov=None, verbose=True):
 
         self.datafiles = datafiles
         self.outputdir = outputdir
@@ -110,12 +111,13 @@ class MBT:
 
         if init_pos is None:
             # Initialization of ball positions
-            #self.xstart, self.ystart = get_local_extrema_ar(self.image, self.surface, self.polarity, self.ballspacing, self.mag_thresh, self.mag_thresh_sunspots, local_min=self.local_min)
+            # self.xstart, self.ystart = get_local_extrema_ar(self.image, self.surface, self.polarity, self.ballspacing,
+            # self.mag_thresh, self.mag_thresh_sunspots, local_min=self.local_min)
             self.xstart, self.ystart = get_local_extrema(self.image, self.polarity, self.ballspacing, self.mag_thresh,
                                                          local_min=self.local_min)
         else:
-            self.xstart = init_pos[0,:]
-            self.ystart = init_pos[1,:]
+            self.xstart = init_pos[0, :]
+            self.ystart = init_pos[1, :]
             
         self.zstart = blt.put_balls_on_surface(self.surface, self.xstart, self.ystart, self.rs, self.dp)
         
