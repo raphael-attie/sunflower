@@ -7,13 +7,9 @@ from pathlib import PurePath
 import glob
 import matplotlib.pyplot as plt
 import numpy as np
-import numpy.ma as ma
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-import matplotlib.colors as colors
-from astropy.io.fits import getheader
 from balltracking import mballtrack as mblt
-from skimage.feature import peak_local_max
-from skimage.feature import blob_log, blob_dog
+from skimage.feature import blob_log, blob_dog, peak_local_max
 from matplotlib.patches import Ellipse
 
 plt.rcParams.update({'font.size': 12})
@@ -22,7 +18,7 @@ DTYPE = np.float32
 
 
 def prep_data(image):
-    image2 =np.abs(image)
+    image2 = np.abs(image)
     image3 = image2.max() - image2
     surface = (image3 - image3.mean())/image3.std()
     return surface.copy(order='C').astype(DTYPE)
@@ -42,6 +38,15 @@ datafiles = sorted(glob.glob(str(PurePath(datadir, '*.fits'))))
 nfiles = len(datafiles)
 nsamples = 10
 
+image = fitstools.fitsread(datafiles[0], cube=False)
+blob_thresh = 1.0
+overlap = 0.6
+
+surface_inv = -prep_data(image)
+blobs_dog = blob_dog(surface_inv, overlap=overlap, threshold=blob_thresh, min_sigma=[6, 2], max_sigma=[20, 10])
+
+init_pos = np.fliplr(blobs_dog[:, 0:2]).T
+
 mbt_dict = {"nt": nsamples,
             "rs": 4,
             "am": 1,
@@ -56,6 +61,7 @@ mbt_dict = {"nt": nsamples,
             "track_emergence": False,
             "prep_function": prep_data,
             "datafiles": datafiles,
+            "init_pos": init_pos,
             "do_plots": False,
             "astropy": True,
             "verbose": False,
@@ -67,36 +73,6 @@ mbt = mblt.MBT(polarity=1, **mbt_dict)
 n = 0
 # Load the image at the current time index
 image = fitstools.fitsread(datafiles[n], cube=False)
-# Search for local extrema
-xpeak, ypeak = mblt.get_local_extrema(image, mbt.polarity, 1, mbt.noise_level)
-# Create their labels. They can change at each new image
-peak_labels = np.arange(0, len(xpeak))
-peak_labels_str = [str(l) for l in peak_labels]
-
-fig, axs = plt.subplots(ncols=1, nrows=1, figsize=(8, 7))
-im = axs.imshow(mbt.surface, vmin=-2, vmax=0, origin='lower', cmap='Greys_r')
-axs.plot(xpeak, ypeak, 'g.', ms=4)
-
-cbar = add_colorbar(axs, im)
-
-if n == 0:
-    axs.plot(mbt.xstart, mbt.ystart, 'r+')
-    labels = np.arange(0, mbt.nballs)
-    labels_str = [str(l) for l in labels]
-    for i, l in enumerate(labels_str):
-        axs.text(mbt.xstart[i]+5, mbt.ystart[i], l, color='black', fontsize=10,
-                 bbox=dict(facecolor='yellow', alpha=0.4, edgecolor='none', pad=1),
-                 clip_on=True)
-
-axs.set_xlim([0, 600])
-axs.set_ylim([0, 659])
-plt.tight_layout()
-plt.savefig(PurePath(outputdir, 'figures/training_set', f'peaks_{n:03d}.png'))
-
-blob_thresh = 1.0
-overlap = 0.6
-
-blobs_dog = blob_dog(-mbt.surface, overlap=overlap, threshold=blob_thresh, min_sigma=[6, 2], max_sigma=[20, 10])
 
 fig, axs = plt.subplots(ncols=1, nrows=1, figsize=(10, 9))
 im = axs.imshow(-mbt.surface, vmin=0, vmax=3, origin='lower', cmap='Greys')
@@ -121,5 +97,5 @@ axs.set_xlim([0, 600])
 axs.set_ylim([0, 659])
 
 plt.tight_layout()
-plt.savefig(PurePath(outputdir, 'figures/training_set', f'blobs_dog_log_overlap_{overlap:0.1}_threshold_{blob_thresh:0.1f}_frame_{n:03d}.png'))
+plt.savefig(PurePath(outputdir, 'figures/training_set', f'blobs_dog_{overlap:0.1}_threshold_{blob_thresh:0.1f}_frame_{n:03d}.png'))
 plt.close()
