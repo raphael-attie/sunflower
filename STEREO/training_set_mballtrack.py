@@ -23,6 +23,7 @@ def prep_data(image):
     surface = (image3 - image3.mean())/image3.std()
     return surface.copy(order='C').astype(DTYPE)
 
+
 def add_colorbar(axes, image_object):
     # position for the colorbar
     divider = make_axes_locatable(axs)
@@ -30,6 +31,22 @@ def add_colorbar(axes, image_object):
     # Adding the colorbar
     cbar = plt.colorbar(im, cax=cax)
     return cbar
+
+
+def make_ell_points(xc, yc, a, b, imshape):
+    ellgridx = np.arange(xc - a, xc + a + 1, dtype=np.int32)
+    ellgridy = np.arange(yc - b, yc + b + 1, dtype=np.int32)
+    xx, yy = np.meshgrid(ellgridx, ellgridy)
+    ell_x = []
+    ell_y = []
+    for x, y in zip(xx.ravel(), yy.ravel()):
+        if x > 0 and y > 0 and x < imshape[1] and y < imshape[0] and (x - xc) ** 2 / a ** 2 + (
+                y - yc) ** 2 / b ** 2 <= 1:
+            ell_x.append(x)
+            ell_y.append(y)
+
+    return ell_x, ell_y
+
 
 # Data prepped by COR2_tracking_prep.ipynb
 datadir = PurePath(os.environ['DATA'], 'STEREO/L7tum/prep_fits')
@@ -99,3 +116,21 @@ axs.set_ylim([0, 659])
 plt.tight_layout()
 plt.savefig(PurePath(outputdir, 'figures/training_set', f'blobs_dog_{overlap:0.1}_threshold_{blob_thresh:0.1f}_frame_{n:03d}.png'))
 plt.close()
+
+# Create label mask and apply labelled peak detection
+label_mask = np.zeros(image.shape, dtype=np.int64)
+for i, blob in enumerate(blobs_dog):
+    yc, xc, b, a = blob
+    ell_x, ell_y = make_ell_points(xc, yc, a, b, image.shape)
+    label_mask[ell_y, ell_x] = i+1
+
+peaks = peak_local_max(surface_inv, labels=label_mask, num_peaks_per_label=1)
+
+
+plt.figure(figsize=(10,9))
+plt.imshow(label_mask, origin='lower', vmin=0, vmax=1, cmap='gray')
+plt.plot(peaks[:,1], peaks[:,0], 'r+')
+plt.xlim([0, 600])
+plt.ylim([0, 659])
+
+plt.tight_layout()
