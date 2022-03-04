@@ -34,6 +34,9 @@ def add_colorbar(axes, image_object):
 
 
 def make_ell_points(xc, yc, a, b, imshape):
+
+    a *= np.sqrt(2)
+    b *= np.sqrt(2)
     ellgridx = np.arange(xc - a, xc + a + 1, dtype=np.int32)
     ellgridy = np.arange(yc - b, yc + b + 1, dtype=np.int32)
     xx, yy = np.meshgrid(ellgridx, ellgridy)
