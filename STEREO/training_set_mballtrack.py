@@ -101,10 +101,10 @@ for n in range(0, 10):
 
     if first_select:
         targets = []
-        figure_title = PurePath(outputdir, 'training_set', f'training_frame_v1_{n:03d}.jpg')
+        figure_fname = PurePath(outputdir, 'training_set', f'training_frame_v1_{n:03d}.jpg')
     else:
         targets = np.load(PurePath(outputdir, 'training_set', 'targets'))
-        figure_title = PurePath(outputdir, 'training_set', f'training_frame_v2_{n:03d}.jpg')
+        figure_fname = PurePath(outputdir, 'training_set', f'training_frame_v2_{n:03d}.jpg')
 
     peaks = []
     for i, blob in enumerate(blobs_d):
