@@ -8,7 +8,7 @@ import fitstools
 
 if __name__ == '__main__':
 
-    os.chdir(os.path.expanduser('~/dev/sdo-tracking-framework'))
+    os.chdir(os.path.expanduser('~/dev/sdo_tracking_framework'))
 
     # output directory for the drifting images
     outputdir = os.path.join(os.environ['DATA'], 'sanity_check/stein_series/calibration')
