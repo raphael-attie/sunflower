@@ -1,22 +1,22 @@
 """ This module hosts all the necessary functions to run balltracking.
 A main program should execute "balltrack_all()".
 """
-import sys, os
+import sys
+import os
 from collections import OrderedDict
 import numpy as np
 import numpy.ma as ma
 from numpy import pi, cos, sin
 import csv
-import matplotlib
 import matplotlib.pyplot as plt
 from scipy.ndimage.filters import gaussian_filter
-import cython_modules.interp as cinterp
-import filters
-import fitstools
 from multiprocessing import Pool
 from functools import partial
 from pathlib import Path
 from scipy.signal import convolve2d
+from ..cython_modules import interp as cinterp
+from .. import filters
+from .. import fitstools
 
 DTYPE = np.float32
 class BT:

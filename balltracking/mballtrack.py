@@ -3,22 +3,22 @@ import os
 import numpy as np
 from numpy import pi, cos, sin
 from pathlib import PurePath
-import cython_modules.interp as cinterp
-import fitstools
-import balltracking.balltrack as blt
+from .. import fitstools
+from . import balltrack as blt
 import matplotlib.pyplot as plt
 from skimage.feature import peak_local_max
 from skimage.morphology import disk
 from skimage.segmentation import find_boundaries, watershed
 from scipy.ndimage import gaussian_filter
 
-
 DTYPE = np.float32
+
+
 class MBT:
-    def __init__(self, nt=1, rs =2, am=1, dp=0.3, td=5, tdx=5, tdy=5, zdamping=1,
+    def __init__(self, nt=1, rs=2, am=1, dp=0.3, td=5, tdx=5, tdy=5, zdamping=1,
                  ballspacing=10, intsteps=15, mag_thresh=30, mag_thresh_sunspots=400, noise_level=20, polarity=1,
                  init_pos=None, track_emergence=False, emergence_box=10, datafiles=None, data=None, 
-                 prep_function=None, local_min=False, outputdir=None, fig_dir = None, do_plots=False, astropy=False,
+                 prep_function=None, local_min=False, outputdir=None, fig_dir=None, do_plots=False, astropy=False,
                  fov=None, verbose=True):
 
         self.datafiles = datafiles
@@ -95,7 +95,7 @@ class MBT:
         self.ball_cols, self.ball_rows = np.meshgrid(self.ballgrid, self.ballgrid)
         self.bcols = self.ball_cols.ravel()[:, np.newaxis].astype(DTYPE)
         self.brows = self.ball_rows.ravel()[:, np.newaxis].astype(DTYPE)
-        self.ds    = np.zeros([self.bcols.shape[0]], dtype=DTYPE)
+        self.ds = np.zeros([self.bcols.shape[0]], dtype=DTYPE)
 
         # Mask of bad balls
         self.bad_balls_mask = np.zeros(self.nballs_max, dtype=bool)
@@ -130,7 +130,11 @@ class MBT:
         self.new_valid_balls_mask[0:self.nballs] = True
         self.unique_valid_balls = np.arange(self.nballs)
         self.do_plots = do_plots
-        self.fig_dir = fig_dir
+
+        if fig_dir is None:
+            self.fig_dir = outputdir
+        else:
+            self.fig_dir = fig_dir
         self.verbose = verbose
 
     def track_all_frames(self):
@@ -188,8 +192,6 @@ class MBT:
         self.balls_age_t = self.balls_age_t[0:self.nballs, :]
         self.valid_balls_mask_t = self.valid_balls_mask_t[0:self.nballs, :]
 
-
-
     def track_all_frames_debug(self):
 
         for n in range(3, self.nt-4):
@@ -207,7 +209,6 @@ class MBT:
 
             self.ballpos[..., n] = self.pos.copy()
 
-
     def track_start_intermediate(self):
 
         for i in range(self.intsteps):
@@ -215,7 +216,6 @@ class MBT:
             self.ballpos_inter[..., i] = pos
             self.vel_inter[..., i] = vel
             self.force_inter.append(force)
-
 
     def populate_emergence(self):
 
@@ -269,6 +269,13 @@ class MBT:
             self.bad_balls_mask[self.nballs:self.nballs + newposx.size] = False
             self.new_valid_balls_mask = np.logical_not(self.bad_balls_mask)
             self.nballs += newposx.size
+
+    def export_track_figures(self, axlims=None, **kwargs):
+
+        for n in range(0, self.nt):
+            image = load_data(self.datafiles, n, astropy=self.astropy, fov=self.fov)
+            fig_title = PurePath(self.fig_dir, f'track_figures_{n:04d}.png')
+            plot_balls_over_frame(image, self.ballpos[0, :, n], self.ballpos[1, :, n], fig_title, axlims=axlims, **kwargs)
 
 
 def mballtrack_main_positive(**kwargs):
@@ -425,7 +432,6 @@ def prep_data(image):
     return surface.copy(order='C').astype(DTYPE)
 
 
-
 def set_bad_balls(bt, pos, check_polarity=True, check_noise=True, check_sinking=True):
     # See discussion at https://stackoverflow.com/questions/44802033/efficiently-index-2d-numpy-array-using-two-1d-arrays
     # and https://stackoverflow.com/questions/36863404/accumulate-constant-value-in-numpy-array
@@ -495,6 +501,7 @@ def set_bad_balls(bt, pos, check_polarity=True, check_noise=True, check_sinking=
     bt.new_valid_balls_mask = np.logical_not(bt.bad_balls_mask)
     return
 
+
 def coarse_grid_pos(mbt, x, y):
 
     # Get the position on the coarse grid, clipped to the edges of that grid.
@@ -531,6 +538,7 @@ def label_from_pos(x, y, dims):
 
     return label_map
 
+
 def marker_watershed(data, x, y, threshold, polarity, invert=True):
 
     markers = label_from_pos(x, y, data.shape)
@@ -549,6 +557,7 @@ def marker_watershed(data, x, y, threshold, polarity, invert=True):
     # Subtract 1 to align with the ball number series. E.g: watershed label 0 corresponds to ball #0
     labels -=1
     return labels, markers, borders
+
 
 def watershed_series(datafile, nframes, threshold, polarity, ballpos, verbose=False, prep_function=None, invert=True, astropy=False, fov=None):
 
@@ -578,6 +587,7 @@ def watershed_series(datafile, nframes, threshold, polarity, ballpos, verbose=Fa
 
     return ws_series, markers_series, borders_series
 
+
 def merge_watershed(labels_p, borders_p, nballs_p, labels_n, borders_n):
     """
     Merge the results from markers-watershed the positive and negative flux.
@@ -598,12 +608,14 @@ def merge_watershed(labels_p, borders_p, nballs_p, labels_n, borders_n):
     return ws_labels, borders
 
 
-
-def plot_balls_over_frame(frame, x, y, fig_title):
-    plt.figure(0, figsize=(11.5, 9))
-    plt.imshow(frame, vmin=-100, vmax=100, cmap='gray')
+def plot_balls_over_frame(frame, x, y, fig_title, figsize=None, axlims=None, **kwargs):
+    plt.figure(0, figsize=figsize)
+    plt.imshow(frame, **kwargs)
     plt.plot(x, y, ls='none', marker='+', color='red', markerfacecolor='none', ms=6)
-    plt.axis([0, frame.shape[1], 0, frame.shape[0]])
+    if axlims is None:
+        plt.axis([0, frame.shape[1], 0, frame.shape[0]])
+    else:
+        plt.axis(axlims)
     plt.colorbar()
     plt.tight_layout()
     plt.savefig(fig_title)
