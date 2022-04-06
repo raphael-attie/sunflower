@@ -918,7 +918,7 @@ plt.savefig('/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/figures/paper/ma
 case = 1
 frame_numbers = [3, 12, 14, 25, 39, 46]
 
-#fov = [50, 350, 50, 350]
+#roi = [50, 350, 50, 350]
 fov = [100, 400, 100, 400]
 # Coordinates of the rectangle: (left, bottom, width, height)
 coords = (220-50 - fov[0], 165-50-fov[2], 125, 125)
@@ -984,7 +984,7 @@ plt.savefig('/Users/rattie/Data/SDO/HMI/EARs/AR12673_2017_09_01/figures/paper/la
 # shaft_width = 0.4
 #
 # figsize = (6.5, 9)
-# fig, axs, cb = create_fig_32(frame_numbers, figsize, fov=fov, coords=(225 - fov[0], 176 - fov[2]), quiver=True)
+# fig, axs, cb = create_fig_32(frame_numbers, figsize, roi=roi, coords=(225 - roi[0], 176 - roi[2]), quiver=True)
 #
 # fname = os.path.join(fig_dir, 'lanes_plot_matplotlib.pdf')
 # plt.savefig(fname, dpi=300)

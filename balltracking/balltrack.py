@@ -101,14 +101,14 @@ class BT:
         # Force scaling factor
         self.k_force = self.am / (self.dp**2 * pi * self.rs**2)
         # Damping
-        self.td = 1.0
-        self.tdx = self.td
-        self.tdy = self.td
+        self.td_ = 1.0
+        self.tdx_ = self.td_
+        self.tdy_ = self.td_
         self.zdamping = 0.3
-        self.e_td = np.exp(-1/self.td)
-        self.e_tdx = self.e_td
-        self.e_tdy = self.e_td
-        self.e_tdz = np.exp(-1/self.zdamping)
+        self.e_td_ = np.exp(-1 / self.td_)
+        self.e_tdx_ = self.e_td_
+        self.e_tdy_ = self.e_td_
+        self.e_tdz_ = np.exp(-1 / self.zdamping)
 
         # Rescaling factor for the standard deviation
         self.sigma_factor = sigma_factor
@@ -131,7 +131,7 @@ class BT:
         self.bcols = self.ball_cols.ravel()[:, np.newaxis].astype(DTYPE)
         self.brows = self.ball_rows.ravel()[:, np.newaxis].astype(DTYPE)
         # Not in use for now
-        self.ds    = np.zeros([self.bcols.shape[0]], dtype=DTYPE)
+        self.ds = np.zeros([self.bcols.shape[0]], dtype=DTYPE)
         # Hold the current surfance
         self.surface = np.zeros(self.sample.shape)
         # Initialize deepest height at which ball can fall down. Typically it will be set to a multiple of -surface.std().
@@ -149,7 +149,6 @@ class BT:
         self.output_prep_data = output_prep_data
         self.outputdir = outputdir
         self.verbose = verbose
-
 
     def initialize(self):
         """Calculate offset (mean) and standard deviation from  a valid surface
@@ -533,8 +532,8 @@ def prep_data2(image, sigma_factor=1, pixel_radius=0):
 def coarse_grid_pos(bt, x, y):
 
     # Get the position on the coarse grid, clipped to the edges of that grid.
-    xcoarse = np.uint32(np.clip(np.floor(x / bt.ballspacing), 0, bt.nxc-1))
-    ycoarse = np.uint32(np.clip(np.floor(y / bt.ballspacing), 0, bt.nyc-1))
+    xcoarse = np.uint32(np.clip(np.floor(x / bt.ballspacing), 0, bt.nxc_ - 1))
+    ycoarse = np.uint32(np.clip(np.floor(y / bt.ballspacing), 0, bt.nyc_ - 1))
     # Convert to linear (1D) indices. One index per ball
     coarse_idx = np.ravel_multi_index((ycoarse, xcoarse), bt.coarse_grid.shape)
     return xcoarse, ycoarse, coarse_idx
@@ -600,17 +599,17 @@ def integrate_motion(bt, surface, return_copies=False):
     vzt += fzt
     # Integrate position including effect of a damped velocity
     # Damping is added arbitrarily for the stability of the code.
-    xt += vxt * bt.tdx * (1 - bt.e_tdx)
-    yt += vyt * bt.tdy * (1 - bt.e_tdy)
-    zt += vzt * bt.zdamping * (1 - bt.e_tdz)
+    xt += vxt * bt.tdx * (1 - bt.e_tdx_)
+    yt += vyt * bt.tdy * (1 - bt.e_tdy_)
+    zt += vzt * bt.zdamping * (1 - bt.e_tdz_)
 
     bt.pos[0, bt.new_valid_balls_mask] = xt
     bt.pos[1, bt.new_valid_balls_mask] = yt
     bt.pos[2, bt.new_valid_balls_mask] = zt
     # Update the velocity with the damping used above
-    bt.vel[0, bt.new_valid_balls_mask] = vxt * bt.e_td
-    bt.vel[1, bt.new_valid_balls_mask] = vyt * bt.e_td
-    bt.vel[2, bt.new_valid_balls_mask] = vzt * bt.e_tdz
+    bt.vel[0, bt.new_valid_balls_mask] = vxt * bt.e_tdx_
+    bt.vel[1, bt.new_valid_balls_mask] = vyt * bt.e_tdy_
+    bt.vel[2, bt.new_valid_balls_mask] = vzt * bt.e_tdz_
 
     if return_copies:
         force = np.array([fxt, fyt, fzt])
@@ -718,7 +717,7 @@ def get_bad_balls(bt):
 def get_outliers(bt):
 
     x, y, z = bt.pos
-    sunk = z < bt.min_ds
+    sunk = z < bt.min_ds_
     off_edges_mask = get_off_edges(bt, x, y)
     outlier_mask = np.logical_or(sunk, off_edges_mask)
 
@@ -796,8 +795,8 @@ def replace_bad_balls1(pos, bt):
     # Get the position on the finegrid
 
     # Get the position on the coarse grid, clipped to the edges of that grid.
-    xcoarse = np.round(pos[0, :] / bt.ballspacing).clip(0, bt.nxc).astype(np.uint32)
-    ycoarse = np.round(pos[1, :] / bt.ballspacing).clip(0, bt.nyc).astype(np.uint32)
+    xcoarse = np.round(pos[0, :] / bt.ballspacing).clip(0, bt.nxc_).astype(np.uint32)
+    ycoarse = np.round(pos[1, :] / bt.ballspacing).clip(0, bt.nyc_).astype(np.uint32)
 
     bt.coarse_grid[ycoarse, xcoarse] = 1
 
@@ -806,8 +805,8 @@ def replace_bad_balls1(pos, bt):
 
 def replace_bad_balls2(pos, bt):
     # Get the position on the coarse grid, clipped to the edges of that grid.
-    xcoarse = np.round(pos[0, :] / bt.ballspacing).clip(0, bt.nxc).astype(np.uint32)
-    ycoarse = np.round(pos[1, :] / bt.ballspacing).clip(0, bt.nyc).astype(np.uint32)
+    xcoarse = np.round(pos[0, :] / bt.ballspacing).clip(0, bt.nxc_).astype(np.uint32)
+    ycoarse = np.round(pos[1, :] / bt.ballspacing).clip(0, bt.nyc_).astype(np.uint32)
 
     # Convert to linear (1D) indices
     idx = np.ravel_multi_index((ycoarse, xcoarse), bt.coarse_grid.shape)
@@ -1030,13 +1029,13 @@ def integrate_motion0(pos, vel, bt, surface):
 
     # Integrate position including effect of a damped velocity
     # Damping is added arbitrarily for the stability of the code.
-    pos[0, :] += vxt * bt.td * (1 - bt.e_td)
-    pos[1, :] += vyt * bt.td * (1 - bt.e_td)
-    pos[2, :] += vzt * bt.zdamping * (1 - bt.e_tdz)
+    pos[0, :] += vxt * bt.td_ * (1 - bt.e_td_)
+    pos[1, :] += vyt * bt.td_ * (1 - bt.e_td_)
+    pos[2, :] += vzt * bt.zdamping * (1 - bt.e_tdz_)
     # Update the velocity with the damping used above
-    vel[0, :] *= bt.e_td
-    vel[1, :] *= bt.e_td
-    vel[2, :] *= bt.e_tdz
+    vel[0, :] *= bt.e_td_
+    vel[1, :] *= bt.e_td_
+    vel[2, :] *= bt.e_tdz_
 
     force = np.array([fxt, fyt, fzt])
 

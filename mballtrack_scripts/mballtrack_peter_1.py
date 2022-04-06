@@ -94,7 +94,7 @@ if __name__ == "__main__":
                 "rs":2,
                 "am":0.5,
                 "dp":0.3,
-                "td":1,
+                "td_":1,
                 "ballspacing":5,
                 "intsteps":3,
                 "mag_thresh":50,
