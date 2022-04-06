@@ -1,3 +1,0 @@
-To retrieve the Fisher and Welsch 2008 paper on FLCT, follow this link:
-
-http://solarmuri.ssl.berkeley.edu/~fisher/public/software/FLCT/C_VERSIONS/flct_1.01-1/doc/flct_technique.pdf
