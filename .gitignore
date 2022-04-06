@@ -1,8 +1,7 @@
-.idea
-.cache
 scratch_notebooks/
 cython_modules/__pycache__/
 cython_modules/build/
 .DS_Store
 *.pyc
 .ipynb_checkpoints
+
