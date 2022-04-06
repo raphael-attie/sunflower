@@ -1,6 +1,5 @@
 import numpy as np
-from skimage.measure import compare_ssim as ssim
-
+from skimage.metrics import structural_similarity as ssim
 
 def han1d_hpf(n, T, rc):
     # 1D hanning filter
@@ -81,15 +80,14 @@ def han2d_lpf(n, rc):
 
     return hwindow
 
+
 def han2d_bandpass(n, small_scale, large_scale):
     # 2D hanning filter, assumes a square image size
-    # rc: filter radius
-    # n: length of array
 
-    hwindow1    = han2d_lpf(n, small_scale)
-    hwindow2    = han2d_hpf(n, large_scale)
+    hwindow1 = han2d_lpf(n, small_scale)
+    hwindow2 = han2d_hpf(n, large_scale)
 
-    hwindow     = hwindow1 * hwindow2
+    hwindow = hwindow1 * hwindow2
 
     return hwindow
 
@@ -131,11 +129,9 @@ def translate_by_phase_shift(image, dx, dy):
     # Get the fourier transform
     fimage = np.fft.fftshift(np.fft.fftn(image))
     # Phase shift
-    shifted_fimage = phase_shift(fimage, -dx, -dy)
-    # Inverse transform -> translated image
-    shifted_image = np.real(np.fft.ifftn(np.fft.ifftshift(shifted_fimage)))
-
-    return shifted_image
+    fimage = phase_shift(fimage, -dx, -dy)
+    # returns inverse transform -> translated image
+    return np.real(np.fft.ifftn(np.fft.ifftshift(fimage)))
 
 
 

@@ -75,7 +75,7 @@ if __name__ == '__main__':
     drift_rates = np.stack((vx_rates, np.zeros(npts)), axis=1).tolist()
     imsize = 263  # actual size is 264 but original size was 263 then padded to 264 to make it even for the Fourier transform
     trim = int(vx_rates.max() * nframes + fwhm + 2)
-    # The balltracking fov needs to be in a list, even for just 1 element.
+    # The balltracking roi needs to be in a list, even for just 1 element.
     # TODO: need to be improved!!
     fov_slices = np.s_[trim:imsize - trim, trim:imsize - trim]
     # Run calibration

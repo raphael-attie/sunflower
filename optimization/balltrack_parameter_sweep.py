@@ -1,47 +1,35 @@
-import os, glob
+import glob, os, sys
+module_path = os.path.abspath(os.path.join('..'))
+if module_path not in sys.path:
+    sys.path.append(module_path)
 import numpy as np
-import fitstools
 import balltracking.balltrack as blt
-import multiprocessing
 from multiprocessing import Pool
 from functools import partial
-import time
-import pandas as pd
 from collections import OrderedDict
+import fitstools
 
+if __name__  == '__main__':
 
-if __name__ == '__main__':
-
-    # the multiprocessing start method can only bet set once.
-    multiprocessing.set_start_method('spawn')
-    nprocesses = 4
-    # directory hosting the drifted data (9 series)
-    drift_dir = '/Users/rattie/Data/sanity_check/stein_series/'
-    # output directory for the drifting images
-    outputdir = os.path.join(drift_dir, 'calibration')
+    # output directory
+    outputdir = os.path.join(os.environ['DATA'], 'sanity_check/stein_series/calibration2')
     reprocess_bt = True
-    nframes = 30
+    nframes = 60
     trange = [0, nframes]
+    image_files = sorted(glob.glob(os.path.join(os.environ['DATA'], 'Ben/SteinSDO/SDO_int*.fits')))[0:nframes]
 
-    ### Ball parameters
+    # Ball parameters
     bt_params = OrderedDict({'rs': 2})
     # Parameter sweep
-    intsteps = [3,4,5]
-    ballspacing = [1, 2, 3, 4]
-    dp_l = [0.2, 0.3, 0.4, 0.5]
-    sigma_factor_l = [1, 1.25, 1.5, 1.75, 2]
-    ### Fourier filter radius
-    f_radius_l = np.arange(0, 21)
-    bt_params_list = blt.get_bt_params_list(bt_params, ('intsteps', 'ballspacing', 'dp', 'sigma_factor', 'f_radius'), (intsteps, ballspacing, dp_l, sigma_factor_l, f_radius_l))
-    # mydict = bt_params_list[0]
-    # file = '/Users/rattie/Data/sanity_check/stein_series/calibration/temp.csv'
-    # with open(file, 'w') as outfile:
-    #     csvwriter = csv.writer(outfile)
-    #     csvwriter.writerow(list(mydict.keys()))
-    #     csvwriter.writerow(list(mydict.values()))
-
-    #bt_df = pd.DataFrame(bt_params_list)
-
+    intsteps = [4, 5, 6]
+    ballspacing = [1, 2]
+    dp_l = [0.2, 0.25, 0.3, 0.35, 0.4]
+    sigma_factor_l = [1.0, 1.25, 1.5, 1.75, 2]
+    # Fourier filter radius
+    f_radius_l = np.arange(0, 10)
+    bt_params_list = blt.get_bt_params_list(bt_params,
+                                            ('intsteps', 'ballspacing', 'dp', 'sigma_factor', 'fourier_radius'),
+                                            (intsteps, ballspacing, dp_l, sigma_factor_l, f_radius_l))
     ### Velocity smoothing
     fwhm = 7
     kernel = 'boxcar'
@@ -60,23 +48,33 @@ if __name__ == '__main__':
 
     dims = [imsize, imsize]
 
+    images = fitstools.fitsread(image_files, cube=False)
+
     # Prepare partial function for parallel pool & map.
-    calibrate_partial = partial(blt.balltrack_calibration, drift_rates=drift_rates, trange=trange, fov_slices=fov_slices,
-                                reprocess_bt=reprocess_bt, drift_dir=drift_dir, outputdir=outputdir, kernel=kernel, fwhm=fwhm, dims=dims,
-                                basename='im_shifted', write_ballpos_list=False)
+    calibrate_partial = partial(blt.balltrack_calibration,
+                                images=images,
+                                drift_rates=drift_rates,
+                                trange=trange,
+                                fov_slices=fov_slices,
+                                reprocess_bt=reprocess_bt,
+                                outputdir=outputdir,
+                                kernel=kernel,
+                                fwhm=fwhm,
+                                dims=dims,
+                                save_ballpos_list=False,
+                                nthreads=1)
 
-
-    # calibrate_partial(bt_params_list[0])
+    print('Running balltracking on {:d} params lists'.format(len(bt_params_list)))
+    # df = calibrate_partial(bt_params_list[0])
 
     #map(calibrate_partial, bt_params_list[0:6])
 
-    pool = Pool(processes=nprocesses)
-    pool.map(calibrate_partial, bt_params_list[0:12])
+    # the multiprocessing start method can only bet set once.
+    # multiprocessing.set_start_method('spawn')
+    pool = Pool(processes=50)
+    pool.map(calibrate_partial, bt_params_list)
     pool.close()
     pool.join()
 
-    # Save the results in a dataframe
-    # df['a_top'] = a_top_l
-    # df['a_bot'] = a_bot_l
-
+# At the end of this parallel job, use "parameter_sweep_velocity_calibration.py" to aggregate everything
 

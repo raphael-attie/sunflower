@@ -1,0 +1,13 @@
+To convert the man pages flct.1 and warp.1 from troff format to .ps files
+using groff and enscript:
+
+groff -man -Tascii flct.1 | enscript --header= -M Letter -T 63 -o flct.ps
+groff -man -Tascii warp.1 | enscript --header= -M Letter -T 63 -o warp.ps
+
+To convert man pages from .ps files to .pdf files:
+
+ps2pdf flct.ps
+ps2pdf warp.ps
+
+If enscript or ps2pdf are not on your system, they are available as GNU 
+open source software.
