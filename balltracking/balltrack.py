@@ -21,24 +21,28 @@ from .. import fitstools
 DTYPE = np.float32
 class BT:
 
-    def __init__(self, nt, rs, ballspacing, dp, intsteps, sigma_factor, fourier_radius, mode, direction, datafiles=None, data=None,
+    def __init__(self, rs, dp, ballspacing, intsteps, sigma_factor, fourier_radius, nt, mode, direction, datafiles=None, data=None,
                  output_prep_data=False, outputdir=None, verbose=False):
 
         """ This is the class hosting all the parameters and intermediate results of balltracking.
 
-        :param nt: number of frames to process
-        :param rs: balls radius
-        :param ballspacing: spacing between balls on initial grid (in pixels)
-        :param dp: characteristic depth
-        :param intsteps: number of intermediate integration steps between images
-        :param sigma_factor: multiplier to the standard deviation
-        :param fourier_radius: radius for image fourier filter in spatial domain units (pixels) instead of k-space.
-        :param mode: string that determines which side of the data surface to track. Either 'top' or 'bottom'.
-        :param direction: string that determines whether we track 'forward' or 'backward' in time.
-        :param datafiles: path to data fits cube or series of fits files.
-        :param data: numpy data cube whose dimensions are (y-axis, x-axis, time)
-        :param output_prep_data: whether write out the intermediary surface data. For sanity check.
-        :param outputdir: will write the arrays of tracked position to that directory
+        Attributes:
+
+            rs (int): balls radius in pixels
+            dp (float): Characteristic percentage depth. 0 < dp < 1
+            ballspacing (int): nb of pixels between balls center at the initialization stage
+            intsteps (int): nb of intermediate frames using linear interpolation.
+            sigma_factor (float): multiplier to the standard deviation
+            fourier_radius (float): radius for high-pass image fourier filter,
+                                    to be given in period units (pixels) instead of k-space frequency.
+            nt (int): nb of frames to track
+            mode (str): determines which side of the data surface to track: 'top' or 'bottom'.
+            direction (str): determines whether we track 'forward' or 'backward' in time.
+            datafiles (list): list of FITS file paths
+            data (ndarray): instead of providing a list of files with datafiles, one can directly provide a 3D array
+            output_prep_data (str): whether to write out the intermediary surface data. For sanity check.
+            outputdir (str): Save the arrays of tracked position to that directory
+
         """
 
         if output_prep_data & (outputdir is None):
@@ -61,9 +65,9 @@ class BT:
                 self.sample = fitstools.fitsread(self.datafiles, tslice=self.nt - 1).astype(np.float32)
         else:
             if self.direction == 'forward':
-                self.sample = self.data[:,:,0]
+                self.sample = self.data[:, :, 0]
             else:
-                self.sample = self.data[:,:,-1]
+                self.sample = self.data[:, :, -1]
 
         self.nx = int(self.sample.shape[1])
         self.ny = int(self.sample.shape[0])
@@ -84,7 +88,7 @@ class BT:
         # Image mesh
         self.meshx, self.meshy = np.meshgrid(self.xcoords, self.ycoords)
         # Initialize ball positions
-        self.xstart, self.ystart = initialize_mesh(self)
+        self.xstart, self.ystart = initialize_mesh(ballspacing, self.nx, self.ny)
         self.zstart = np.zeros(self.xstart.shape, dtype=np.float32)
         self.nballs = self.xstart.size
         # Initialize the array of the lifetime (age) of the balls
@@ -94,18 +98,18 @@ class BT:
         # Matlab: finegrid=zeros(ceil(BT.nr/BT.finegridspacing),ceil(BT.nc/BT.finegridspacing));
         self.coarse_grid = np.zeros([np.ceil(self.ny/self.ballspacing).astype(int), np.ceil(self.nx/self.ballspacing).astype(int)], dtype=np.uint32)
         # Dimensions of the coarse grid
-        self.nyc, self.nxc = self.coarse_grid.shape
+        self.nyc_, self.nxc_ = self.coarse_grid.shape
 
         # Acceleration factor (used to be 0.6 in Potts implementation)
         self.am = 1.0
         # Force scaling factor
         self.k_force = self.am / (self.dp**2 * pi * self.rs**2)
         # Damping
-        self.td_ = 1.0
-        self.tdx_ = self.td_
-        self.tdy_ = self.td_
+        self.td = 1.0
+        self.tdx = self.td
+        self.tdy = self.td
         self.zdamping = 0.3
-        self.e_td_ = np.exp(-1 / self.td_)
+        self.e_td_ = np.exp(-1 / self.td)
         self.e_tdx_ = self.e_td_
         self.e_tdy_ = self.e_td_
         self.e_tdz_ = np.exp(-1 / self.zdamping)
@@ -150,11 +154,23 @@ class BT:
         self.outputdir = outputdir
         self.verbose = verbose
 
+    def coarse_grid_pos(self, x, y):
+        """ x, y coordinates in the image into coarse grid coordinates"""
+
+        # Get the position on the coarse grid, clipped to the edges of that grid.
+        xcoarse = np.uint32(np.clip(np.floor(x / self.ballspacing), 0, self.nxc_ - 1))
+        ycoarse = np.uint32(np.clip(np.floor(y / self.ballspacing), 0, self.nyc_ - 1))
+        # Convert to linear (1D) indices. One index per ball
+        coarse_idx = np.ravel_multi_index((ycoarse, xcoarse), self.coarse_grid.shape)
+        return xcoarse, ycoarse, coarse_idx
+
     def initialize(self):
         """Calculate offset (mean) and standard deviation from  a valid surface
+
         First, filter image to focus on the granulation
         Get mean and standard deviation from the masked array, not affected by bad invalid values (sunspot, ...)
         Generate the data surface from the image with the masked mean and sigma"""
+
         self.surface, mean, sigma = prep_data2(self.sample, self.sigma_factor)
         self.mean = mean
         self.sigma = sigma
@@ -172,6 +188,10 @@ class BT:
         return
 
     def track(self):
+        """Tracking outer loop
+
+        Loop over the images and update the balls positions
+        """
 
         # Outer loop goes over the data frames.
         # If data is a fits cube, we just access a slice of it
@@ -241,7 +261,7 @@ class BT:
         # xpos0, ypos0, zpos0 = bt.pos
 
         # Bad balls are flagged with -1 in the pos array. They will be excluded from the comparisons below
-        bad_balls1_mask = get_outliers(self)
+        bad_balls1_mask = self.get_outliers_mask()
 
         # Ignore these bad balls in the arrays and enforce continuity principle
         valid_balls = np.logical_not(bad_balls1_mask)
@@ -254,7 +274,7 @@ class BT:
         balls_age = self.balls_age[valid_balls]
 
         # Get the 1D position on the coarse grid, clipped to the edges of that grid.
-        _, _, coarse_pos = coarse_grid_pos(self, xpos, ypos)
+        _, _, coarse_pos = self.coarse_grid_pos(xpos, ypos)
 
         # Get ball number and balls age sorted by position, sort positions too, and array of valid balls indices as well!!!
         sorted_balls = np.argsort(coarse_pos)
@@ -278,6 +298,15 @@ class BT:
 
         return
 
+    def get_outliers_mask(self):
+
+        x, y, z = self.pos
+        sunk = z < self.min_ds_
+        off_edges_mask = get_off_edges_mask(self.rs, self.nx, self.ny, x, y)
+        outliers_mask = np.logical_or(sunk, off_edges_mask)
+
+        return outliers_mask
+
     def replace_bad_balls(self, surface):
 
         nbadballs = self.bad_balls_mask.sum()
@@ -287,7 +316,7 @@ class BT:
         # (instead of working with pos[:, :, valid_balls_mask] directly)
         xpos, ypos, zpos = self.pos[:, valid_balls_mask]
         # Get the 1D position on the coarse grid, clipped to the edges of that grid.
-        _, _, coarse_pos_idx = coarse_grid_pos(self, xpos, ypos)
+        _, _, coarse_pos_idx = self.coarse_grid_pos(xpos, ypos)
         # Set these positions on the coarse grid as filled. Remember that to avoid putting new balls on the edge,
         # the coarse_grid is pre-filled with ones at its edges
         # See discussion at https://stackoverflow.com/questions/44802033/efficiently-index-2d-numpy-array-using-two-1d-arrays
@@ -338,17 +367,29 @@ class BT:
         return xnew, ynew
 
 
+def initialize_mesh(ballspacing, nx, ny):
+    """ Initial horizontal (x,y) positions into a regular, cartesian grid"""
+
+    x_start_points = np.arange(ballspacing, nx - ballspacing + 1, ballspacing, dtype=DTYPE)
+    y_start_points = np.arange(ballspacing, ny - ballspacing + 1, ballspacing, dtype=DTYPE)
+    xstart, ystart = np.meshgrid(x_start_points, y_start_points)
+    return xstart, ystart
+
+
 def track_instance(params, side_direction, datafiles=None, data=None):
 
     """
-    Wrapper to run balltracking on a given tuple of (side, direction). This routine must be executed with 4 of these pairs for
-    a complete flow tracking.
+    Wrapper to run balltracking on a given tuple of (side, direction).
+    This routine must be executed with 4 of these pairs for minimizing the random error.
 
-    :params: all ball parameters relevant to the BT class.
-    :param side_direction: tracking mode and tracking direction, e.g. ('top', 'forward'), ('bottom', 'backward')...
-    :param datafiles: path to data cube file or series of files.
-    :param data: for calibration only. numpy data arrays of drifting data surface.
-    :return:
+    Args:
+        params (dict): ball parameters for the BT class
+        side_direction (tuple): must wrap (BT.mode) and (BT.direction), e.g. ('top', 'forward'), ('bottom', 'backward')
+        datafiles (str or list): path to data cube file or list of FITS files
+        data (ndarray): Series of 3D Numpy arrays with time on the 3rd index: (y-axis, x-axis, time-axis)
+
+    Returns:
+        BT.ballpos (ndarray): Array storing the positions of the balls at each frame
     """
     print(side_direction)
 
@@ -367,7 +408,6 @@ def track_instance(params, side_direction, datafiles=None, data=None):
     return bt_instance.ballpos
 
 
-
 def balltrack_all(params, datafiles=None, data=None, write_ballpos=True, ncores=1):
 
     """ Run the tracking on the 4 (mode, direction) pairs:
@@ -378,13 +418,18 @@ def balltrack_all(params, datafiles=None, data=None, write_ballpos=True, ncores=
 
      Can be executed in a pool of up to 4 parallel workers.
 
-    :params: all ball parameters relevant to the BT class
-    :param datafiles: path to data cube file or series of files.
-    :param data: numpy data cube used if datafile not given.
-    :param write_ballpos: sets whether to write the array of ball positions as .npz or not.
-    :param ncores: number of cores to use for running the 4 modes/directions in parallel.
-        Default is 1 for sequential processing. There can up to 4 workers for these parallel tasks.
-    :return: 2D arrays of ball positions for top-side and bottom-side tracking -> [ball #, coordinates]
+    Args:
+        params (dict): all ball parameters relevant to the BT class
+        datafiles (str or list): path to data cube file or list of FITS files
+        data (ndarray): Series of 3D Numpy arrays with time on the 3rd index: (y-axis, x-axis, time-axis)
+        write_ballpos (bool): sets whether to write the array of ball positions
+        ncores: number of cores to use for running the 4 modes/directions in parallel
+            Default is 1 for sequential processing. There can up to 4 workers for these parallel tasks (2-3x speed-up)
+
+    Returns:
+        ballpos_top: 3D array of ball positions for top-side tracking -> [xyz, ball #, time]
+        ballpos_bottom: 3D array of ball positions for bottom-side tracking -> [xyz, ball #, time]
+
     """
     if write_ballpos and 'outputdir' not in params:
         sys.exit('missing outputdir in params to write ball positions')
@@ -393,7 +438,7 @@ def balltrack_all(params, datafiles=None, data=None, write_ballpos=True, ncores=
     if (datafiles is None or not isinstance(datafiles, str)) and not isinstance(datafiles, list) and data is None:
         raise ValueError
     # Get a BT instance with the above parameters
-    mode_direction_list = (('top','forward'),
+    mode_direction_list = (('top', 'forward'),
                            ('top', 'backward'),
                            ('bottom', 'forward'),
                            ('bottom', 'backward'))
@@ -420,28 +465,35 @@ def balltrack_all(params, datafiles=None, data=None, write_ballpos=True, ncores=
     return ballpos_top, ballpos_bottom
 
 
-def calculate_invalid_mask(data):
+def calculate_invalid_mask(data, threshold=5):
     """
-    Create a mask where invalid values are where the data values are too small to be coming from granulation signal
-    The threshold is 5 times the standard deviation below the mean
+    Create a masked array where invalid values are where the data values are too small to be coming from granulation
+    The default threshold is 5 times the standard deviation below the mean
 
-    :param data: input 2D array (image or filtered image)
-    :return: numpy mask to be used with numpy.masked_array
+    Args:
+        data (ndarray): balltracking input image, e.g. as loaded from BT.datafiles or BT.data
+        threshold (int): multiplier to the standard deviation (sigma)
+    Returns:
+        out (MaskedArray): Numpy Masked Array with off-threshold values masked out
     """
+
     mean = data.mean()
     sigma = data.std()
-    mind = mean - 5 * sigma
-
-    return ma.masked_less(data, mind)
+    mind = mean - threshold * sigma
+    out = ma.masked_less(data, mind)
+    return out
 
 
 def filter_image(image, pixel_radius=0):
     """
     Filter the image to enhance granulation signal
 
-    :param image: input image e.g continuum intensity from SDO/HMI (2D array). IMAGE MUST HAVE NX = NY!
-    :param pixel_radius: radius of the fourier filter converted in spatial domain units (pixels) instead of k-space.
-    :return: fdata: filtered data (2D array)
+    Args:
+        image (ndarray): input image e.g continuum intensity from SDO/HMI (2D array).
+        pixel_radius (int): radius of the fourier filter in spatial domain units (pixels) instead of k-space.
+
+    Returns:
+        fdata: filtered data (2D array)
     """
 
     if image.shape[0] != image.shape[1]:
@@ -464,15 +516,19 @@ def filter_image(image, pixel_radius=0):
 
 
 def rescale_frame(data, offset, norm_factor):
-    """
-    Rescales the images for Balltracking. It subtract the mean of the data and divide by a scaling factor.
+    """ Rescales the images for Balltracking.
+
+    Subtracts the mean from the data and divide by a scaling factor.
     For balltracking, this scaling factor shall be the standard deviation of the whole data series.
     See http://mathworld.wolfram.com/HanningFunction.html
 
-    :param data: 2D frame (e.g: continuum image or magnetogram)
-    :param offset: scalar that offsets the data. Typically the mean of the data or of masked data
-    :param norm_factor: scalar that divides the data. Typically a multiple of the standard deviation.
-    :return: rescaled_data: rescaled image.
+    Args:
+        data (ndarray): 2D frame (e.g: continuum image or magnetogram)
+        offset (float): scalar that offsets the data. Typically the mean of the data or of masked data
+        norm_factor (float): scalar that divides the data. Typically a multiple of the standard deviation
+
+    Returns:
+        rescaled_data (ndarray): rescaled image
     """
     rescaled_data = data - offset
     rescaled_data = rescaled_data / norm_factor
@@ -481,16 +537,20 @@ def rescale_frame(data, offset, norm_factor):
 
 
 def prep_data(image, mean, sigma, sigma_factor=1):
-    """
-    The image is filtered to enhance the granulation pattern, and rescaled into a data surface
-    where the resulting standard deviation is equal to the sigma_factor, typically 1 or 2 depending
+    """ Rescale the image into a data surface
+
+    The resulting standard deviation is equal to sigma_factor * sigma, typically between [0, 1] depending
     on the statistical properties of the image series. The data intensity is centered around the mean.
 
-    :param image: input image e.g continuum intensity from SDO/HMI (2D array)
-    :param mean: offset for rescaling the image as a data surface (i.e. 3D mesh).
-    :param sigma: standard deviation of the 1st filtered data of the series
-    :param sigma_factor: Multiplier to the standard deviation (scalar)
-    :return: data surface (2D array)
+    Args:
+        image (ndarray): image to be rescaled. E.g continuum intensity from SDO/HMI
+        mean (float): offset for rescaling the image as a data surface to make it centered around the mean
+        sigma (float): standard deviation to normalize with, it can be the one of the image itself,
+        or of another one in the series
+        sigma_factor (float): Multiplier to sigma
+
+    Returns:
+        surface (ndarray): data surface (2D array)
     """
 
     # Filter the image to isolate granulation
@@ -502,19 +562,26 @@ def prep_data(image, mean, sigma, sigma_factor=1):
 
 
 def prep_data2(image, sigma_factor=1, pixel_radius=0):
-    """
-    Similar to prep_data (see prep_data). The difference is that sigma is calculated from the input data and not from
-    a user input. This is implemented as follows:
+    """ Mean-normalized the input data where sigma is calculated from the input, filtered data and not from
+    an externally provided sigma.
+
+    Implemented as follows:
         - First, filter image to focus on the granulation
-        - Sigma-clip outlyers (e.g. sunspots)
+        - Sigma-clip outliers (e.g. sunspots)
         - Get mean and standard deviation from the masked array, not affected by bad invalid values (sunspot, ...)
         - Generate the data surface from the image with the masked mean and sigma
 
-    :param image: input image e.g continuum intensity from SDO/HMI (2D array)
-    :param sigma_factor: Multiplier to the standard deviation (scalar)
-    :param pixel_radius: radius of the fourier filter converted in spatial domain units (pixels) instead of k-space.
-    :return: data surface (2D array)
+    Args:
+        image (ndarray): input image e.g continuum intensity from SDO/HMI
+        sigma_factor (float): Multiplier to the standard deviation
+        pixel_radius (float): radius of the fourier filter converted in spatial domain units (pixels) instead of k-space
+
+    Returns:
+        surface (ndarray): data surface
+        mean: mean of the data used to offset
+        sigma: standard deviation of the filtered image used to normalize before multiplying by the sigma_factor
     """
+
     # Filter the image to isolate granulation. Ignored if pixel_radius = 0
     if pixel_radius == 0:
         fdata = image
@@ -529,44 +596,10 @@ def prep_data2(image, sigma_factor=1, pixel_radius=0):
     return surface, mean, sigma
 
 
-def coarse_grid_pos(bt, x, y):
-
-    # Get the position on the coarse grid, clipped to the edges of that grid.
-    xcoarse = np.uint32(np.clip(np.floor(x / bt.ballspacing), 0, bt.nxc_ - 1))
-    ycoarse = np.uint32(np.clip(np.floor(y / bt.ballspacing), 0, bt.nyc_ - 1))
-    # Convert to linear (1D) indices. One index per ball
-    coarse_idx = np.ravel_multi_index((ycoarse, xcoarse), bt.coarse_grid.shape)
-    return xcoarse, ycoarse, coarse_idx
-
-
-def fill_coarse_grid(bt, x, y):
-    """
-    Fill coarse_grid as a chess board: the positions in the original grid are mapped to the coarse grid points
-    And each of the mapped grid points are incremented by 1.
-
-    :param x: x-coordinate in original grid
-    :param y: y-coordinate in original grid
-    :return: coarse grid filled like a chess board.
-    """
-    # Favor clarity and stay in 2D coordinates instead of linear indices.
-    xcoarse, ycoarse, _ = coarse_grid_pos(bt, x, y)
-    chess_board = bt.coarse_grid.copy()
-    np.add.at(chess_board, (ycoarse, xcoarse), 1)
-    return chess_board
-
-
-def initialize_mesh(bt):
-    # Initial horizontal (x,y) positions
-    x_start_points = np.arange(bt.ballspacing, bt.nx - bt.ballspacing + 1, bt.ballspacing,
-                               dtype=np.float32)
-    y_start_points = np.arange(bt.ballspacing, bt.ny - bt.ballspacing + 1, bt.ballspacing,
-                               dtype=np.float32)
-    xstart, ystart = np.meshgrid(x_start_points, y_start_points)
-    return xstart, ystart
-
-
 def put_balls_on_surface(surface, x, y, rs, dp):
-    if x.ndim !=1 or y.ndim !=1:
+    """Initialize the vertical position of the balls for given x,y coordinates"""
+
+    if x.ndim != 1 or y.ndim != 1:
         sys.exit("Input coordinates have incorrect dimensions. "
                  "x and y must be 1D numpy arrays")
 
@@ -576,6 +609,7 @@ def put_balls_on_surface(surface, x, y, rs, dp):
 
 
 def integrate_motion(bt, surface, return_copies=False):
+    """Integrate balls position for one integration step"""
 
     # Get the valid balls & unpack vector components for better readability
     #print("Get the valid balls")
@@ -591,7 +625,7 @@ def integrate_motion(bt, surface, return_copies=False):
     # "ds" stands for "data surface"
     # These interpolations gives identical results in Matlab
     ds = cinterp.bilin_interp2f(surface, bcols, brows)
-    fxt, fyt, fzt = compute_force(bt, brows, bcols, xt, yt, zt, ds)
+    fxt, fyt, fzt = compute_force(bt.rs, bt.am, bt.k_force, brows, bcols, xt, yt, zt, ds)
 
     # Integrate velocity
     vxt += fxt
@@ -616,10 +650,9 @@ def integrate_motion(bt, surface, return_copies=False):
         return bt.pos.copy(), bt.vel.copy(), force
 
 
-def compute_force(bt, brows, bcols, xt, yt, zt, ds):
-    # need to work out the correct indices. r is 2D but xt, yt are 1D
-    # => define an intermediate variable to calculate the delta;
-    # the minus operation is propagated to either dimensions.
+def compute_force(rs, am, k_force, brows, bcols, xt, yt, zt, ds):
+    """Compute the Newtonian forces that pushes the balls toward local minima"""
+
     delta_x = xt - bcols
     delta_y = yt - brows
     delta_z = ds - zt
@@ -628,11 +661,11 @@ def compute_force(bt, brows, bcols, xt, yt, zt, ds):
     # Singularity at r = 0. Need to get rid of them and force beyond the radius must be set to zero
     # Need to fill the masked values before the summation. Otherwise, subtracting bt.am on a masked value still gives a
     # masked value, instead of -bt.am = -1.0.
-    rmask = np.logical_or(r == 0, r > bt.rs)
-    rm = np.ma.masked_array(r, mask= rmask)
+    rmask = np.logical_or(r == 0, r > rs)
+    rm = np.ma.masked_array(r, mask=rmask)
     # When the sum is performed on an entirely masked row (1 ball grid), we must not end up with the default filled value
     # instead, we must get fn = 0 for that row. The fill_value =0 takes care of that.
-    fn = bt.k_force * (rm - bt.rs)/rm
+    fn = k_force * (rm - rs)/rm
 
     fxtm = -np.ma.sum(fn * delta_x, 0)
     fytm = -np.ma.sum(fn * delta_y, 0)
@@ -642,24 +675,9 @@ def compute_force(bt, brows, bcols, xt, yt, zt, ds):
     fztm = -np.ma.sum(fn * np.abs(delta_z), 0)
     # On a few previous versions this was mistakenly resulting in all force components = 0 when filling the value after
     # the subtraction by bt.am.
-    fzt = np.ma.filled(fztm, fill_value=0) - bt.am
-
+    fzt = np.ma.filled(fztm, fill_value=0) - am
 
     return fxt, fyt, fzt
-
-
-# def compute_force(bt, brows, bcols, xt, yt, zt, ds):
-#     r = np.sqrt((bcols - xt) ** 2 + (brows - yt) ** 2 + (ds - zt) ** 2)
-#     # Force that are beyond the radius must be set to zero
-#     f = bt.k_force * (r - bt.rs)
-#     f[r > bt.rs] = 0
-#     # Calculate each force vector component
-#     fxt = -np.sum(f * (xt - bcols) / r, 0)
-#     fyt = -np.sum(f * (yt - brows) / r, 0)
-#     # Buoyancy must stay oriented upward. Used to be signed, but that caused more lost balls without other advantage
-#     fzt = -np.sum(f * np.abs(zt - ds) / r, 0) - bt.am
-#
-#     return fxt, fyt, fzt
 
 
 def ravel_index(x, dims):
@@ -670,165 +688,34 @@ def ravel_index(x, dims):
     return int(i)
 
 
-def get_bad_balls(bt):
-    # See discussion at https://stackoverflow.com/questions/44802033/efficiently-index-2d-numpy-array-using-two-1d-arrays
-    # and https://stackoverflow.com/questions/36863404/accumulate-constant-value-in-numpy-array
-    #xpos0, ypos0, zpos0 = bt.pos
+def get_off_edges_mask(rs, nx, ny, x, y):
 
-    # Bad balls are flagged with -1 in the pos array. They will be excluded from the comparisons below
-    bad_balls1_mask = get_outliers(bt)
-
-    # Ignore these bad balls in the arrays and enforce continuity principle
-    valid_balls = np.logical_not(bad_balls1_mask)
-    valid_balls_idx = np.nonzero(valid_balls)[0]
-    #valid_balls = np.logical_not(bad_balls1_mask)
-    # Map back to original balls indices
-    #valid_balls_idx = np.nonzero(valid_balls)[0]
-
-    xpos, ypos, zpos = bt.pos[:, valid_balls]
-    balls_age = bt.balls_age[valid_balls]
-
-    # Get the 1D position on the coarse grid, clipped to the edges of that grid.
-    _, _, coarse_pos = coarse_grid_pos(bt, xpos, ypos)
-
-    # Get ball number and balls age sorted by position, sort positions too, and array of valid balls indices as well!!!
-    sorted_balls = np.argsort(coarse_pos)
-    balls_age = balls_age[sorted_balls]
-    coarse_pos = coarse_pos[sorted_balls]
-    valid_balls_idx = valid_balls_idx[sorted_balls]
-    # There can be repetitions in the coarse_pos because there can be more than one ball per finegrid cell.
-    # The point is to keep only one ball per coarse grid point: the oldest.
-    # So we need to sort coarse_pos further using the balls age as weight and extract a unique set where each ball is the oldest
-    sidx = np.lexsort([balls_age, coarse_pos])
-    # Indices of the valid balls to keep
-    unique_oldest_balls = valid_balls_idx[ sidx[ np.r_[np.flatnonzero(coarse_pos[1:] != coarse_pos[:-1]), -1] ] ]
-
-    # Now the point is to have a mask or list of balls at overpopulated cells.
-    # They are simply the ones not listed by unique_oldest_balls
-    bad_full_balls = np.ones([bt.nballs], dtype=bool)
-    bad_full_balls[unique_oldest_balls] = False
-    # The bad balls are not just the ones in overpopulated cells, there's also the ones off edges & sunk balls
-    #bad_balls_mask = np.logical_or(bad_balls1, bad_full_balls)
-    bt.bad_balls_mask = np.logical_or(bad_balls1_mask, bad_full_balls)
-
-    return
-
-
-def get_outliers(bt):
-
-    x, y, z = bt.pos
-    sunk = z < bt.min_ds_
-    off_edges_mask = get_off_edges(bt, x, y)
-    outlier_mask = np.logical_or(sunk, off_edges_mask)
-
-    return outlier_mask
-
-
-def get_off_edges(bt, x,y):
-
-    off_edge_left = x - bt.rs < 0
-    off_edge_right = x + bt.rs > bt.nx - 1
-    off_edge_bottom = y - bt.rs < 0
-    off_edge_top = y + bt.rs > bt.ny - 1
+    off_edge_left = x - rs < 0
+    off_edge_right = x + rs > nx - 1
+    off_edge_bottom = y - rs < 0
+    off_edge_top = y + rs > ny - 1
     off_edges_mask = np.logical_or.reduce(np.array((off_edge_left, off_edge_right, off_edge_bottom, off_edge_top)))
 
     return off_edges_mask
 
 
-
-def replace_bad_balls(surface, bt):
-
-    nbadballs = bt.bad_balls_mask.sum()
-
-    # Get the mask of the valid balls that we are going to keep
-    valid_balls_mask = np.logical_not(bt.bad_balls_mask)
-    # Work with with views on coordinate and velocity arrays of valid balls for clarity (instead of working with pos[:, :, valid_balls_mask] directly)
-    xpos, ypos, zpos = bt.pos[:, valid_balls_mask]
-
-    # Get the 1D position on the coarse grid, clipped to the edges of that grid.
-    _, _, coarse_pos_idx = coarse_grid_pos(bt, xpos, ypos)
-
-    # Set these positions on the coarse grid as filled. Remember that to avoid putting new balls on the edge, the coarse_grid is pre-filled with ones at its edges
-    # See discussion at https://stackoverflow.com/questions/44802033/efficiently-index-2d-numpy-array-using-two-1d-arrays
-    coarse_grid = bt.coarse_grid.copy()
-    coarse_grid.ravel()[coarse_pos_idx] = 1
-    y0, x0 = np.where(coarse_grid == 0)
-    nemptycells = x0.size
-
-    if nemptycells <= nbadballs:
-
-        # Get the indices of bad balls in order to assign them with new positions
-        bad_balls_idx = np.nonzero(bt.bad_balls_mask)[0][0:nemptycells]
-        # Relocate the previously flagged balls in all the empty cells
-        # IMPROVEMENT with respect to Matlab version:
-        # y0, x0 above are from np.where => integer values! All values in xnew, ynew are integers.
-        # => There is no need to interpolate in put_ball_on_surface!
-        xnew = bt.ballspacing * x0.astype(np.float32)#+ bt.rs
-        ynew = bt.ballspacing * y0.astype(np.float32)#+ bt.rs
-        znew = put_balls_on_surface(surface, xnew, ynew, bt.rs, bt.dp)
-
-        bt.pos[0, bad_balls_idx] = xnew
-        bt.pos[1, bad_balls_idx] = ynew
-        bt.pos[2, bad_balls_idx] = znew
-        # Reset the velocity and age at these new positions
-        bt.vel[:, bad_balls_idx] = 0
-        bt.balls_age[bad_balls_idx] = 0
-
-        # Rest of bad balls
-        bad_balls_remaining_idx = np.nonzero(bt.bad_balls_mask)[0][nemptycells:nbadballs]
-
-        # Update the list valid balls in bt.new_valid_balls_mask
-        new_valid_balls_mask = np.ones([bt.nballs], dtype = bool)
-        new_valid_balls_mask[bad_balls_remaining_idx] = False
-        bt.new_valid_balls_mask = new_valid_balls_mask
-
-    else:
-        # This case means the number of bad balls available for relocation is smaller than the number of empty cells where they can be relocated.
-        # This means the continuity principle is not satisfied and needs investigation.
-        raise SystemExit('The number of empy cells is greater than the number of bad balls.')
-
-    return xnew, ynew
-
-
-
-def replace_bad_balls1(pos, bt):
-    # Get the position on the finegrid
-
-    # Get the position on the coarse grid, clipped to the edges of that grid.
-    xcoarse = np.round(pos[0, :] / bt.ballspacing).clip(0, bt.nxc_).astype(np.uint32)
-    ycoarse = np.round(pos[1, :] / bt.ballspacing).clip(0, bt.nyc_).astype(np.uint32)
-
-    bt.coarse_grid[ycoarse, xcoarse] = 1
-
-    return xcoarse, ycoarse
-
-
-def replace_bad_balls2(pos, bt):
-    # Get the position on the coarse grid, clipped to the edges of that grid.
-    xcoarse = np.round(pos[0, :] / bt.ballspacing).clip(0, bt.nxc_).astype(np.uint32)
-    ycoarse = np.round(pos[1, :] / bt.ballspacing).clip(0, bt.nyc_).astype(np.uint32)
-
-    # Convert to linear (1D) indices
-    idx = np.ravel_multi_index((ycoarse, xcoarse), bt.coarse_grid.shape)
-    bt.coarse_grid.flat[idx] = 1
-
-    # x = np.bincount(idx, minlength=bt.coarse_grid.size)
-    # bt.coarse_grid.flat += x
-
-    return xcoarse, ycoarse
-
-
 def make_velocity_from_tracks(ballpos, dims, trange, fwhm, kernel='gaussian'):
-    """
-    Calculate the velocity field, i.e, differentiate the position to get the velocity in Lagrange ref. frame and
+    """ Calculate the velocity field
+
+    Differentiate the position to get the velocity in Lagrange ref. frame and
     convert to Euler ref. frame.
 
-    :param ballpos: array of ball positions. Dimensions are [xyz, ball number, time]
-    :param dims: dimensions of the images used for the tracking.
-    :param trange: sequence of [1st index, last index[ on time axis over which the flows are averaged
-    :param fwhm: full width at half maximum for the spatial gaussian smoothing.
-    :param kernel: kernel for smoothing the velocity: either 'gaussian' or 'boxcar'
-    :return: 2 components of the flow fields and the weight plane.
+    Args:
+        ballpos (ndarray): array of ball positions. Dimensions are [xyz, ball number, time]
+        dims (tuple): (ny, nx) dimensions of the images used for the tracking.
+        trange (sequence): sequence of [1st index, last index[ on time axis over which the flows are averaged
+        fwhm (int): full width at half maximum for the spatial gaussian smoothing.
+        kernel (str): kernel for smoothing the velocity: either 'gaussian' or 'boxcar'
+
+    Returns:
+        vx (ndarray): 2D x-component of the flow field
+        vy (ndarray): 2D y-component of the flow field
+        wplane (ndarray): weight plane
     """
 
     # Slices for differentiating the ball positions, in ascending start & end frame number
@@ -904,17 +791,6 @@ def make_velocity_from_tracks(ballpos, dims, trange, fwhm, kernel='gaussian'):
     return vx_euler, vy_euler, wplane
 
 
-def initialize_ball_vector(xstart, ystart, zstart):
-    # Initialize balls at user-supplied positions
-    pos = np.array([xstart, ystart, zstart], dtype=np.float32)
-    if pos.ndim == 1:
-        pos = pos[:, np.newaxis]
-
-    vel = np.zeros(pos.shape, dtype=np.float32)
-
-    return pos, vel
-
-
 def bilin_interp_d(image, x, y):
     # Bilinear interpolation. About 7x to 10x slower than the Cython implementation.
     x0 = np.floor(x).astype(int)
@@ -922,10 +798,10 @@ def bilin_interp_d(image, x, y):
     y0 = np.floor(y).astype(int)
     y1 = y0 + 1
 
-    q00 = image[ y0, x0 ]
-    q01 = image[ y1, x0 ]
-    q10 = image[ y0, x1 ]
-    q11 = image[ y1, x1 ]
+    q00 = image[y0, x0]
+    q01 = image[y1, x0]
+    q10 = image[y0, x1]
+    q11 = image[y1, x1]
 
     dx0 = x - x0
     dy0 = y - y0
@@ -965,21 +841,6 @@ def bilin_interp_f(image, x, y):
     return w11*q00 + w10*q01 + w01*q10 + w00*q11
 
 
-def gauss2d(size,  sigma):
-
-    xgrid, ygrid = np.meshgrid(np.arange(size), np.arange(size))
-    r = np.sqrt((xgrid - (size / 2 - 0.5)) ** 2 + (ygrid - (size / 2 - 0.5)) ** 2)
-    gauss = 1 - np.exp(- r**2 / (2*sigma**2))
-
-    return gauss
-
-# Display functions
-def show_ballpos(image, ballpos):
-    plt.figure(1)
-    plt.imshow(image, cmap='gray', origin='lower')
-    plt.plot(ballpos[:,0], ballpos[:,1], 'r.')
-
-
 def mesh_ball(rs):
 
     # number of mesh points along 1 dimension
@@ -991,62 +852,9 @@ def mesh_ball(rs):
     x = rs * cos(th)
     y = rs * sin(th) * cos(ph)
     z = rs * sin(th) * sin(ph)
-    return x,y,z
+    return x, y, z
 
 ### Numpy-only function (no C, no Cython)
-
-def integrate_motion0(pos, vel, bt, surface):
-    """
-    Integrate the motion of a series of balls. This is one integration step.
-    Position and velocity are changed in place.
-    Either use a loop or a list comprehension to integrate over more than one time step
-
-    :param pos: input and output x, y, z coordinates (1D array)
-    :param vel: input and output velocity. (1D array)
-    :param bt: BT instance
-    :param surface: data surface (2D array)
-    :return:
-    """
-    # Unpack vector components for better readability
-    xt, yt, zt = pos
-    vxt, vyt, vzt = vel
-
-    # Update the balls grids with current positions
-    # bcols and brows have dimensions = [prod(ballgrid.shape), nballs]
-    bcols = np.clip(bt.bcols + xt, 0, bt.nx - 1).squeeze()
-    brows = np.clip(bt.brows + yt, 0, bt.ny - 1).squeeze()
-
-    # "ds" stands for "data surface"
-    ds = bilin_interp_f(surface, bcols, brows)
-
-
-    fxt, fyt, fzt = compute_force(bt, brows, bcols, xt, yt, zt, ds)
-
-    # Integrate velocity
-    vxt += fxt
-    vyt += fyt
-    vzt += fzt
-
-    # Integrate position including effect of a damped velocity
-    # Damping is added arbitrarily for the stability of the code.
-    pos[0, :] += vxt * bt.td_ * (1 - bt.e_td_)
-    pos[1, :] += vyt * bt.td_ * (1 - bt.e_td_)
-    pos[2, :] += vzt * bt.zdamping * (1 - bt.e_tdz_)
-    # Update the velocity with the damping used above
-    vel[0, :] *= bt.e_td_
-    vel[1, :] *= bt.e_td_
-    vel[2, :] *= bt.e_tdz_
-
-    force = np.array([fxt, fyt, fzt])
-
-    #return xt, yt, zt, vxt, vyt, vzt, fxt, fyt, fzt
-    # return xt.copy(), yt.copy(), zt.copy(), vxt.copy(), vyt.copy(), vzt.copy(), fxt.copy(), fyt.copy(), fzt.copy()
-    return pos.copy(), vel.copy(), force
-
-
-
-
-
 
 
 ##############################################################################################################
