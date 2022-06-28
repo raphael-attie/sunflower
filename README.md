@@ -24,8 +24,8 @@ you compile the necessary balltracking binaries written with Cython as follows:
 - run ``python setup_cbinterp.py build_ext --inplace`` 
 
 ### How do I get the code running
-For Balltracking, the main function is `balltrack_all` in [balltrack.py](https://github.com/raphael-attie/sunflower/blob/master/balltracking/balltrack.py). 
-For Magnetic Balltracking, the main function is `track_all_frames` in [mballtrack.py](https://github.com/raphael-attie/sunflower/blob/master/balltracking/balltrack.py).
+- For Balltracking, the main function is `balltrack_all` in [balltrack.py](https://github.com/raphael-attie/sunflower/blob/master/balltracking/balltrack.py). 
+- For Magnetic Balltracking, the main function is `track_all_frames` in [mballtrack.py](https://github.com/raphael-attie/sunflower/blob/master/balltracking/balltrack.py).
 
 **Come back soon for self-reproducible examples.** 
 
