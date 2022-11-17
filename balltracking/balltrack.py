@@ -14,9 +14,9 @@ from multiprocessing import Pool
 from functools import partial
 from pathlib import Path
 from scipy.signal import convolve2d
-from ..cython_modules import interp as cinterp
-from .. import filters
-from .. import fitstools
+from cython_modules import interp as cinterp
+import filters
+import fitstools
 
 DTYPE = np.float32
 class BT:
