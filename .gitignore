@@ -3,6 +3,7 @@
 scratch_notebooks/
 cython_modules/__pycache__/
 cython_modules/build/
+*.pyc
 .DS_Store
 *.pyc
 .ipynb_checkpoints
