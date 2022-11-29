@@ -14,8 +14,8 @@ DTYPE = np.float32
 
 class MBT:
 
-    def __init__(self, rs=2, am=1, dp=0.3, td=5, tdx=5, tdy=5, zdamping=1,
-                 ballspacing=10, intsteps=15, nt=1, mag_thresh=30, noise_level=20, polarity=1,
+    def __init__(self, rs=2, am=1, dp=0.3, td=None, tdx=5, tdy=5, zdamping=1,
+                 ballspacing=10, intsteps=15, nt=1, mag_thresh=30, noise_level=20, polarity=True,
                  init_pos=None, track_emergence=False, emergence_box=10, datafiles=None, data=None,
                  prep_function=None, local_min=False, roi=None, fig_dir=None, do_plots=False, astropy=False,
                  verbose=True):
@@ -35,7 +35,7 @@ class MBT:
             nt (int): nb of frames to track
             mag_thresh (int): magnetogram pixel threshold above which local extrema are search at initialization
             noise_level (int): magnetogram pixel threshold below which the tracking stops for a ball centered on that pixel
-            polarity (int): magnetic polarity (1 or 0 for pos/neg) of the magnetic elements that are to be tracked
+            polarity (bool): magnetic polarity (True or False for pos/neg) of the magnetic elements that are to be tracked
             init_pos (ndarray): initial positions of the balls
             track_emergence (bool): enable/disable the tracking of new feature appearing after the 1st frame
             emergence_box (int): detection threshold setting a minimum distance between a ball and nearest emergence
@@ -75,20 +75,21 @@ class MBT:
 
         self.nx = self.image.shape[1]
         self.ny = self.image.shape[0]
-        # Contrary to the Matlab implementation, and given the new way of initialization with locating the local extrema,
-        # it seems more sensible to use a coarse grid with a grid size  < ballspacing.
-        # A grid size of one ball diameter appears reasonable. That defines the "removal_distance"
+
         self.removal_distance = 2 * self.rs
 
         # Force scaling factor
         self.k_force = self.am / (self.dp**2 * pi * self.rs**2)
         # Damping
-        if self.td is not None:
-            self.tdx = self.td
-            self.tdy = self.td
+        if td is not None:
+            self.tdx = td
+            self.tdy = td
+        else:
+            self.tdx = tdx
+            self.tdy = tdy
         self.zdamping = zdamping
 
-        # Precalculate some damping terms, as they can be used rather repeatedly
+        # Precalculate some damping terms, as they can be used many times
         self.e_tdx_ = np.exp(-1 / self.tdx)
         self.e_tdy_ = np.exp(-1 / self.tdy)
         self.e_tdz_ = np.exp(-1 / self.zdamping)
@@ -247,7 +248,7 @@ class MBT:
             newposx = flux_posx[populate_flux_mask].view('int32').copy(order='C')
             newposy = flux_posy[populate_flux_mask].view('int32').copy(order='C')
 
-            within_edges_mask = np.logical_not(blt.get_off_edges(self, newposx, newposy))
+            within_edges_mask = np.logical_not(blt.get_off_edges_mask(self.rs, self.nx, self.ny, newposx, newposy))
             newposx = newposx[within_edges_mask]
             newposy = newposy[within_edges_mask]
 
@@ -296,7 +297,7 @@ class MBT:
 
         # It is important to first get rid of the off-edge ones so we can use direct coordinate look-up instead of
         # interpolating the values, which would be troublesome with off-edge coordinates.
-        off_edges_mask = blt.get_off_edges(self, self.pos[0, :], self.pos[1, :])
+        off_edges_mask = blt.get_off_edges_mask(self.rs, self.nx, self.ny, self.pos[0, :], self.pos[1, :])
         # Ignore these bad balls in the arrays and enforce continuity principle
         valid_balls_mask = np.logical_not(off_edges_mask)
         valid_balls_idx = np.nonzero(valid_balls_mask)[0]
@@ -370,6 +371,30 @@ class MBT:
             image = load_data(self.datafiles, n, astropy=self.astropy, roi=self.roi)
             fig_title = PurePath(self.fig_dir, f'track_figures_{n:04d}.png')
             plot_balls_over_frame(image, self.ballpos[0, :, n], self.ballpos[1, :, n], fig_title, axlims=axlims, **kwargs)
+
+
+def mballtrack_main_positive(**kwargs):
+    """ Main function for Magnetic Balltracking for tracking positive polarity"""
+    mbt_p = MBT(polarity=True, **kwargs)
+    mbt_p.track_all_frames()
+
+    return mbt_p
+
+
+def mballtrack_main_negative(**kwargs):
+    """ Main function for Magnetic Balltracking for tracking negatie polarity"""
+    mbt_n = MBT(polarity=False, **kwargs)
+    mbt_n.track_all_frames()
+
+    return mbt_n
+
+
+def mballtrack_main(**kwargs):
+    """ Main function for Magnetic Balltracking for tracking both polarities independently"""
+    mbt_p = mballtrack_main_positive(**kwargs)
+    mbt_n = mballtrack_main_negative(**kwargs)
+
+    return mbt_p, mbt_n
 
 
 def load_data(datafiles, n, astropy=False, roi=None):
