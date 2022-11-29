@@ -15,7 +15,7 @@ DTYPE = np.float32
 class MBT:
 
     def __init__(self, rs=2, am=1, dp=0.3, td=None, tdx=5, tdy=5, zdamping=1,
-                 ballspacing=10, intsteps=15, nt=1, mag_thresh=30, noise_level=20, polarity=True,
+                 ballspacing=10, intsteps=15, nt=1, mag_thresh=30, noise_level=20, polarity=1,
                  init_pos=None, track_emergence=False, emergence_box=10, datafiles=None, data=None,
                  prep_function=None, local_min=False, roi=None, fig_dir=None, do_plots=False, astropy=False,
                  verbose=True):
@@ -35,7 +35,7 @@ class MBT:
             nt (int): nb of frames to track
             mag_thresh (int): magnetogram pixel threshold above which local extrema are search at initialization
             noise_level (int): magnetogram pixel threshold below which the tracking stops for a ball centered on that pixel
-            polarity (bool): magnetic polarity (True or False for pos/neg) of the magnetic elements that are to be tracked
+            polarity (int): magnetic polarity (1 or -1 for pos/neg) of the magnetic elements that are to be tracked
             init_pos (ndarray): initial positions of the balls
             track_emergence (bool): enable/disable the tracking of new feature appearing after the 1st frame
             emergence_box (int): detection threshold setting a minimum distance between a ball and nearest emergence
@@ -375,7 +375,7 @@ class MBT:
 
 def mballtrack_main_positive(**kwargs):
     """ Main function for Magnetic Balltracking for tracking positive polarity"""
-    mbt_p = MBT(polarity=True, **kwargs)
+    mbt_p = MBT(polarity=1, **kwargs)
     mbt_p.track_all_frames()
 
     return mbt_p
@@ -383,7 +383,7 @@ def mballtrack_main_positive(**kwargs):
 
 def mballtrack_main_negative(**kwargs):
     """ Main function for Magnetic Balltracking for tracking negatie polarity"""
-    mbt_n = MBT(polarity=False, **kwargs)
+    mbt_n = MBT(polarity=-1, **kwargs)
     mbt_n.track_all_frames()
 
     return mbt_n
