@@ -13,39 +13,42 @@ DTYPE = np.float32
 
 
 class MBT:
-    """Main class for the Magnetic Balltracking
 
-    Attributes:
-        rs (int): balls radius in pixels
-        am (float) Acceleration factor
-        dp (float): Characteristic percentage depth. 0 < dp < 1
-        td (float): damping term, in units of time intervals between frames
-        tdx (float): damping term in the x-axis, in units of time intervals between frames
-        tdy (float): damping term in the y-axis, in units of time intervals between frames
-        zdamping (float): damping in the z-axis, in units of time intervals between frames
-        ballspacing (int): nb of pixels between balls center at the initialization stage
-        intsteps (int): nb of intermediate frames using linear interpolation.
-        nt (int): nb of frames to track
-        mag_thresh (int): magnetogram pixel threshold above which local extrema are search at initialization
-        noise_level (int): magnetogram pixel threshold below which the tracking stops for a ball centered on that pixel
-        polarity (int): magnetic polarity (1 or 0 for pos/neg) of the magnetic elements that are to be tracked
-        init_pos (ndarray): initial positions of the balls
-        track_emergence (bool): enable/disable the tracking of new feature appearing after the 1st frame
-        emergence_box (int): detection threshold setting a minimum distance between a ball and nearest emergence
-        datafiles (list): list of FITS file paths
-        data (ndarray): instead of providing a list of files with datafiles, one can directly provide a 3D array
-        prep_function (function): function to use for preprocessing an image. Will only accept an image as argument
-        local_min (bool): True / False, resp., will track for local minima / maxima, resp.
-        roi (tuple): (ymin, ymax, xmin, xmax) of a fixed region of interest in the images for faster computation
-        fig_dir (str): directory path for storing figures
-        do_plots (bool): set whether to export intermediate steps as figures (mostly for debug)
-        astropy (bool): False will use the fitsio package for fits files. fitsio package does not work well on Windows.
-    """
     def __init__(self, rs=2, am=1, dp=0.3, td=5, tdx=5, tdy=5, zdamping=1,
                  ballspacing=10, intsteps=15, nt=1, mag_thresh=30, noise_level=20, polarity=1,
                  init_pos=None, track_emergence=False, emergence_box=10, datafiles=None, data=None,
                  prep_function=None, local_min=False, roi=None, fig_dir=None, do_plots=False, astropy=False,
                  verbose=True):
+
+        """ Main class for Magnetic Balltracking
+
+        Args:
+            rs (int): balls radius in pixels
+            am (float) Acceleration factor
+            dp (float): Characteristic percentage depth. 0 < dp < 1
+            td (float): damping term, in units of time intervals between frames
+            tdx (float): damping term in the x-axis, in units of time intervals between frames
+            tdy (float): damping term in the y-axis, in units of time intervals between frames
+            zdamping (float): damping in the z-axis, in units of time intervals between frames
+            ballspacing (int): nb of pixels between balls center at the initialization stage
+            intsteps (int): nb of intermediate frames using linear interpolation.
+            nt (int): nb of frames to track
+            mag_thresh (int): magnetogram pixel threshold above which local extrema are search at initialization
+            noise_level (int): magnetogram pixel threshold below which the tracking stops for a ball centered on that pixel
+            polarity (int): magnetic polarity (1 or 0 for pos/neg) of the magnetic elements that are to be tracked
+            init_pos (ndarray): initial positions of the balls
+            track_emergence (bool): enable/disable the tracking of new feature appearing after the 1st frame
+            emergence_box (int): detection threshold setting a minimum distance between a ball and nearest emergence
+            datafiles (list): list of FITS file paths
+            data (ndarray): instead of providing a list of files with datafiles, one can directly provide a 3D array
+            prep_function (function): function to use for preprocessing an image. Will only accept an image as argument
+            local_min (bool): True / False, resp., will track for local minima / maxima, resp.
+            roi (tuple): (ymin, ymax, xmin, xmax) of a fixed region of interest in the images for faster computation
+            fig_dir (str): directory path for storing figures
+            do_plots (bool): set whether to export intermediate steps as figures (mostly for debug)
+            astropy (bool): False will use the fitsio package for fits files. fitsio package does not work well on Windows.
+            verbose (bool): toggles verbosity
+        """
 
         self.rs = rs
         self.am = am

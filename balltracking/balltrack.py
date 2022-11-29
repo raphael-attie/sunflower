@@ -19,6 +19,8 @@ import filters
 import fitstools
 
 DTYPE = np.float32
+
+
 class BT:
 
     def __init__(self, rs, dp, ballspacing, intsteps, sigma_factor, fourier_radius, nt, mode, direction, datafiles=None, data=None,
@@ -256,6 +258,13 @@ class BT:
             self.ballvel = np.flip(self.ballvel, 2)
 
     def get_bad_balls(self):
+        """
+        Mask out all the balls that are outside the tracking requirements.
+
+        Returns
+        -------
+
+        """
         # See discussion at https://stackoverflow.com/questions/44802033/efficiently-index-2d-numpy-array-using-two-1d-arrays
         # and https://stackoverflow.com/questions/36863404/accumulate-constant-value-in-numpy-array
         # xpos0, ypos0, zpos0 = bt.pos
@@ -299,7 +308,13 @@ class BT:
         return
 
     def get_outliers_mask(self):
+        """
+        Create the mask of balls that are falling off the 3D surface.
 
+        Returns
+        -------
+
+        """
         x, y, z = self.pos
         sunk = z < self.min_ds_
         off_edges_mask = get_off_edges_mask(self.rs, self.nx, self.ny, x, y)
@@ -308,7 +323,17 @@ class BT:
         return outliers_mask
 
     def replace_bad_balls(self, surface):
+        """
+        Repopulate the data surface with a new set of balls whose number is consistent with the masked out balls.
 
+        Parameters
+        ----------
+        surface : data surface to be repopulated
+
+        Returns
+        -------
+        Array of x,y coordinates of the new balls
+        """
         nbadballs = self.bad_balls_mask.sum()
         # Get the mask of the valid balls that we are going to keep
         valid_balls_mask = np.logical_not(self.bad_balls_mask)
@@ -368,7 +393,18 @@ class BT:
 
 
 def initialize_mesh(ballspacing, nx, ny):
-    """ Initial horizontal (x,y) positions into a regular, cartesian grid"""
+    """
+    Initial horizontal (x,y) positions into a regular, cartesian grid
+
+    Args:
+        ballspacing (int): Initial spacing between the balls
+        nx (int): size of image horizontal axis in pixels
+        ny (int): size of image vertical axis in pixels
+
+    Returns:
+        x (horizontal) and y (vertical) coordinates of initial positions
+
+    """
 
     x_start_points = np.arange(ballspacing, nx - ballspacing + 1, ballspacing, dtype=DTYPE)
     y_start_points = np.arange(ballspacing, ny - ballspacing + 1, ballspacing, dtype=DTYPE)
@@ -377,20 +413,21 @@ def initialize_mesh(ballspacing, nx, ny):
 
 
 def track_instance(params, side_direction, datafiles=None, data=None):
-
     """
     Wrapper to run balltracking on a given tuple of (side, direction).
     This routine must be executed with 4 of these pairs for minimizing the random error.
+    Either the list of files or numpy array of images must be provided.
 
     Args:
         params (dict): ball parameters for the BT class
-        side_direction (tuple): must wrap (BT.mode) and (BT.direction), e.g. ('top', 'forward'), ('bottom', 'backward')
-        datafiles (str or list): path to data cube file or list of FITS files
-        data (ndarray): Series of 3D Numpy arrays with time on the 3rd index: (y-axis, x-axis, time-axis)
+        side_direction (tuple): (BT.mode) and (BT.direction) listed as ('top', 'forward') or ('bottom', 'backward')
+        datafiles (list): path to data cube file or list of FITS files. Ignored if `data` is provided.
+        data (ndarray): Series of 3D Numpy arrays with time on the 3rd index: (y-axis, x-axis, time-axis).
 
     Returns:
-        BT.ballpos (ndarray): Array storing the positions of the balls at each frame
+        BT.ballpos : Array storing the positions of the balls at each frame
     """
+
     print(side_direction)
 
     params_side = params[side_direction[0]]
@@ -409,8 +446,8 @@ def track_instance(params, side_direction, datafiles=None, data=None):
 
 
 def balltrack_all(params, datafiles=None, data=None, write_ballpos=True, ncores=1):
-
-    """ Run the tracking on the 4 (mode, direction) pairs:
+    """
+    Run the tracking on the 4 (mode, direction) pairs:
     (('top', 'forward'),
      ('top', 'backward'),
      ('bottom', 'forward'),
@@ -427,8 +464,8 @@ def balltrack_all(params, datafiles=None, data=None, write_ballpos=True, ncores=
             Default is 1 for sequential processing. There can up to 4 workers for these parallel tasks (2-3x speed-up)
 
     Returns:
-        ballpos_top: 3D array of ball positions for top-side tracking -> [xyz, ball #, time]
-        ballpos_bottom: 3D array of ball positions for bottom-side tracking -> [xyz, ball #, time]
+        ballpos_top : 3D array of ball positions for top-side tracking -> [xyz, ball #, time]
+        ballpos_bottom : 3D array of ball positions for bottom-side tracking -> [xyz, ball #, time]
 
     """
     if write_ballpos and 'outputdir' not in params:
@@ -516,7 +553,8 @@ def filter_image(image, pixel_radius=0):
 
 
 def rescale_frame(data, offset, norm_factor):
-    """ Rescales the images for Balltracking.
+    """
+    Rescales the images for Balltracking.
 
     Subtracts the mean from the data and divide by a scaling factor.
     For balltracking, this scaling factor shall be the standard deviation of the whole data series.
@@ -537,7 +575,8 @@ def rescale_frame(data, offset, norm_factor):
 
 
 def prep_data(image, mean, sigma, sigma_factor=1):
-    """ Rescale the image into a data surface
+    """
+    Rescale the image into a data surface
 
     The resulting standard deviation is equal to sigma_factor * sigma, typically between [0, 1] depending
     on the statistical properties of the image series. The data intensity is centered around the mean.
@@ -562,7 +601,8 @@ def prep_data(image, mean, sigma, sigma_factor=1):
 
 
 def prep_data2(image, sigma_factor=1, pixel_radius=0):
-    """ Mean-normalized the input data where sigma is calculated from the input, filtered data and not from
+    """
+    Mean-normalized the input data where sigma is calculated from the input, filtered data and not from
     an externally provided sigma.
 
     Implemented as follows:
@@ -689,7 +729,20 @@ def ravel_index(x, dims):
 
 
 def get_off_edges_mask(rs, nx, ny, x, y):
+    """
+    Create a mask that flags the positions of balls that have crossed the edges of the image
 
+    Args:
+        rs (int): balls radius
+        nx (int): horizontal image size in pixels
+        ny (int): vertical image size in pixels
+        x (ndarray): array of balls x-coordinates
+        y (ndarray): array of balls y-coordinates
+
+    Returns:
+        off_edges_mask (ndarray) : mask of flagged positions. 1-valued where the balls are off the edges.
+
+    """
     off_edge_left = x - rs < 0
     off_edge_right = x + rs > nx - 1
     off_edge_bottom = y - rs < 0
@@ -700,7 +753,8 @@ def get_off_edges_mask(rs, nx, ny, x, y):
 
 
 def make_velocity_from_tracks(ballpos, dims, trange, fwhm, kernel='gaussian'):
-    """ Calculate the velocity field
+    """
+    Calculate the velocity field
 
     Differentiate the position to get the velocity in Lagrange ref. frame and
     convert to Euler ref. frame.
@@ -792,7 +846,8 @@ def make_velocity_from_tracks(ballpos, dims, trange, fwhm, kernel='gaussian'):
 
 
 def bilin_interp_d(image, x, y):
-    # Bilinear interpolation. About 7x to 10x slower than the Cython implementation.
+    """ Bilinear interpolation. About 7x to 10x slower than the Cython implementation. """
+
     x0 = np.floor(x).astype(int)
     x1 = x0 + 1
     y0 = np.floor(y).astype(int)
@@ -816,46 +871,16 @@ def bilin_interp_d(image, x, y):
     return w11*q00 + w10*q01 + w01*q10 + w00*q11
 
 
-def bilin_interp_f(image, x, y):
-    # Bilinear interpolation. About 7x to 10x slower than the Cython implementation.
-    x0 = np.floor(x).astype(int)
-    x1 = x0 + 1
-    y0 = np.floor(y).astype(int)
-    y1 = y0 + 1
-
-    q00 = image[ y0, x0 ]
-    q01 = image[ y1, x0 ]
-    q10 = image[ y0, x1 ]
-    q11 = image[ y1, x1 ]
-
-    dx0 = np.float32(x - x0)
-    dy0 = np.float32(y - y0)
-    dx1 = np.float32(x1 - x)
-    dy1 = np.float32(y1 - y)
-
-    w11 = dx1 * dy1
-    w10 = dx1 * dy0
-    w01 = dx0 * dy1
-    w00 = dx0 * dy0
-
-    return w11*q00 + w10*q01 + w01*q10 + w00*q11
-
-
-def mesh_ball(rs):
-
-    # number of mesh points along 1 dimension
-    p = 20
+def mesh_ball(rs, npts=20):
+    """Creates a spherical mesh"""
     # parametrize mesh
-    t = np.linspace(0, 1, p)
+    t = np.linspace(0, 1, npts)
     th, ph = np.meshgrid(t*pi, t*2*pi)
     # coordinates of sphere mesh
     x = rs * cos(th)
     y = rs * sin(th) * cos(ph)
     z = rs * sin(th) * sin(ph)
     return x, y, z
-
-### Numpy-only function (no C, no Cython)
-
 
 ##############################################################################################################
 #################    Calibration     #########################################################################
