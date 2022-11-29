@@ -83,9 +83,9 @@ class MBT:
         # Force scaling factor
         self.k_force = self.am / (self.dp**2 * pi * self.rs**2)
         # Damping
-        self.td = td
-        self.tdx = tdx
-        self.tdy = tdy
+        if self.td is not None:
+            self.tdx = self.td
+            self.tdy = self.td
         self.zdamping = zdamping
 
         # Precalculate some damping terms, as they can be used rather repeatedly
