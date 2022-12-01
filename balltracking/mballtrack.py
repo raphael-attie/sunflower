@@ -76,8 +76,6 @@ class MBT:
         self.nx = self.image.shape[1]
         self.ny = self.image.shape[0]
 
-        self.removal_distance = 2 * self.rs
-
         # Force scaling factor
         self.k_force = self.am / (self.dp**2 * pi * self.rs**2)
         # Damping
@@ -95,7 +93,7 @@ class MBT:
         self.e_tdz_ = np.exp(-1 / self.zdamping)
 
         # Dimensions of the coarse grid. Used only to remove balls when they are too close to each other
-        self.nxc_, self.nyc_ = np.ceil(self.nx / self.removal_distance).astype(int), np.ceil(self.nx / self.removal_distance).astype(int) #self.coarse_grid.shape
+        self.nxc_, self.nyc_ = np.ceil(self.nx / self.ballspacing).astype(int), np.ceil(self.nx / self.ballspacing).astype(int) #self.coarse_grid.shape
 
         # Deepest height below surface level at which ball can fall down.
         self.min_ds_ = 4 * self.rs
@@ -173,10 +171,17 @@ class MBT:
             if self.verbose:
                 print(f'Frame n={n}: {str(self.datafiles[n])}')
 
-            self.image = load_data(self.datafiles, n, astropy=self.astropy, roi=self.roi)
+            # Load data at current time and next time step for intermediate-step interpolation.
+            if self.data is None:
+                self.image = load_data(self.datafiles, n, astropy=self.astropy, roi=self.roi)
+            else:
+                self.image = self.data[:, :, n]
             self.surface = self.prep_function(self.image)
             if n < self.nt - 1:
-                next_image = load_data(self.datafiles, n + 1, astropy=self.astropy, roi=self.roi)
+                if self.data is None:
+                    next_image = load_data(self.datafiles, n + 1, astropy=self.astropy, roi=self.roi)
+                else:
+                    next_image = self.data[:, :, n + 1]
                 next_surface = self.prep_function(next_image)
             else:
                 next_surface = self.surface
