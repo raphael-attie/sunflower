@@ -556,8 +556,8 @@ def prep_data(image):
 def coarse_grid_pos(mbt, x, y):
 
     # Get the position on the coarse grid, clipped to the edges of that grid.
-    xcoarse = np.uint32(np.clip(np.floor(x / mbt.removal_distance), 0, mbt.nxc_ - 1))
-    ycoarse = np.uint32(np.clip(np.floor(y / mbt.removal_distance), 0, mbt.nyc_ - 1))
+    xcoarse = np.uint32(np.clip(np.floor(x / mbt.ballspacing), 0, mbt.nxc_ - 1))
+    ycoarse = np.uint32(np.clip(np.floor(y / mbt.ballspacing), 0, mbt.nyc_ - 1))
     # Convert to linear (1D) indices. One index per ball
     #coarse_idx = np.ravel_multi_index((ycoarse, xcoarse), mbt.coarse_grid.shape)
     coarse_idx = np.ravel_multi_index((ycoarse, xcoarse), (mbt.nyc_, mbt.nxc_))
