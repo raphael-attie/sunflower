@@ -67,9 +67,9 @@ class BT:
                 self.sample = fitstools.fitsread(self.datafiles, tslice=self.nt - 1).astype(np.float32)
         else:
             if self.direction == 'forward':
-                self.sample = self.data[:, :, 0]
+                self.sample = self.data[0, :, :]
             else:
-                self.sample = self.data[:, :, -1]
+                self.sample = self.data[-1, :, :]
 
         self.nx = int(self.sample.shape[1])
         self.ny = int(self.sample.shape[0])
@@ -209,12 +209,12 @@ class BT:
                 if self.data is None:
                     image = fitstools.fitsread(self.datafiles, tslice=n).astype(np.float32)
                 else:
-                    image = self.data[:, :, n]
+                    image = self.data[n, :, :]
             else:
                 if self.data is None:
                     image = fitstools.fitsread(self.datafiles, tslice=self.nt - 1 - n).astype(np.float32)
                 else:
-                    image = self.data[:, :, self.nt - 1 - n]
+                    image = self.data[self.nt - 1 - n, :, :]
 
             # TODO: check the choice of prep_data regarding mean normalization with fixed mean or time-dependent one
             # self.surface = prep_data(image, self.mean, self.sigma, sigma_factor=self.sigma_factor)
@@ -882,9 +882,12 @@ def mesh_ball(rs, npts=20):
     z = rs * sin(th) * sin(ph)
     return x, y, z
 
+
 ##############################################################################################################
-#################    Calibration     #########################################################################
+# Calibration
 ##############################################################################################################
+
+
 class Calibrator:
 
     def __init__(self, images, drift_rates, trange, rs, ballspacing, dp, sigma_factor, filter_radius, intsteps,
@@ -945,7 +948,6 @@ class Calibrator:
         else:
             self.subdirs = subdirs
 
-
     def drift_series(self, rate_idx):
 
         if self.read_write_drift_images:
@@ -958,10 +960,10 @@ class Calibrator:
                       .format(self.drift_rates[rate_idx][0], self.drift_rates[rate_idx][1]))
 
                 # Get a sample for the size
-                sample = fitstools.fitsread(str(filepaths[0]), cube=false, astropy=True) #fitsio.read(str(filepaths[0]))
+                sample = fitstools.fitsread(str(filepaths[0]), cube=false, astropy=True)
                 drift_images = np.zeros([sample.shape[0], sample.shape[1], self.nframes])
                 for i, f in enumerate(filepaths):
-                    drift_images[:, :, i] = fitstools.fitsread(str(f), cube=false, astropy=True) #fitsio.read(str(f))
+                    drift_images[i, :, :] = fitstools.fitsread(str(f), cube=false, astropy=True)
             elif self.images is not None:
                 # Use the self.images to create the drift images out of them
                 # os.makedirs(self.subdirs[rate_idx], exist_ok=True)
@@ -983,12 +985,10 @@ class Calibrator:
 
         return drift_images
 
-
     def drift_all_rates(self):
         rate_idx_list = range(len(self.drift_rates))
         for idx in rate_idx_list:
-             self.drift_series(idx)
-
+            self.drift_series(idx)
 
     def balltrack_rate(self, rate_idx):
         """
@@ -1025,7 +1025,6 @@ class Calibrator:
 
         ballpos_top, ballpos_bottom = balltrack_all(bt_params, data=drift_images, write_ballpos=False, ncores=1)
         return ballpos_top, ballpos_bottom
-
 
     def balltrack_all_rates(self):
         """
@@ -1082,14 +1081,14 @@ def drift_series(images, drift_rate, subdir, use_existing=True):
         # but it significantly reduces disk usage compared to creating the images all over again.
         print("Reading existing drift images at rate: [{:.2f}, {:.2f}] px/frame".format(drift_rate[0], drift_rate[1]))
         for i in range(nfiles):
-            drift_images[:, :, i] = fitstools.fitsread(str(filepaths[i]), cube=False, astropy=True) #fitsio.read(str(filepaths[i]))
+            drift_images[i, :, :] = fitstools.fitsread(str(filepaths[i]), cube=False, astropy=True)
     else:
         print("Creating drift images at rate: [{:.2f}, {:.2f}] px/frame".format(drift_rate[0], drift_rate[1]))
         for i in range(nfiles):
             dx = -drift_rate[0] * float(i)
             dy = -drift_rate[1]*i
-            drift_images[:,:,i] = filters.translate_by_phase_shift(images[:,:,i], dx, dy)
-            fitstools.writefits(drift_images[:,:,i], filepaths[i])
+            drift_images[i, :, :] = filters.translate_by_phase_shift(images[i, :, :], dx, dy)
+            fitstools.writefits(drift_images[i, :, :], filepaths[i])
 
     return drift_images
 
@@ -1113,16 +1112,16 @@ def create_drift_series(images, drift_rate, filepaths=None, filter_function=None
         drift_images = np.zeros(images.shape)
 
     for i in range(images.shape[2]):
-        if (drift_rate[0] != 0) or (drift_rate[1]!=0):
+        if (drift_rate[0] != 0) or (drift_rate[1] != 0):
             dx = drift_rate[0] * float(i)
             dy = drift_rate[1] * i
-            drift_images[:, :, i] = filters.translate_by_phase_shift(images[:, :, i], dx, dy)
+            drift_images[i, :, :] = filters.translate_by_phase_shift(images[i, :, :], dx, dy)
 
         if filter_function is not None:
-            drift_images[:, :, i] = filter_function(drift_images[:,:,i])
+            drift_images[i, :, :] = filter_function(drift_images[i, :, :])
 
         if filepaths is not None:
-            fitstools.writefits(drift_images[:, :, i], filepaths[i])
+            fitstools.writefits(drift_images[i, :, :], filepaths[i])
 
     return drift_images
 
@@ -1180,8 +1179,6 @@ def check_file_series(filepaths):
     else:
         return False
 
-##############################################################################################################
-##############################################################################################################
 
 def make_euler_velocity(ballpos_top, ballpos_bottom, cal_top, cal_bottom, dims, trange, fwhm, kernel, outputdir=None):
 
@@ -1205,7 +1202,6 @@ def make_euler_velocity(ballpos_top, ballpos_bottom, cal_top, cal_bottom, dims, 
 
 
 def make_euler_velocity_lanes(ballpos_top, ballpos_bottom, cal_top, cal_bottom, dims, tranges, fwhm, nsteps, maxstep, outputdir, kernel='gaussian'):
-
 
     vxl = []
     vyl = []
