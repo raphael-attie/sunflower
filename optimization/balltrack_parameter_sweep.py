@@ -7,11 +7,14 @@ if module_path not in sys.path:
 import balltracking.balltrack as blt
 import numpy as np
 import multiprocessing
-from multiprocessing import Pool
+
 from functools import partial
 from collections import OrderedDict
 from pathlib import Path
 import fitstools
+import ray
+# from multiprocessing import Pool
+from ray.util.multiprocessing import Pool
 
 if __name__ == '__main__':
     # the multiprocessing start method can only bet set once
@@ -57,9 +60,12 @@ if __name__ == '__main__':
     trim = int(vx_rates.max() * nframes + fwhm + 2)
     fov_slices = np.s_[trim:imsize - trim, trim:imsize - trim]
     dims = [imsize, imsize]
+
+    # Put images in Ray object store - shared resource
+    images_ref = ray.put(images)
     # Prepare partial function for parallel pool & map, which can accept only the list of parameters as its argument
     calibrate_partial = partial(blt.full_calibration,
-                                images=images,
+                                images_ref=images_ref,
                                 drift_rates=drift_rates,
                                 trange=trange,
                                 fov_slices=fov_slices,
@@ -70,10 +76,10 @@ if __name__ == '__main__':
                                 dims=dims,
                                 outputdir2=outputdir,
                                 save_ballpos_list=True,
-                                verbose=True,
+                                verbose=False,
                                 nthreads=1)
 
-    with Pool(processes=1) as pool:
+    with Pool(processes=10) as pool:
         pool.map(calibrate_partial, bt_params_list)
 
 # At the end of this parallel job, use "parameter_sweep_velocity_calibration.py" to aggregate everything

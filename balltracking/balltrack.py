@@ -9,7 +9,6 @@ import numpy.ma as ma
 from numpy import pi, cos, sin
 import csv
 import pandas as pd
-import matplotlib.pyplot as plt
 from scipy.ndimage.filters import gaussian_filter
 from multiprocessing import Pool
 from functools import partial
@@ -18,6 +17,7 @@ from scipy.signal import convolve2d
 from cython_modules import interp as cinterp
 import filters
 import fitstools
+import ray
 
 DTYPE = np.float32
 
@@ -62,7 +62,6 @@ class BT:
         self.nt = int(nt)
 
         # Get a sample. 1st of the series in forward direction. last of the series in backward direction.
-        # TODO: It could be wiser to get some average value between 1st, middle, and last of the series?
         if self.data is None:
             if self.direction == 'forward':
                 self.sample = fitstools.fitsread(self.datafiles, tslice=0).astype(np.float32)
@@ -1162,8 +1161,12 @@ def calibration_run_fit(bt_params, ballpos_top_list, ballpos_bottom_list, output
 
 
 def full_calibration(bt_params, drift_rates, trange, fov_slices, reprocess_bt, outputdir, fwhm, dims,
-                     images=None, outputdir2=None, drift_dir=None, basename='drift', save_ballpos_list=True,
+                     images=None, images_ref=None, outputdir2=None, drift_dir=None, basename='drift', save_ballpos_list=True,
                      verbose=False, reprocess_fit=False, nthreads=1):
+
+    if images is None:
+        # image data are in a Ray object store
+        images = ray.get(images_ref)
 
     if reprocess_bt:
         print(f'processing index {bt_params["index"]}')
