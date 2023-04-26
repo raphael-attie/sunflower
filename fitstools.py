@@ -38,10 +38,7 @@ def fitsread(files, xslice=slice(None), yslice=slice(None), tslice=slice(None), 
         else: # Assume and read list of files
             # Load sample to get dimensions
             fitsfiles = files[tslice]
-            sample = fitsio.read(fitsfiles[0])
-            data = np.empty([*sample.shape, len(fitsfiles)], np.float32)
-            for i, datafile in enumerate(fitsfiles):
-                data[i, :, :] = fitsio.read(datafile)
+            data = np.array([fitsio.read(f) for f in fitsfiles])
     return data
 
 
