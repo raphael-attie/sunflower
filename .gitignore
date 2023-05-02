@@ -1,7 +1,6 @@
 .idea
 .cache
 scratch_notebooks/
-cython_modules/__pycache__/
 cython_modules/build/
 *.pyc
 .DS_Store
@@ -10,3 +9,4 @@ cython_modules/build/
 __pycache__
 cython_modules/interp.c
 *.sh
+**/__pycache__/
