@@ -10,3 +10,4 @@ __pycache__
 cython_modules/interp.c
 *.sh
 **/__pycache__/
+*.so
