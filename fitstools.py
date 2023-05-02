@@ -1,4 +1,3 @@
-from importlib import reload
 import os
 import numpy as np
 from astropy.io import fits
@@ -38,7 +37,10 @@ def fitsread(files, xslice=slice(None), yslice=slice(None), tslice=slice(None), 
         else: # Assume and read list of files
             # Load sample to get dimensions
             fitsfiles = files[tslice]
-            data = np.array([fitsio.read(f) for f in fitsfiles])
+            if astropy:
+                data = np.array([getdata(f) for f in fitsfiles])
+            else:
+                data = np.array([fitsio.read(f) for f in fitsfiles])
     return data
 
 

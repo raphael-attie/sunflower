@@ -17,7 +17,6 @@ from scipy.signal import convolve2d
 from cython_modules import interp as cinterp
 import filters
 import fitstools
-import ray
 
 DTYPE = np.float32
 
@@ -434,7 +433,7 @@ def track_instance(params, side_direction, datafiles=None, data=None):
         BT.ballpos : Array storing the positions of the balls at each frame
     """
 
-    print(side_direction)
+    # print(side_direction)
 
     params_side = params[side_direction[0]]
 
@@ -478,8 +477,8 @@ def balltrack_all(params, datafiles=None, data=None, write_ballpos=True, ncores=
             Default is 1 for sequential processing. There can up to 4 workers for these parallel tasks (2-3x speed-up)
 
     Returns:
-        ballpos_top : 3D array of ball positions for top-side tracking -> [xyz, ball #, time]
-        ballpos_bottom : 3D array of ball positions for bottom-side tracking -> [xyz, ball #, time]
+        ballpos_top (ndarray): 3D array of ball positions for top-side tracking -> [xyz, ball #, time]
+        ballpos_bottom (ndarray): 3D array of ball positions for bottom-side tracking -> [xyz, ball #, time]
 
     """
     if write_ballpos and 'outputdir' not in params:
@@ -519,7 +518,7 @@ def calculate_invalid_mask(data, threshold=5):
     The default threshold is 5 times the standard deviation below the mean
 
     Args:
-        data (ndarray): balltracking input image, e.g. as loaded from BT.datafiles or BT.data
+        data (ndarray): balltracking input image, e.g as loaded from BT.datafiles or BT.data
         threshold (int): multiplier to the standard deviation (sigma)
     Returns:
         out (MaskedArray): Numpy Masked Array with off-threshold values masked out
@@ -537,7 +536,7 @@ def filter_image(image, pixel_radius=0):
     Filter the image to enhance granulation signal
 
     Args:
-        image (ndarray): input image e.g continuum intensity from SDO/HMI (2D array).
+        image (ndarray): input image e.g. continuum intensity from SDO/HMI (2D array).
         pixel_radius (int): radius of the fourier filter in spatial domain units (pixels) instead of k-space.
 
     Returns:
@@ -902,9 +901,9 @@ def mesh_ball(rs, npts=20):
 class Calibrator:
 
     def __init__(self, images, drift_rates, trange, bt_params_top, bt_params_bottom, outputdir,
-                 drift_dir=None, output_prep_data=False, read_write_drift_images=False,
-                 filter_function=None, subdirs=None, basename='drift', save_ballpos_list=True, nthreads=1,
-                 reprocess_existing=True, verbose=False, return_ballpos=False, index=0):
+                 read_drift_images=False, drift_dirs=None, output_prep_data=False,
+                 filter_function=None, save_ballpos_list=True, nthreads=1,
+                 reprocess_existing=True, verbose=False, ray_verbose=False, return_ballpos=False, index=0):
 
         """
         Calibrate the top and bottom tracking using a series of images drifting at uniform offset velocities
@@ -916,14 +915,13 @@ class Calibrator:
             trange: list of 2 indices in the list of images for the start and end frame used to calibrate.
             bt_params_top (dict): inputs of top tracking: rs, ballspacing, am, dp, sigma_factor, fourier_radius, intsteps
             bt_params_bottom (dict): inputs of bottom tracking: rs, ballspacing, am, dp, sigma_factor, fourier_radius, intsteps
-            drift_dir: parent directory hosting all the drift data subdirectories (one for each drift rate)
             outputdir: directory for output calibration data
+            read_drift_images: toggle whether to read images from existing files
+            drift_dirs: parent directory hosting all the drift data subdirectories (one for each drift rate)
             output_prep_data: output directory for the prepped filtered data
             normalization: Enable/Disable image intensity mean-normalization (default is True)
             filter_function: custom function for filtering before writing the drift images.
             Balltracking will still use its own filtering function (see input 'filter_radius')
-            subdirs: user can provide drift data subdirectories. default is drift_ under drift_dir.
-            basename: basename of the fits files in each subdirectory. They get appended by a 2-digit number.
             save_ballpos_list = enable/disable writing the list of ballpos arrays for all drift rates.
             nthreads: number of threads to use for parallelization. Default to 1.
 
@@ -935,53 +933,35 @@ class Calibrator:
         self.bt_params_top = bt_params_top
         self.bt_params_bottom = bt_params_bottom
         self.nframes = trange[1] - trange[0]
-        self.read_write_drift_images = read_write_drift_images
-        self.drift_dir = drift_dir
+        self.read_drift_images = read_drift_images
+        self.drift_dirs = drift_dirs
         self.outputdir = outputdir
         self.output_prep_data = output_prep_data
         self.filter_function = filter_function
-        self.basename = basename
         self.save_ballpos_list = save_ballpos_list
         self.nthreads = nthreads
         self.reprocess_existing = reprocess_existing
         self.verbose = verbose
+        self.ray_verbose = ray_verbose
         self.return_ballpos = return_ballpos
         self.index = index
 
-        if self.drift_dir is None:
-            self.drift_dir = outputdir
-
         os.makedirs(self.outputdir, exist_ok=True)
-        os.makedirs(self.drift_dir, exist_ok=True)
-        if subdirs is None:
-            self.subdirs = [os.path.join(self.drift_dir, 'drift_{:02d}'.format(i)) for i in range(len(drift_rates))]
-        else:
-            self.subdirs = subdirs
 
-    def drift_series(self, rate_idx):
 
-        if self.read_write_drift_images:
+    def get_drift_images(self, rate_idx):
+
+        if self.read_drift_images:
             # Files supposed to be created or to be read if already exist.
-            filepaths = [Path(os.path.join(self.subdirs[rate_idx], '{:s}_{:04d}.fits'.format(self.basename, i))) for i in range(*self.trange)]
-
-            if self.images is None and check_file_series(filepaths):
-                # does not save much time compared to the total time of balltracking, should I bother?
+            filepaths = sorted(list(Path(self.drift_dirs[rate_idx]).glob('*.fits')))
+            if not check_file_series(filepaths):
+                print("Drift data do not exist. Sources images not provided. Must provide them as input")
+                sys.exit(1)
+            if self.verbose:
                 print("Reading existing drift images at rate: [{:.2f}, {:.2f}] px/frame"
                       .format(self.drift_rates[rate_idx][0], self.drift_rates[rate_idx][1]))
 
-                # Get a sample for the size
-                sample = fitstools.fitsread(str(filepaths[0]), cube=False, astropy=True) #fitsio.read(str(filepaths[0]))
-                drift_images = np.zeros([self.nframes, sample.shape[0], sample.shape[1]])
-                for i, f in enumerate(filepaths):
-                    drift_images[i, :, :] = fitstools.fitsread(str(f), cube=False, astropy=True) #fitsio.read(str(f))
-            elif self.images is not None:
-                # Use the self.images to create the drift images out of them
-                # os.makedirs(self.subdirs[rate_idx], exist_ok=True)
-                print("Creating drift images at rate: [{:.2f}, {:.2f}] px/frame".format(self.drift_rates[rate_idx][0], self.drift_rates[rate_idx][1]))
-                drift_images = create_drift_series(self.images, self.drift_rates[rate_idx], filepaths=filepaths, filter_function=self.filter_function)
-            else:
-                print("Drift data do not exist. Sources images not provided. Must provide them as input")
-                sys.exit(1)
+            drift_images = fitstools.fitsread(filepaths)
 
         else:
             if self.images is None:
@@ -991,37 +971,31 @@ class Calibrator:
             if self.verbose:
                 print("Creating drift images at rate: [{:.2f}, {:.2f}] px/frame".format(self.drift_rates[rate_idx][0],
                                                                                         self.drift_rates[rate_idx][1]))
-            drift_images = create_drift_series(self.images, self.drift_rates[rate_idx],
-                                               filter_function=self.filter_function)
+            drift_images = self.images[rate_idx]
 
         return drift_images
-
-    def drift_all_rates(self):
-        rate_idx_list = range(len(self.drift_rates))
-        for idx in rate_idx_list:
-             self.drift_series(idx)
 
     def balltrack_rate(self, rate_idx):
         """
         Balltrack the drifted images at a given drift rate index.
 
         Args:
-            rate_idx: index in the list of drift rates
+            rate_idx (int): index in the list of drift rates
 
         Returns:
-            ballpos_top: ball position from top-side tracking
-            ballpos_bottom: ball position from bottom-side tracking
+            ballpos_top (ndarray): ball positions from top-side tracking
+            ballpos_bottom (ndarray): ball positions from bottom-side tracking
         """
 
         if self.verbose:
             print(f'balltrack_rate() at rate_idx = {rate_idx}')
 
-        drift_images = self.drift_series(rate_idx)
+        drift_images = self.get_drift_images(rate_idx)
 
         bt_params = {'top': self.bt_params_top,
                      'bottom': self.bt_params_bottom,
                      'nframes': self.nframes,
-                     'outputdir': self.subdirs[rate_idx],
+                     'outputdir': self.drift_dirs[rate_idx],
                      'output_prep_data': False,
                      'verbose': False}
 
@@ -1033,7 +1007,9 @@ class Calibrator:
         Balltrack the different series of drifting images. Each series drift at a different drift velocity or "drift rate".
         results saved as npz file with top-side tracking and bottom-side tracking in two different lists.
 
-        :return: list of ballpos arrays for top-side and bottom side tracking at all drift rates.
+        Returns:
+            ballpos_top_list (ndarray): arrays of ball positions for top-side tracking at all drift rates.
+            ballpos_bottom_list (ndarray): arrays of ball positions for bottom-side tracking at all drift rates.
         """
 
         ballpos_top_list, ballpos_bottom_list = None, None
@@ -1066,13 +1042,14 @@ class Calibrator:
             np.savez(npzf,
                      ballpos_top_list=ballpos_top_list,
                      ballpos_bottom_list=ballpos_bottom_list)
-            print(f'saved ballpos_top_list and ballpos_bottom_list in {self.outputdir}/ballpos_list_{self.index}.npz')
+            if self.verbose:
+                print(f'saved ballpos_top_list and ballpos_bottom_list in {self.outputdir}/ballpos_list_{self.index}.npz')
 
         return ballpos_top_list, ballpos_bottom_list
 
 
 def calibration_run_balltrack(bt_params, drift_rates, trange, outputdir,
-                              images=None, drift_dir=None, basename='drift', save_ballpos_list=True, verbose=False,
+                              images=None, drift_dirs=None, read_drift_images=False, save_ballpos_list=True, verbose=False,
                               nthreads=1, reprocess_existing=True, return_ballpos=True):
 
     if 'index' not in bt_params:
@@ -1087,9 +1064,9 @@ def calibration_run_balltrack(bt_params, drift_rates, trange, outputdir,
     bt_params_bottom = bt_params
 
     cal = Calibrator(images, drift_rates, trange, bt_params_top, bt_params_bottom, outputdir,
-                     drift_dir=drift_dir,
+                     drift_dirs=drift_dirs,
                      output_prep_data=False,
-                     basename=basename,
+                     read_drift_images=read_drift_images,
                      save_ballpos_list=save_ballpos_list,
                      nthreads=nthreads,
                      reprocess_existing=reprocess_existing,
@@ -1142,7 +1119,7 @@ def calibration_run_fit(bt_params, ballpos_top_list, ballpos_bottom_list, output
 
     df_fit = pd.DataFrame(dicts)
     df_fit.to_csv(csvfile)
-    npzf = os.path.join(outputdir2, f'mean_velocity_{bt_params["index"]:04d}.npz')
+    npzf = os.path.join(outputdir2, f'mean_velocity_{bt_params["index"]:05d}.npz')
     # Index where xrates = 0. Used to save specific velocity map
     idx0 = np.where(xrates == 0)[0][0]
     np.savez_compressed(npzf,
@@ -1153,39 +1130,48 @@ def calibration_run_fit(bt_params, ballpos_top_list, ballpos_bottom_list, output
                         vxmeans_top=vxmeans_top,
                         vxmeans_bot=vxmeans_bot,
                         xrates=xrates,
+                        p_top=p_top,
+                        p_bot=p_bot,
                         index=bt_params['index'])
-
-    print(f'saved dictionnary at {npzf}')
+    if verbose:
+        print(f'saved dictionnary at {npzf}')
 
     return dict_results
 
-
+# @ray.remote
 def full_calibration(bt_params, drift_rates, trange, fov_slices, reprocess_bt, outputdir, fwhm, dims,
-                     images=None, images_ref=None, outputdir2=None, drift_dir=None, basename='drift', save_ballpos_list=True,
-                     verbose=False, reprocess_fit=False, nthreads=1):
+                     images=None, ray_drift_id=None, outputdir2=None, drift_dirs=None,
+                     read_drift_images=False,
+                     save_ballpos_list=True, verbose=False, reprocess_fit=False, nthreads=1):
 
-    if images is None:
-        # image data are in a Ray object store
-        images = ray.get(images_ref)
+    print(f'Processing index {bt_params["index"]}')
+
+    if images is None and ray_drift_id is None and not read_drift_images:
+        print("Drift data do not exist. Source images must be set")
+        sys.exit(1)
+
+    # images = ray.get(ray_drift_id)
+    csvfile = os.path.join(outputdir, f'param_sweep_{bt_params["index"]:05d}.csv')
 
     if reprocess_bt:
-        print(f'processing index {bt_params["index"]}')
+        # print(f'processing index {bt_params["index"]}')
+
+        # images = ray.get(ray_drift_id)
+
         ballpos_top_list, ballpos_bottom_list = \
             calibration_run_balltrack(bt_params, drift_rates, trange, outputdir,
                                       images=images,
-                                      drift_dir=drift_dir,
-                                      basename=basename,
+                                      drift_dirs=drift_dirs,
+                                      read_drift_images=read_drift_images,
                                       save_ballpos_list=save_ballpos_list,
                                       verbose=verbose,
                                       nthreads=nthreads)
 
     else:
 
-        ballpos_list_file = os.path.join(outputdir, f'ballpos_list_{bt_params["index"]}.npz')
+        ballpos_list_file = os.path.join(outputdir, f'ballpos_list_{bt_params["index"]:05d}.npz')
         if not os.path.isfile(ballpos_list_file):
             sys.exit('Missing ballpos_list_file for calibration')
-
-        csvfile = os.path.join(outputdir, f'param_sweep_{bt_params["index"]:04d}.csv')
 
         if not reprocess_fit and os.path.isfile(csvfile):
             return None
@@ -1196,42 +1182,13 @@ def full_calibration(bt_params, drift_rates, trange, fov_slices, reprocess_bt, o
                 ballpos_bottom_list = npzfile['ballpos_bottom_list']
         except:
             # For monitoring any fail from the terminal while the cluster is running the concurrent jobs.
-            # Using the same logger file would be problematic => race condition
             open(os.path.join(outputdir, f'failed_{bt_params["index"]}.npz'), 'a').close()
             return None
 
     _ = calibration_run_fit(bt_params, ballpos_top_list, ballpos_bottom_list, outputdir, drift_rates,
                             trange, fwhm, dims, fov_slices, csvfile, outputdir2=outputdir2, verbose=verbose)
 
-    return None
-
-
-def drift_series(images, drift_rate, subdir, use_existing=True):
-
-    # number of files to process:
-    nfiles = images.shape[0]
-
-    os.makedirs(subdir, exist_ok=True)
-    # Create filenames "drift_[drift rate on x][drift rate on y]_[file number i].fits"
-    filepaths = [Path(os.path.join(subdir, 'drift_{:03d}.fits'.format(i))) for i in range(nfiles)]
-
-    drift_images = np.zeros(images.shape)
-
-    if use_existing and check_file_series(filepaths):
-        # does not save much time compared to the total time of balltracking,
-        # but it significantly reduces disk usage compared to creating the images all over again.
-        print("Reading existing drift images at rate: [{:.2f}, {:.2f}] px/frame".format(drift_rate[0], drift_rate[1]))
-        for i in range(nfiles):
-            drift_images[i, :, :] = fitstools.fitsread(str(filepaths[i]), cube=False, astropy=True)
-    else:
-        print("Creating drift images at rate: [{:.2f}, {:.2f}] px/frame".format(drift_rate[0], drift_rate[1]))
-        for i in range(nfiles):
-            dx = -drift_rate[0] * float(i)
-            dy = -drift_rate[1]*i
-            drift_images[i, :, :] = filters.translate_by_phase_shift(images[i, :, :], dx, dy)
-            fitstools.writefits(drift_images[i, :, :], filepaths[i])
-
-    return drift_images
+    return bt_params['index']
 
 
 def create_drift_series(images, drift_rate, filepaths=None, filter_function=None):
@@ -1240,11 +1197,14 @@ def create_drift_series(images, drift_rate, filepaths=None, filter_function=None
     The drift operates by shifting the phase of the Fourier transform that also circularly shifts the escaping pixels
     back to the other edge.
 
-    :param images: data cube to drift
-    :param drift_rate: list of [vx,vy] signed velocity values.
-    :param filepaths: paths where the output files are written.
-    :param filter_function: optional filter to apply to the image
-    :return: drifted images
+    Args:
+        images (ndarray): data cube to drift
+        drift_rate (list): list of [vx,vy] signed velocity values.
+        filepaths (list): paths where the driftes images are written.
+        filter_function (function): optional filter to apply to the image
+
+    Returns:
+        drifted_images (ndarray): 3D array with images drifting at the given drift rate
     """
 
     if drift_rate[0] == 0 and drift_rate[1] == 0:
@@ -1271,15 +1231,23 @@ def fit_calibration(ballpos_list, shift_rates, trange, fwhm, dims, fov_slices, k
 
     """
     This fits linear calibration value by calculating the mean velocity for each drift rate.
-    Edge effects exist and must be excluded by slicing the data in an area unaffected by edge effects.
-    :param ballpos_list:
-    :param shift_rates:
-    :param trange:
-    :param fwhm:
-    :param dims:
-    :param fov_slices: 2d slices for selecting an area free of edge effects
-    :param kernel: 2d smoothing kernel of the velocity field. Either 'gaussian' or 'boxcar'.
-    :return:
+    Edge effects exist and must be excluded by slicing an unaffected area 
+    
+    Args:
+        ballpos_list (ndarray): List of ball positions at each frame
+        shift_rates (list): drift velocity rates
+        trange (list):
+        fwhm (float):
+        dims (list):
+        fov_slices (list): 2d slices for selecting an area free of edge effects
+        kernel (str): 2d smoothing kernel of the velocity field. Either 'gaussian' or 'boxcar'.
+
+    Returns:
+        p (list): fit parameters
+        rmse (float): root-mean-square error
+        vxmeans (float): mean value over the sliced velocity field
+        vxs (ndarray): non-averaged flow fields x-component (unsliced)
+        vys (ndarray): non-averaged flow fields y-components (unsliced)
     """
 
     if not isinstance(fov_slices, list):
@@ -1582,8 +1550,8 @@ def balltrack_calibration(bt_params, drift_rates, trange, fov_slices, reprocess_
                         vy_top=vys_top[idx0],
                         vx_bot=vxs_bot[idx0],
                         vy_bot=vys_bot[idx0])
-
-    print(f'saved dictionnary at {npzf}')
+    if verbose:
+        print(f'saved dictionnary at {npzf}')
 
     return dict_results
 

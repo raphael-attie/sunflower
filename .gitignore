@@ -9,4 +9,4 @@ cython_modules/build/
 .ipynb_checkpoints
 __pycache__
 cython_modules/interp.c
-
+*.sh
