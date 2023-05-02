@@ -5,6 +5,7 @@ cython_modules/build/
 *.pyc
 .DS_Store
 *.pyc
+*.pyd
 .ipynb_checkpoints
 __pycache__
 cython_modules/interp.c
