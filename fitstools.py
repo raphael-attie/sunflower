@@ -2,10 +2,12 @@ import os
 import numpy as np
 from astropy.io import fits
 from astropy.io.fits import getdata
-import fitsio
+import importlib
+if importlib.util.find_spec("fitstio") is not None:
+    import fitsio
 
 
-def fitsread(files, xslice=slice(None), yslice=slice(None), tslice=slice(None), cube=True, astropy=False, header=False):
+def fitsread(files, xslice=slice(None), yslice=slice(None), tslice=slice(None), cube=True, header=False):
 
     if isinstance(files, str):
         if cube:
@@ -17,56 +19,22 @@ def fitsread(files, xslice=slice(None), yslice=slice(None), tslice=slice(None), 
                     data = np.squeeze(fitsfile[1][tslice, yslice, xslice])
         else:
             # Load as single file and single image
-            if astropy:
-                if header:
-                    data, hdr = getdata(files, header=True)
-                    return data, hdr
-                else:
-                    data = getdata(files)
-                    
+            if header:
+                data, hdr = getdata(files, header=True)
+                return data, hdr
             else:
-                data = fitsio.read(files)
+                data = getdata(files)
             
     else:
         if isinstance(tslice, int):
             # There's only 1 file to read.
-            if astropy:
-                data = getdata(files[tslice])
-            else:
-                data = fitsio.read(files[tslice])
+            data = getdata(files[tslice])
         else: # Assume and read list of files
             # Load sample to get dimensions
             fitsfiles = files[tslice]
-            if astropy:
-                data = np.array([getdata(f) for f in fitsfiles])
-            else:
-                data = np.array([fitsio.read(f) for f in fitsfiles])
+            data = np.array([getdata(f) for f in fitsfiles])
+
     return data
-
-
-def fitsheader(file):
-
-    with fitsio.FITS(file) as fitsfile:
-        if fitsfile[0].has_data():
-            header = fitsfile[0].read_header()
-        else:
-            header = fitsfile[1].read_header()
-
-    return header
-
-
-def write_cube_to_series(file, directory, compressed=False):
-
-    h = fitsheader(file)
-    nfiles = h['ZNAXIS3']
-
-    for i in range(nfiles):
-        data = fitsread(file, tslice=slice(i, i+1))
-        basename = '%s_%05d.fits' % (os.path.basename(os.path.splitext(file)[0]), i)
-        fname = os.path.join(directory, basename)
-        writefits(data, fname, compressed=compressed)
-
-    return
 
 
 def writefits(image, fname, compressed=False):
