@@ -26,7 +26,7 @@ module load gnu10
 module load python
 module load openmpi4/4.1.2
 source ~/envs/MPIpool/bin/activate
-export DATA3=/groups/RATTIE/Data
+export DATA3=/scratch/rattie/Data
 export PYTHONPATH=~/dev/sunflower
 
 python ~/dev/sunflower/optimization/balltrack_parameter_sweep.py
