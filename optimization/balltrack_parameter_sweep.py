@@ -5,6 +5,7 @@ import multiprocessing
 from functools import partial
 from collections import OrderedDict
 from pathlib import Path
+from time import time
 # import ray
 # from ray.util.multiprocessing import Pool
 from concurrent.futures import ProcessPoolExecutor
@@ -78,9 +79,12 @@ if __name__ == '__main__':
     # with Pool(processes=32) as pool:
     #     pool.map(calibrate_partial, bt_params_list)
 
+    start = time()
     with ProcessPoolExecutor(max_workers=32) as executor:
         for idx in executor.map(calibrate_partial, bt_params_list):
             print(f'Processed index {idx}')
-
+    end = time()
+    print('Elapsed time: ', (end - start)/60)
+    
 # At the end of this parallel job, use "parameter_sweep_velocity_calibration.py" to aggregate everything
 
