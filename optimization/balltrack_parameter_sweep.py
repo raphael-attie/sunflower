@@ -1,18 +1,10 @@
-import glob
 import os
-import sys
-module_path = os.path.abspath(os.path.join('..'))
-if module_path not in sys.path:
-    sys.path.append(module_path)
 import balltracking.balltrack as blt
 import numpy as np
 import multiprocessing
-
 from functools import partial
 from collections import OrderedDict
 from pathlib import Path
-import fitstools
-from multiprocessing import Pool
 # import ray
 # from ray.util.multiprocessing import Pool
 from concurrent.futures import ProcessPoolExecutor
@@ -79,7 +71,7 @@ if __name__ == '__main__':
                                 fwhm=fwhm,
                                 dims=dims,
                                 outputdir2=outputdir,
-                                save_ballpos_list=True,
+                                save_ballpos_list=False,
                                 verbose=False,
                                 nthreads=1)
 
