@@ -29,4 +29,4 @@ source ~/envs/MPIpool/bin/activate
 export DATA3=/groups/RATTIE/Data
 export PYTHONPATH=~/dev/sunflower
 
-python optimization/balltrack_parameter_sweep.py
+python ~/dev/sunflower/optimization/balltrack_parameter_sweep.py
