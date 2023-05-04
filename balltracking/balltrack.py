@@ -1556,24 +1556,38 @@ def balltrack_calibration(bt_params, drift_rates, trange, fov_slices, reprocess_
     return dict_results
 
 
-def meshgrid_params_to_list(args):
-    mesh = np.meshgrid(*args, indexing='ij')
-    list_ravel = []
-    for elem in mesh:
-        list_ravel.append(np.ravel(elem))
+def meshgrid_params_to_list(param_dict):
+    """
+    Generate a list of a flattened mesh of parameters. The mesh can have more than 2 dimensions.
+
+    Args:
+        param_dict (dict): dictionnary of parameters. At least one value must be a list of more than 1 scalar.
+
+    Returns:
+        List of flattened mesh-gridded parameters
+    """
+    param_list = list(param_dict.values())
+    mesh = np.meshgrid(*param_list, indexing='ij')
+    list_ravel = [np.ravel(m) for m in mesh]
     args_list = [list(a) for a in zip(*list_ravel)]
     return args_list
 
 
-def get_bt_params_list(bt_params, param_names, param_lists):
+def get_bt_params_list(param_dict):
+    """
 
-    param_mesh_list = meshgrid_params_to_list(param_lists)
+    Args:
+        param_dict (dict): dictionnary of parameters. At least one value must be a list of more than 1 scalar.
+
+    Returns:
+        Mesh-gridded list of balltracking input dictionnaries.
+    """
+    param_mesh_list = meshgrid_params_to_list(param_dict)
     bt_params_list = []
-    bt_params2 = bt_params.copy()
     for i, p_list in enumerate(param_mesh_list):
-        for n, name in enumerate(param_names):
-            bt_params2[name] = p_list[n]
-        bt_params2['index'] = i
-        bt_params_list.append(bt_params2)
-        bt_params2 = bt_params.copy()
+        bt_params = OrderedDict()
+        for n, key in enumerate(param_dict.keys()):
+            bt_params[key] = p_list[n]
+        bt_params['index'] = i
+        bt_params_list.append(bt_params)
     return bt_params_list
