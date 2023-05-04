@@ -32,9 +32,13 @@ bt_params = OrderedDict({
     'fourier_radius': np.arange(0, 5)
 })
 bt_params_list = blt.get_bt_params_list(bt_params)
+# If restricting only to a subset
 # bt_params_list = [params for params in bt_params_list if ((params['am'] < 0.5 or
+#
 #                                                           params['dp'] < 0.2))]
-bt_params_list = bt_params_list[0:32]
+
+# Testing another subset with one task per cpu in parallel
+bt_params_list = bt_params_list[0:ncpus]
 
 ##########################
 # Calibration parameters
