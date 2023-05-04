@@ -8,7 +8,8 @@ from pathlib import Path
 from time import time
 # import ray
 # from ray.util.multiprocessing import Pool
-from concurrent.futures import ProcessPoolExecutor
+# from concurrent.futures import ProcessPoolExecutor
+from mpi4py.futures import MPIPoolExecutor
 
 if __name__ == '__main__':
     # the multiprocessing start method can only bet set once
@@ -80,11 +81,14 @@ if __name__ == '__main__':
     #     pool.map(calibrate_partial, bt_params_list)
 
     start = time()
-    with ProcessPoolExecutor(max_workers=32) as executor:
-        for idx in executor.map(calibrate_partial, bt_params_list):
-            print(f'Processed index {idx}')
+    # with ProcessPoolExecutor(max_workers=32) as executor:
+    #     for idx in executor.map(calibrate_partial, bt_params_list):
+    #         print(f'Processed index {idx}')
+    with MPIPoolExecutor() as executor:
+        results = executor.map(calibrate_partial, bt_params_list)
+
     end = time()
     print('Elapsed time: ', (end - start)/60)
-    
+
 # At the end of this parallel job, use "parameter_sweep_velocity_calibration.py" to aggregate everything
 
