@@ -1,6 +1,3 @@
-""" This module hosts all the necessary functions to run balltracking.
-A main program should execute "balltrack_all()".
-"""
 import sys
 import os
 from collections import OrderedDict
@@ -63,9 +60,9 @@ class BT:
         # Get a sample. 1st of the series in forward direction. last of the series in backward direction.
         if self.data is None:
             if self.direction == 'forward':
-                self.sample = fitstools.fitsread(self.datafiles, tslice=0).astype(np.float32)
+                self.sample = fitstools.fitsread(self.datafiles, tslice=0).astype(DTYPE)
             else:
-                self.sample = fitstools.fitsread(self.datafiles, tslice=self.nt - 1).astype(np.float32)
+                self.sample = fitstools.fitsread(self.datafiles, tslice=self.nt - 1).astype(DTYPE)
         else:
             if self.direction == 'forward':
                 self.sample = self.data[0, :, :]
@@ -96,7 +93,7 @@ class BT:
         self.meshx, self.meshy = np.meshgrid(self.xcoords, self.ycoords)
         # Initialize ball positions
         self.xstart, self.ystart = initialize_mesh(ballspacing, self.nx, self.ny)
-        self.zstart = np.zeros(self.xstart.shape, dtype=np.float32)
+        self.zstart = np.zeros(self.xstart.shape, dtype=DTYPE)
         self.nballs = self.xstart.size
         # Initialize the array of the lifetime (age) of the balls
         self.balls_age = np.ones([self.nballs], dtype=np.uint32)
@@ -212,12 +209,12 @@ class BT:
 
             if self.direction == 'forward':
                 if self.data is None:
-                    image = fitstools.fitsread(self.datafiles, tslice=n).astype(np.float32)
+                    image = fitstools.fitsread(self.datafiles, tslice=n).astype(DTYPE)
                 else:
                     image = self.data[n, :, :]
             else:
                 if self.data is None:
-                    image = fitstools.fitsread(self.datafiles, tslice=self.nt - 1 - n).astype(np.float32)
+                    image = fitstools.fitsread(self.datafiles, tslice=self.nt - 1 - n).astype(DTYPE)
                 else:
                     image = self.data[self.nt - 1 - n, :, :]
 
@@ -364,8 +361,8 @@ class BT:
         # IMPROVEMENT with respect to Matlab version:
         # y0, x0 above are from np.where => integer values! All values in xnew, ynew are integers.
         # => There is no need to interpolate in put_ball_on_surface!
-        xnew = self.ballspacing * x0_empty.astype(np.float32)#+ bt.rs
-        ynew = self.ballspacing * y0_empty.astype(np.float32)#+ bt.rs
+        xnew = self.ballspacing * x0_empty.astype(DTYPE)#+ bt.rs
+        ynew = self.ballspacing * y0_empty.astype(DTYPE)#+ bt.rs
         znew = put_balls_on_surface(surface, xnew, ynew, self.rs, self.dp)
         # Get the indices of bad balls in order to assign them to new positions. If nemptycells > nbadballs,
         # this array indexing automatically truncates indexing limit to the size of bad_balls_mask.
@@ -605,7 +602,7 @@ def prep_data(image, mean, sigma, sigma_factor=1):
     # Filter the image to isolate granulation
     fdata = filter_image(image)
     # Rescale image to a data surface
-    surface = rescale_frame(fdata, mean, sigma_factor * sigma).astype(np.float32)
+    surface = rescale_frame(fdata, mean, sigma_factor * sigma).astype(DTYPE)
 
     return surface
 
@@ -641,7 +638,7 @@ def prep_data2(image, sigma_factor=1, pixel_radius=0):
     mean = masked_fdata.mean()
     sigma = masked_fdata.std()
     # Rescale image to a data surface
-    surface = rescale_frame(fdata, mean, sigma_factor * sigma).astype(np.float32)
+    surface = rescale_frame(fdata, mean, sigma_factor * sigma).astype(DTYPE)
 
     return surface, mean, sigma
 
@@ -1182,7 +1179,7 @@ def full_calibration(bt_params, drift_rates, trange, fov_slices, reprocess_bt, o
                 ballpos_bottom_list = npzfile['ballpos_bottom_list']
         except:
             # For monitoring any fail from the terminal while the cluster is running the concurrent jobs.
-            open(os.path.join(outputdir, f'failed_{bt_params["index"]}.npz'), 'a').close()
+            print(f'failed at index{bt_params["index"]}')
             return None
 
     _ = calibration_run_fit(bt_params, ballpos_top_list, ballpos_bottom_list, outputdir, drift_rates,
@@ -1357,18 +1354,18 @@ def make_lanes(vx, vy, nsteps, maxstep):
     vxng = vxn*g
     vyng = vyn*g
 
-    vblank = np.zeros([dims[0]+2*maxstep, dims[1]+2*maxstep], dtype=np.float32)
+    vblank = np.zeros([dims[0]+2*maxstep, dims[1]+2*maxstep], dtype=DTYPE)
     vx2 = vblank.copy()
     vy2 = vblank.copy()
-    vx2[maxstep : dims[0] + maxstep, maxstep :dims[1] + maxstep] = vxng.astype(np.float32)
-    vy2[maxstep : dims[0] + maxstep, maxstep :dims[1] + maxstep] = vyng.astype(np.float32)
+    vx2[maxstep : dims[0] + maxstep, maxstep :dims[1] + maxstep] = vxng.astype(DTYPE)
+    vy2[maxstep : dims[0] + maxstep, maxstep :dims[1] + maxstep] = vyng.astype(DTYPE)
 
     vx2 *= -1
     vy2 *= -1
 
     x0, y0 = np.meshgrid( maxstep + np.arange(dims[1]) , maxstep + np.arange(dims[0]))
-    xold = x0.flatten().astype(np.float32)
-    yold = y0.flatten().astype(np.float32)
+    xold = x0.flatten().astype(DTYPE)
+    yold = y0.flatten().astype(DTYPE)
 
     maxv = np.sqrt(vx2.max() ** 2 + vy2.max() ** 2)
 
@@ -1418,24 +1415,24 @@ def make_lanes_visualization(vx, vy, nsteps, maxstep):
     vxng = vxn*g
     vyng = vyn*g
 
-    vblank = np.zeros([dims[0]+2*maxstep, dims[1]+2*maxstep], dtype=np.float32)
+    vblank = np.zeros([dims[0]+2*maxstep, dims[1]+2*maxstep], dtype=DTYPE)
     vx2 = vblank.copy()
     vy2 = vblank.copy()
-    vx2[maxstep : dims[0] + maxstep, maxstep :dims[1] + maxstep] = vxng.astype(np.float32)
-    vy2[maxstep : dims[0] + maxstep, maxstep :dims[1] + maxstep] = vyng.astype(np.float32)
+    vx2[maxstep : dims[0] + maxstep, maxstep :dims[1] + maxstep] = vxng.astype(DTYPE)
+    vy2[maxstep : dims[0] + maxstep, maxstep :dims[1] + maxstep] = vyng.astype(DTYPE)
 
     vx2 *= -1
     vy2 *= -1
 
     x0, y0 = np.meshgrid( maxstep + np.arange(dims[1]) , maxstep + np.arange(dims[0]))
-    xold = x0.flatten().astype(np.float32)
-    yold = y0.flatten().astype(np.float32)
+    xold = x0.flatten().astype(DTYPE)
+    yold = y0.flatten().astype(DTYPE)
 
     maxv = np.sqrt(vx2.max() ** 2 + vy2.max() ** 2)
 
     # Create a storage array for the intermediate integration steps
-    xtracks = np.zeros([nsteps+1, x0.size], dtype=np.float32)
-    ytracks = np.zeros([nsteps+1, y0.size], dtype=np.float32)
+    xtracks = np.zeros([nsteps+1, x0.size], dtype=DTYPE)
+    ytracks = np.zeros([nsteps+1, y0.size], dtype=DTYPE)
     xtracks[0, :] = xold
     ytracks[0, :] = yold
     lanes_series = np.empty([nsteps+1, *dims])
