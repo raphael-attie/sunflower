@@ -8,8 +8,6 @@
 #SBATCH --output=/scratch/%u/%x-%N-%j.out  # Output file
 #SBATCH --error=/scratch/%u/%x-%N-%j.err   # Error file
 #SBATCH --constraint=intel
-##SBATCH --nodes=1
-##SBATCH --cpus-per-task=33
 #SBATCH --ntasks=200
 ## Specify how much memory your job needs. (2G is the default)
 #SBATCH --mem=360G        # Total memory needed per task (units: K,M,G,T)
@@ -30,5 +28,4 @@ source ~/envs/MPIpool/bin/activate
 export DATA3=/scratch/rattie/Data
 export PYTHONPATH=~/dev/sunflower
 
-##python ~/dev/sunflower/optimization/balltrack_parameter_sweep.py
 mpirun -np $SLURM_NTASKS python -m mpi4py.futures ~/dev/sunflower/optimization/balltrack_parameter_sweep.py
