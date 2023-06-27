@@ -17,18 +17,16 @@ if __name__ == '__main__':
     calibrate_partial = partial(blt.full_calibration,
                                 drift_rates=inputs.drift_rates,
                                 drift_dirs=inputs.drift_dirs,
-                                read_drift_images=True,
+                                read_drift_images=inputs.read_drift_images,
                                 trange=inputs.trange,
                                 fov_slices=inputs.fov_slices,
                                 reprocess_bt=inputs.reprocess_bt,
-                                reprocess_fit=True,
                                 outputdir=inputs.outputdir,
                                 fwhm=inputs.fwhm,
                                 dims=inputs.dims,
                                 outputdir2=inputs.outputdir_cal,
-                                save_ballpos_list=False,
-                                verbose=False,
-                                nthreads=1)
+                                save_ballpos_list=inputs.save_ballpos_list,
+                                verbose=inputs.verbose)
 
     start = time()
 

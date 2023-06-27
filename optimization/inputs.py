@@ -15,6 +15,7 @@ outputdir = Path(os.environ['DATA3'], 'sanity_check/stein_series/calibration3')
 outputdir_cal = outputdir
 # Run balltracking (True) or re-use balltracked positions from a previous run?
 reprocess_bt = True
+# Number of frames to process
 nframes = 60
 # Time range [start, end[ within the series of images to consider in the calibration.
 # To take them all, just put [0, nframes]
@@ -39,11 +40,9 @@ bt_params_list = blt.get_bt_params_list(bt_params)
 
 # Testing another subset with one task per cpu in parallel
 bt_params_list = bt_params_list[0:ncpus]
-
 ##########################
 # Calibration parameters
 ##########################
-
 # Read images from disk?
 read_drift_images = True
 # If True, must provide directories, one per drift rate.
@@ -76,4 +75,6 @@ dims = [263, 263]
 # To avoid edge effects, set some cropping parameters, for the metrics of the flow field (correlation, rmse, etc...)
 trim = int(vx_rates.max() * nframes + fwhm + 2)
 fov_slices = np.s_[trim:dims[0] - trim, trim:dims[1] - trim]
-
+# Save the arrays of ball positions to disk?
+save_ballpos_list = False
+verbose = False
