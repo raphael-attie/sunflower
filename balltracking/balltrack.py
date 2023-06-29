@@ -899,7 +899,7 @@ class Calibrator:
 
     def __init__(self, bt_params_top, bt_params_bottom, drift_rates, trange, fwhm, images, outputdir,
                  kernel='gaussian', read_drift_images=False, drift_dirs=None, output_prep_data=False, save_ballpos_list=True,
-                 nthreads=1, reprocess_existing=True, verbose=False, ray_verbose=False, return_ballpos=False, index=0):
+                 reprocess_existing=True, verbose=False, ray_verbose=False, return_ballpos=False, index=0, nthreads=1):
 
         """
         Calibrate the top and bottom tracking using a series of images drifting at uniform offset velocities
@@ -943,8 +943,8 @@ class Calibrator:
         self.return_ballpos = return_ballpos
         self.index = index
         # Get frame dimensions
-        self.sample = self.get_drift_images(0)
-        self.dims = self.sample.shape
+        self.samples = self.get_drift_images(0)
+        self.dims = self.samples.shape[-2:]
 
         os.makedirs(self.outputdir, exist_ok=True)
 

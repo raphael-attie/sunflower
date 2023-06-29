@@ -5,20 +5,20 @@ import numpy as np
 ### Balltrack parameters
 bt_params_top = {
     'rs': 2,
-    'intsteps': 3,
+    'intsteps': 4,
     'ballspacing': 1,
-    'am' : 0.3,
-    'dp' : 0.1,
-    'sigma_factor' : 1.5,
+    'am': 0.5,
+    'dp': 0.25,
+    'sigma_factor': 1.5,
     'fourier_radius': 2,
 }
 
 bt_params_bottom = {
     'rs': 2,
-    'intsteps': 3,
+    'intsteps': 4,
     'ballspacing': 1,
-    'am': 0.3,
-    'dp': 0.1,
+    'am': 0.5,
+    'dp': 0.25,
     'sigma_factor': 1.5,
     'fourier_radius': 2,
 }
@@ -60,7 +60,7 @@ save_ballpos_list = False
 # Reprocess existing calibration results?
 reprocess_existing = True
 
-verbose = False
+verbose = True
 # Multithread?
-nthreads = 1
+nthreads = 11
 
