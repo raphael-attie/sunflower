@@ -6,8 +6,8 @@ import matplotlib.pyplot as plt
 from skimage.feature import peak_local_max
 from skimage.morphology import disk
 from skimage.segmentation import find_boundaries, watershed
-from .. import fitstools
-from . import balltrack as blt
+import fitstools
+import balltrack as blt
 
 DTYPE = np.float32
 
@@ -16,9 +16,8 @@ class MBT:
 
     def __init__(self, rs=2, am=1, dp=0.3, td=None, tdx=5, tdy=5, zdamping=1,
                  ballspacing=10, intsteps=15, nt=1, mag_thresh=30, noise_level=20, polarity=1,
-                 init_pos=None, track_emergence=False, emergence_box=10, datafiles=None, data=None,
-                 prep_function=None, local_min=False, roi=None, fig_dir=None, do_plots=False, astropy=False,
-                 verbose=True):
+                 init_pos=None, track_emergence=False, datafiles=None, data=None, prep_function=None, local_min=False,
+                 roi=None, fig_dir=None, do_plots=False, astropy=False, verbose=True):
 
         """ Main class for Magnetic Balltracking
 
@@ -38,7 +37,6 @@ class MBT:
             polarity (int): magnetic polarity (1 or -1 for pos/neg) of the magnetic elements that are to be tracked
             init_pos (ndarray): initial positions of the balls
             track_emergence (bool): enable/disable the tracking of new feature appearing after the 1st frame
-            emergence_box (int): detection threshold setting a minimum distance between a ball and nearest emergence
             datafiles (list): list of FITS file paths
             data (ndarray): instead of providing a list of files with datafiles, one can directly provide a 3D array
             prep_function (function): function to use for preprocessing an image. Will only accept an image as argument
@@ -134,7 +132,6 @@ class MBT:
         self.noise_level = noise_level
         self.mag_thresh = mag_thresh
         self.track_emergence = track_emergence
-        self.emergence_box = emergence_box
 
         if init_pos is None:
             # Initialization of ball positions
@@ -245,10 +242,10 @@ class MBT:
 
         distance_matrix = np.sqrt((flux_posx[:, np.newaxis] - ball_posx[np.newaxis, :])**2 + (flux_posy[:,np.newaxis] - ball_posy[np.newaxis,:])**2)
         distance_min = distance_matrix.min(axis=1)
-        populate_flux_mask = distance_min > self.emergence_box
+        populate_flux_mask = distance_min > self.ballspacing + 1
 
         # Populate only if there's something
-        if populate_flux_mask.sum() > 0 :
+        if populate_flux_mask.sum() > 0:
 
             newposx = flux_posx[populate_flux_mask].view('int32').copy(order='C')
             newposy = flux_posy[populate_flux_mask].view('int32').copy(order='C')
@@ -423,7 +420,7 @@ def load_data(datafiles, n, astropy=False, roi=None):
     else:
         # If the file is a fits cube, will read only one slice without reading the whole cube in memory
         # does not work with astropy.io.fits, only with fitsio
-        image = fitstools.fitsread(datafiles, tslice=n, astropy=astropy).astype(DTYPE)
+        image = fitstools.fitsread(datafiles, tslice=n).astype(DTYPE)
         if roi is not None:
             image = image[roi]
         return image
@@ -693,6 +690,6 @@ def plot_balls_over_frame(frame, x, y, fig_title, figsize=None, axlims=None, **k
     plt.ylabel('Y [px]')
     plt.colorbar()
     plt.tight_layout()
-    plt.savefig(fig_title)
+    plt.savefig(fig_title, dpi=180)
     plt.close()
 

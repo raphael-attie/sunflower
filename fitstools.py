@@ -2,6 +2,7 @@ import numpy as np
 from astropy.io import fits
 from astropy.io.fits import getdata
 import importlib
+# The fitsio python package installation does not work in Windows.
 if importlib.util.find_spec("fitstio") is not None:
     import fitsio
 
