@@ -1,10 +1,8 @@
 import numpy as np
 from astropy.io import fits
 from astropy.io.fits import getdata
-import importlib
-# The fitsio python package installation does not work in Windows.
-if importlib.util.find_spec("fitstio") is not None:
-    import fitsio
+# The fitsio python package installation often does not work in Windows.
+import fitsio
 
 
 def fitsread(files, xslice=slice(None), yslice=slice(None), tslice=slice(None), cube=True, header=False):
@@ -37,13 +35,13 @@ def fitsread(files, xslice=slice(None), yslice=slice(None), tslice=slice(None), 
     return data
 
 
-def writefits(image, fname, compressed=False):
+def writefits(image, fname, header=None, compressed=False):
 
     if not compressed:
         try:
-            fits.writeto(fname, image, output_verify='exception', overwrite=True)
+            fits.writeto(fname, image, header=header, output_verify='exception', overwrite=True)
         except TypeError:
-            fits.writeto(fname, image, output_verify='exception', checksum=True, clobber=True)
+            fits.writeto(fname, image, header=header, output_verify='exception', checksum=True, overwrite=True)
     else:
         chdu = fits.CompImageHDU(data=image, compression_type='RICE_1')
         chdu.writeto(fname, overwrite=True)

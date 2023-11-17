@@ -97,19 +97,19 @@ vx_stein, vy_stein = load_vel_mean((svx_files, svy_files), trange)
 kernels = ['boxcar', 'gaussian']
 vx_stein_sm_, vy_stein_sm_ = zip(*[smooth_vel(vx_stein, vy_stein, fwhm, kernel=k) for k in kernels])
 
-# List of balltracked velocity flows
-filelist = sorted(glob.glob(os.path.join(datadir, 'mean_velocity*.npz')))
 
-for f in filelist:
-    with np.load(f) as vel:
-        idx = int(vel['index'])
-        print(f'file: {f} - idx = {idx}')
-        for k, kernel in enumerate(kernels):
-            vx_stein_sm = vx_stein_sm_[k]
-            vy_stein_sm = vy_stein_sm_[k]
-            # magnitude
-            v_stein = np.sqrt(vx_stein_sm ** 2 + vy_stein_sm ** 2)
-
+for k, kernel in enumerate(kernels):
+    vx_stein_sm = vx_stein_sm_[k]
+    vy_stein_sm = vy_stein_sm_[k]
+    # magnitude
+    v_stein = np.sqrt(vx_stein_sm ** 2 + vy_stein_sm ** 2)
+    # List of balltracked velocity flows
+    filelist = sorted(glob.glob(os.path.join(datadir, f'mean_velocity_{kernel}*.npz')))
+    for f in filelist:
+        with np.load(f) as vel:
+            idx = int(vel['index'])
+            print(f'file: {f} - idx = {idx}')
+            # Query string to get the dataframe rows at the right kernel
             ker = f'kernel=="{kernel}"'
 
             vx_top_cal = vel['vx_top'] * df.query(ker).loc[idx, 'p_top_0'].values[0] * u

@@ -20,8 +20,8 @@ DTYPE = np.float32
 
 class BT:
 
-    def __init__(self, rs, dp, am, ballspacing, intsteps, sigma_factor, fourier_radius, nt, mode, direction, datafiles=None, data=None,
-                 output_prep_data=False, outputdir=None, verbose=False):
+    def __init__(self, rs, dp, am, ballspacing, intsteps, sigma_factor, fourier_radius, trange,
+                 side='top', direction='forward', datafiles=None, data=None, outputdir_prep=None, verbose=False):
 
         """ This is the class hosting all the parameters and intermediate results of balltracking.
 
@@ -29,33 +29,40 @@ class BT:
 
             rs (int): balls radius in pixels
             dp (float): Characteristic percentage depth. 0 < dp < 1
-            am (float): acceleration factor
+            am (float): acceleration factor. Used to be 0.6 in Potts implementation. 0.3 best for HMI
             ballspacing (int): nb of pixels between balls center at the initialization stage
             intsteps (int): nb of intermediate frames using linear interpolation.
             sigma_factor (float): multiplier to the standard deviation
             fourier_radius (float): radius for high-pass image fourier filter,
                                     to be given in period units (pixels) instead of k-space frequency.
-            nt (int): nb of frames to track
-            #TODO: change 'mode' to 'side'
-            mode (str): determines which side of the data surface to track: 'top' or 'bottom'.
+            trange (tuble): Frame indices for the (start, end) frame
+            side (str): determines which side of the data surface to track: 'top' or 'bottom'.
             direction (str): determines whether we track 'forward' or 'backward' in time.
             datafiles (list): list of FITS file paths
             data (ndarray): instead of providing a list of files with datafiles, one can directly provide a 3D array
-            output_prep_data (str): whether to write out the intermediary surface data. For sanity check.
-            outputdir (str): Save the arrays of tracked position to that directory
+            outputdir_prep (str): output directory to write out the intermediary surface data. For sanity check.
 
         """
-
-        if output_prep_data & (outputdir is None):
-            sys.exit('Missing output directory to output prep data')
 
         self.datafiles = datafiles
         self.data = data
         if direction != 'forward' and direction != 'backward':
             raise ValueError
 
+        self.rs = rs
+        self.am = am
+        self.dp = dp
+        self.ballspacing = int(ballspacing)
+        self.intsteps = int(intsteps)
+
+        self.outputdir_prep= outputdir_prep
+        self.verbose = verbose
+
+        self.side = side
         self.direction = direction
-        self.nt = int(nt)
+
+        self.trange = trange
+        self.nt = trange[-1] - trange[0]
 
         # Get a sample. 1st of the series in forward direction. last of the series in backward direction.
         if self.data is None:
@@ -69,17 +76,9 @@ class BT:
             else:
                 self.sample = self.data[-1, :, :]
 
+        # Set frame dimensions
         self.nx = int(self.sample.shape[1])
         self.ny = int(self.sample.shape[0])
-
-        self.intsteps = int(intsteps)
-        self.rs = rs
-        # Acceleration factor (used to be 0.6 in Potts implementation)
-        self.am = am
-        # Characteristic depth
-        self.dp = dp
-        # initial spacing
-        self.ballspacing = int(ballspacing)
         # Number of balls in a row
         self.nballs_row = int((self.nx - 4 * self.rs) / self.ballspacing + 1)
         # Number of balls in a column
@@ -122,6 +121,7 @@ class BT:
         self.sigma_factor = sigma_factor
         self.mean = 0
         self.sigma = 0
+
         self.fourier_radius = fourier_radius
 
         # Current position, force and velocity components, updated after each frame
@@ -149,32 +149,6 @@ class BT:
         # Mask of valid balls
         self.new_valid_balls_mask = np.ones(self.nballs, dtype=bool)
 
-        # Mode and direction
-        self.mode = mode
-        self.direction = direction
-
-        # Optional parameter for writing the "prepped" data surface in fits files.
-        self.output_prep_data = output_prep_data
-        self.outputdir = outputdir
-        self.verbose = verbose
-
-    def coarse_grid_pos(self, x, y):
-        """ x, y coordinates in the image into coarse grid coordinates"""
-
-        # Get the position on the coarse grid, clipped to the edges of that grid.
-        xcoarse = np.uint32(np.clip(np.floor(x / self.ballspacing), 0, self.nxc_ - 1))
-        ycoarse = np.uint32(np.clip(np.floor(y / self.ballspacing), 0, self.nyc_ - 1))
-        # Convert to linear (1D) indices. One index per ball
-        coarse_idx = np.ravel_multi_index((ycoarse, xcoarse), self.coarse_grid.shape)
-        return xcoarse, ycoarse, coarse_idx
-
-    def initialize(self):
-        """Calculate offset (mean) and standard deviation from  a valid surface
-
-        First, filter image to focus on the granulation
-        Get mean and standard deviation from the masked array, not affected by bad invalid values (sunspot, ...)
-        Generate the data surface from the image with the masked mean and sigma"""
-
         self.surface, mean, sigma = prep_data2(self.sample, self.sigma_factor)
         self.mean = mean
         self.sigma = sigma
@@ -189,7 +163,16 @@ class BT:
         self.coarse_grid[:, 0] = 1
         self.coarse_grid[-1,:] = 1
         self.coarse_grid[:, -1] = 1
-        return
+
+    def coarse_grid_pos(self, x, y):
+        """ x, y coordinates in the image into coarse grid coordinates"""
+
+        # Get the position on the coarse grid, clipped to the edges of that grid.
+        xcoarse = np.uint32(np.clip(np.floor(x / self.ballspacing), 0, self.nxc_ - 1))
+        ycoarse = np.uint32(np.clip(np.floor(y / self.ballspacing), 0, self.nyc_ - 1))
+        # Convert to linear (1D) indices. One index per ball
+        coarse_idx = np.ravel_multi_index((ycoarse, xcoarse), self.coarse_grid.shape)
+        return xcoarse, ycoarse, coarse_idx
 
     def track(self):
         """Tracking outer loop
@@ -200,12 +183,9 @@ class BT:
         # Outer loop goes over the data frames.
         # If data is a fits cube, we just access a slice of it
 
-        # Initialize
-        self.initialize()
-
-        for n in range(0, self.nt):
+        for n in range(self.trange[0], self.trange[1]):
             if self.verbose:
-                print("Tracking direction {}/{}, frame {:d}".format(self.direction, self.mode, n))
+                print("Tracking direction {}/{}, frame {:d}".format(self.direction, self.side, n))
 
             if self.direction == 'forward':
                 if self.data is None:
@@ -221,11 +201,11 @@ class BT:
             # TODO: check the choice of prep_data regarding mean normalization with fixed mean or time-dependent one
             # self.surface = prep_data(image, self.mean, self.sigma, sigma_factor=self.sigma_factor)
             self.surface, _, _ = prep_data2(image, sigma_factor=self.sigma_factor, pixel_radius=self.fourier_radius)
-            if self.mode == 'bottom':
+            if self.side == 'bottom':
                 self.surface = -self.surface
 
-            if self.output_prep_data:
-                filename_surface = os.path.join(self.outputdir, 'prep_data_{}_{}_{:05d}.fits'.format(self.direction, self.mode, n))
+            if self.outputdir_prep is not None:
+                filename_surface = Path(self.outputdir_prep, f'prep_data_{self.direction}_{self.side}_{n:05d}.fits')
                 fitstools.writefits(self.surface, filename_surface)
 
             # The current position "pos" and velocity "vel" are attributes of bt.
@@ -422,7 +402,7 @@ def track_instance(params, side_direction, datafiles=None, data=None):
 
     Args:
         params (dict): ball parameters for the BT class
-        side_direction (tuple): (BT.mode) and (BT.direction) listed as ('top', 'forward') or ('bottom', 'backward')
+        side_direction (tuple): (BT.side) and (BT.direction) listed as ('top', 'forward') or ('bottom', 'backward')
         datafiles (list): path to data cube file or list of FITS files. Ignored if `data` is provided.
         data (ndarray): 3D array with time on the 1st dimension: (time, y-axis, x-axis).
 
@@ -430,23 +410,12 @@ def track_instance(params, side_direction, datafiles=None, data=None):
         BT.ballpos : Array storing the positions of the balls at each frame
     """
 
-    # print(side_direction)
-
+    # Get which side we're tracking: either top or bottom
     params_side = params[side_direction[0]]
 
-    bt_instance = BT(rs=params_side['rs'],
-                     dp=params_side['dp'],
-                     am=params_side['am'],
-                     ballspacing=params_side['ballspacing'],
-                     intsteps=params_side['intsteps'],
-                     sigma_factor=params_side['sigma_factor'],
-                     fourier_radius=params_side['fourier_radius'],
-                     nt=params['nframes'],
-                     mode=side_direction[0],
+    bt_instance = BT(**params_side,
+                     side=side_direction[0],
                      direction=side_direction[1],
-                     output_prep_data=params['output_prep_data'],
-                     outputdir=params['outputdir'],
-                     verbose=params['verbose'],
                      datafiles=datafiles,
                      data=data)
 
@@ -455,9 +424,10 @@ def track_instance(params, side_direction, datafiles=None, data=None):
     return bt_instance.ballpos
 
 
-def balltrack_all(params, datafiles=None, data=None, write_ballpos=True, ncores=1):
+def balltrack_all(bt_params_top, bt_params_bottom, outputdir,
+                  datafiles=None, data=None, write_ballpos=True, ncores=1):
     """
-    Run the tracking on the 4 (mode, direction) pairs:
+    Run the tracking on the 4 (side, direction) pairs:
     (('top', 'forward'),
      ('top', 'backward'),
      ('bottom', 'forward'),
@@ -466,11 +436,13 @@ def balltrack_all(params, datafiles=None, data=None, write_ballpos=True, ncores=
      Can be executed in a pool of up to 4 parallel workers.
 
     Args:
-        params (dict): all ball parameters relevant to the BT class
+        bt_params_top (dict): Top-side ball parameters relevant to the BT class
+        bt_params_bottom (dict): Bottom-side ball parameters relevant to the BT class
+        outputdir (str): output directory to save the 3D arrays of ball positions
         datafiles (str or list): path to data cube file or list of FITS files
         data (ndarray): Series of 3D Numpy arrays with time on the 3rd index: (y-axis, x-axis, time-axis)
         write_ballpos (bool): sets whether to write the array of ball positions
-        ncores: number of cores to use for running the 4 modes/directions in parallel
+        ncores: number of cores to use for running the 4 sides/directions in parallel
             Default is 1 for sequential processing. There can up to 4 workers for these parallel tasks (2-3x speed-up)
 
     Returns:
@@ -478,34 +450,51 @@ def balltrack_all(params, datafiles=None, data=None, write_ballpos=True, ncores=
         ballpos_bottom (ndarray): 3D array of ball positions for bottom-side tracking -> [xyz, ball #, time]
 
     """
-    if write_ballpos and 'outputdir' not in params:
-        sys.exit('missing outputdir in params to write ball positions')
 
     # Check user data input
     if (datafiles is None or not isinstance(datafiles, str)) and not isinstance(datafiles, list) and data is None:
-        raise ValueError
+        sys.exit('missing data or datafiles in balltrack_all')
     # Get a BT instance with the above parameters
-    mode_direction_list = (('top', 'forward'),
+    side_direction_list = (('top', 'forward'),
                            ('top', 'backward'),
                            ('bottom', 'forward'),
                            ('bottom', 'backward'))
-    partial_track = partial(track_instance, params, datafiles=datafiles, data=data)
+
+    bt_params_sides = {
+        'top': bt_params_top,
+        'bottom': bt_params_bottom
+    }
+
+    partial_track = partial(track_instance, bt_params_sides, datafiles=datafiles, data=data)
     # Only use 1 to 4 workers. 1 means no parallelization.
     if ncores == 1:
-        ballpos_top_f, ballpos_top_b, ballpos_bot_f, ballpos_bot_b = list(map(partial_track, mode_direction_list))
+        ballpos_top_f, ballpos_top_b, ballpos_bot_f, ballpos_bot_b = list(map(partial_track, side_direction_list))
     else:
         with Pool(processes=max(min(ncores, 4), 1)) as pool:
-            ballpos_top_f, ballpos_top_b, ballpos_bot_f, ballpos_bot_b = pool.map(partial_track, mode_direction_list)
+            ballpos_top_f, ballpos_top_b, ballpos_bot_f, ballpos_bot_b = pool.map(partial_track, side_direction_list)
 
     ballpos_top = np.concatenate((ballpos_top_f, ballpos_top_b), axis=1)
     ballpos_bottom = np.concatenate((ballpos_bot_f, ballpos_bot_b), axis=1)
 
     if write_ballpos:
-        # Create outputdir if does not exist
-        os.makedirs(params['outputdir'], exist_ok=True)
-        np.savez_compressed(os.path.join(params['outputdir'], 'ballpos.npz'),
+        # Create outputdir if it does not exist
+        os.makedirs(outputdir, exist_ok=True)
+        np.savez_compressed(Path(outputdir, 'ballpos.npz'),
                             ballpos_top=ballpos_top, ballpos_bottom=ballpos_bottom)
 
+    return ballpos_top, ballpos_bottom
+
+
+def balltrack_main_hmi(bt_params, outputdir, datafiles=None, data=None, ncores=1):
+
+    # Calibration HMI is so far considering the same top-side and bottom-side parameters
+    ballpos_top, ballpos_bottom = balltrack_all(bt_params, bt_params, outputdir,
+                                                data=data,
+                                                datafiles=datafiles,
+                                                # ballpos arrays will be written after all rates are processed
+                                                # Thus disabling saving them in each run
+                                                write_ballpos=True,
+                                                ncores=ncores)
     return ballpos_top, ballpos_bottom
 
 
@@ -897,62 +886,84 @@ def mesh_ball(rs, npts=20):
 
 class Calibrator:
 
-    def __init__(self, bt_params_top, bt_params_bottom, drift_rates, trange, fwhm, images, outputdir,
-                 kernel='gaussian', read_drift_images=False, drift_dirs=None, output_prep_data=False, save_ballpos_list=True,
-                 reprocess_existing=True, verbose=False, ray_verbose=False, return_ballpos=False, index=0, nthreads=1):
+    def __init__(self, bt_params, vx_rates, vy_rates, trange, fwhm, images, outputdir_cal,
+                 component='x', kernel='gaussian', roi=None, read_drift_images=False,
+                 save_ballpos_list=True, reprocess_existing=True, verbose=False, return_ballpos=False,
+                 ncpus=1):
 
         """
         Calibrate the top and bottom tracking using a series of images drifting at uniform offset velocities
         
         Attributes:
 
-            bt_params_top (dict): inputs of top tracking: rs, ballspacing, am, dp, sigma_factor, fourier_radius, intsteps
-            bt_params_bottom (dict): inputs of bottom tracking: see bt_params_top
-            drift_rates: rate at which the images are shifted (px/frame)
+            bt_params (dict): inputs of top tracking: rs, ballspacing, am, dp, sigma_factor, fourier_radius, intsteps
+            vx_rates: x-direction rate at which the images are shifted (px/frame)
+            vy_rates: y-direction rate at which the images are shifted (px/frame)
             trange: list of 2 indices in the list of images for the start and end frame used to calibrate.
             fwhm: FWHM of the gaussian smoothing on the flow fields
             images: if None, will use the ones already on disk in `drift_dirs`. images or drift_dirs must be specified
-            outputdir: directory for output calibration data
+            outputdir_cal: directory for output calibration data
+            component (str): velocity vector component over which to fit, either 'x', 'y', or 'xy' for both
             kernel: either 'gaussian' or 'boxcar' for smoothing the velocity vector field
             read_drift_images: toggle whether to read images from existing files
-            drift_dirs: parent directory hosting all the drift data subdirectories (one for each drift rate)
-            output_prep_data: output directory for the prepped filtered data
             Balltracking will still use its own filtering function (see input 'filter_radius')
             save_ballpos_list = enable/disable writing the list of ballpos arrays for all drift rates.
-            nthreads: number of threads to use for parallelization. Default to 1.
+            ncpus: number of parallel workers.
 
         """
 
-        self.bt_params_top = bt_params_top
-        self.bt_params_bottom = bt_params_bottom
-        self.drift_rates = drift_rates
+        # Input check
+        if images is None and not read_drift_images:
+            print("Drift data do not exist. Source images must be set")
+            sys.exit(1)
+
+        self.bt_params = bt_params
+        self.vx_rates = vx_rates
+        self.vy_rates = vy_rates
+        self.drift_rates = np.stack((vx_rates, vy_rates), axis=1)
         self.trange = trange
         self.fwhm = fwhm
         self.nframes = trange[1] - trange[0]
         self.images = images
         self.read_drift_images = read_drift_images
-        self.drift_dirs = drift_dirs
-        self.outputdir = outputdir
+        self.outputdir_cal = outputdir_cal
+        # parent directory hosting all the drift data subdirectories (one for each drift rate)
+        self.drift_dirs = sorted(list(Path(outputdir_cal).glob('drift*')))
+        if len(self.drift_dirs) < len(vx_rates):
+            sys.exit('Drift directories not set correctly')
+        self.component = component
         self.kernel = kernel
-        self.output_prep_data = output_prep_data
         self.save_ballpos_list = save_ballpos_list
-        self.nthreads = nthreads
+        self.ncpus = ncpus
         self.reprocess_existing = reprocess_existing
         self.verbose = verbose
-        self.ray_verbose = ray_verbose
         self.return_ballpos = return_ballpos
-        self.index = index
+        if "index" in bt_params:
+            self.index = bt_params['index']
+        else:
+            self.index = 0
         # Get frame dimensions
         self.samples = self.get_drift_images(0)
         self.dims = self.samples.shape[-2:]
+        if roi is None:
+            self.roi = self.get_roi()
 
-        os.makedirs(self.outputdir, exist_ok=True)
+        if self.kernel == 'boxcar' or self.kernel == 'gaussian':
+            self.kernels = [self.kernel]
+        elif self.kernel == 'both':
+            self.kernels = ['boxcar', 'gaussian']
+        else:
+            sys.exit('smoothing kernel not supported or missing')
+
+        os.makedirs(self.outputdir_cal, exist_ok=True)
 
     def get_drift_images(self, rate_idx):
 
         if self.read_drift_images:
+            if self.verbose:
+                print(self.drift_dirs[rate_idx])
             # Files supposed to be created or to be read if already exist.
-            filepaths = sorted(list(Path(self.drift_dirs[rate_idx]).glob('*.fits')))
+            filepaths = sorted(list(Path(self.drift_dirs[rate_idx]).glob('*.fits')))[self.trange[0]:self.trange[1]]
             if not check_file_series(filepaths):
                 print("Drift data do not exist. Sources images not provided. Must provide them as input")
                 sys.exit(1)
@@ -989,14 +1000,14 @@ class Calibrator:
 
         drift_images = self.get_drift_images(rate_idx)
 
-        bt_params = {'top': self.bt_params_top,
-                     'bottom': self.bt_params_bottom,
-                     'nframes': self.nframes,
-                     'outputdir': self.drift_dirs[rate_idx],
-                     'output_prep_data': False,
-                     'verbose': False}
+        # The calibration uses the same bt_params for top and bottom.
+        # To track top and bottom with different parameters, just create different calibrators
+        ballpos_top, ballpos_bottom = balltrack_all(self.bt_params, self.bt_params, self.drift_dirs[rate_idx],
+                                                    data=drift_images,
+                                                    # ballpos arrays will be written after all rates are processed
+                                                    # Thus disabling saving them in each run
+                                                    write_ballpos=False)
 
-        ballpos_top, ballpos_bottom = balltrack_all(bt_params, data=drift_images, write_ballpos=False, ncores=1)
         return ballpos_top, ballpos_bottom
 
     def balltrack_all_rates(self):
@@ -1016,7 +1027,7 @@ class Calibrator:
             print(self.drift_rates)
         rate_idx_list = range(len(self.drift_rates))
 
-        npzf = Path(self.outputdir, f'ballpos_list_{self.index}.npz')
+        npzf = Path(self.outputdir_cal, f'ballpos_list_{self.index}.npz')
         if npzf.exists() and not self.reprocess_existing:
             if self.return_ballpos:
                 print('loading data at existing index: ', self.index)
@@ -1028,11 +1039,11 @@ class Calibrator:
                 print('skipping existing data at index: ', self.index)
                 return ballpos_top_list, ballpos_bottom_list
 
-        if self.nthreads < 2:
+        if self.ncpus < 2:
             ballpos_top_list, ballpos_bottom_list = zip(*map(self.balltrack_rate, rate_idx_list))
         else:
-            with Pool(processes=self.nthreads) as pool:
-                print(f'starting multiprocessing pool with {self.nthreads} workers')
+            with Pool(processes=self.ncpus) as pool:
+                print(f'starting multiprocessing pool with {self.ncpus} workers')
                 ballpos_top_list, ballpos_bottom_list = zip(*pool.map(self.balltrack_rate, rate_idx_list))
 
         if self.save_ballpos_list:
@@ -1040,176 +1051,177 @@ class Calibrator:
                      ballpos_top_list=ballpos_top_list,
                      ballpos_bottom_list=ballpos_bottom_list)
             if self.verbose:
-                print(f'saved ballpos_top_list and ballpos_bottom_list in {self.outputdir}/ballpos_list_{self.index}.npz')
+                print(f'saved ballpos_top_list and ballpos_bottom_list in {self.outputdir_cal}/ballpos_list_{self.index}.npz')
 
         return ballpos_top_list, ballpos_bottom_list
 
-    def fit(self, ballpos_list):
-        # Calculate amount of cropping necessary to avoid edge effects
+    def get_roi(self):
+        """
+        Calculate amount of cropping necessary to avoid edge effects
+        """
         trim = int(self.drift_rates.max() * self.nframes + self.fwhm + 2)
         roi = [trim, self.dims[0] - trim, trim, self.dims[1] - trim]
-        p, rmse, _, _, _ = fit_calibration(ballpos_list, self.drift_rates, self.trange, self.fwhm, self.dims, roi, self.kernel)
-        return p, rmse
+        return roi
 
-def calibration_run_balltrack(bt_params, drift_rates, trange, outputdir,
-                              images=None, drift_dirs=None, read_drift_images=False, save_ballpos_list=True, verbose=False,
-                              nthreads=1, reprocess_existing=True):
+    def fit_mean_velocities(self, velocities, rates):
+        vel_means = np.array([vel[self.roi[0]:self.roi[1], self.roi[2]:self.roi[3]].mean() for vel in velocities])
+        p, r, _, _, _ = np.polyfit(vel_means, rates, 1, full=True)
+        rmse = np.sqrt(r[0] / vel_means.size)
+        return p, rmse, vel_means
 
-    if 'index' not in bt_params:
-        print('bt_params missing "index" key')
-        sys.exit(1)
+    def fit_calibration(self, ballpos_list, kernel=None):
 
-    if verbose:
-        print(bt_params)
+        """
+        Fit a linear profile by calculating the mean velocity for each drift rate.
+        Edge effects exist and must be excluded by slicing an unaffected area
 
-    # Consider the same balls parameters for top and bottom tracking.
-    bt_params_top = bt_params
-    bt_params_bottom = bt_params
+        Args:
+            ballpos_list (ndarray): List of ball positions at each drift rate.
+            kernel (str): 2d smoothing kernel of the velocity field. Either 'gaussian', 'boxcar'
 
-    cal = Calibrator(images, drift_rates, trange, bt_params_top, bt_params_bottom, outputdir,
-                     drift_dirs=drift_dirs,
-                     output_prep_data=False,
-                     read_drift_images=read_drift_images,
-                     save_ballpos_list=save_ballpos_list,
-                     nthreads=nthreads,
-                     reprocess_existing=reprocess_existing,
-                     verbose=verbose,
-                     index=bt_params['index'])
+        Returns:
+            p (list): fit parameters
+            rmse (float): root-mean-square error
+            vxmeans (float): mean value over the sliced velocity field
+            vxs (ndarray): non-averaged flow fields x-component (unsliced)
+            vys (ndarray): non-averaged flow fields y-components (unsliced)
+        """
 
-    ballpos_top_list, ballpos_bottom_list = cal.balltrack_all_rates()
+        if kernel is None:
+            kernel = self.kernel
+        # Convert to Euler averaged flow fields
+        vxs, vys, wplanes = (
+            zip(*[make_velocity_from_tracks(ballpos, self.dims, self.trange, self.fwhm, kernel=kernel)
+                  for ballpos in ballpos_list])
+        )
 
-    return ballpos_top_list, ballpos_bottom_list
+        if self.component == 'x':
+            # Beware of bias due to differential rotation.
+            p_x, rmse_x, vx_means = self.fit_mean_velocities(vxs, self.vx_rates)
+            return p_x, rmse_x, vx_means, vxs, vys
+
+        elif self.component == 'y':
+            # Beware of bias due to differential rotation.
+            p_y, rmse_y, vy_means = self.fit_mean_velocities(vys, self.vy_rates)
+            return p_y, rmse_y, vy_means, vxs, vys
+
+        elif self.component == 'xy':
+            p_x, rmse_x, vx_means = self.fit_mean_velocities(vxs, self.vx_rates)
+            p_y, rmse_y, vy_means = self.fit_mean_velocities(vys, self.vy_rates)
+            return p_x, p_y, rmse_x, rmse_y, vy_means, vxs, vys
+
+        else:
+            sys.exit('component not recognized in fit_calibration()')
+
+    def calibration_run_fit(self, ballpos_top_list, ballpos_bottom_list, verbose=False):
+
+        vx_headers_top = ['vx_top {:1.2f}'.format(vx[0]) for vx in self.drift_rates]
+        vx_headers_bottom = ['vx_bottom {:1.2f}'.format(vx[0]) for vx in self.drift_rates]
+        # Concatenate headers
+        vx_headers = vx_headers_top + vx_headers_bottom
+
+        dicts = []
+
+        for ker in self.kernels:
+            if verbose:
+                print('calibration top')
+            p_top, _, vxmeans_top, vxs_top, vys_top = self.fit_calibration(ballpos_top_list, kernel=ker)
+            if verbose:
+                print('calibration bottom')
+            p_bot, _, vxmeans_bot, vxs_bot, vys_bot = self.fit_calibration(ballpos_bottom_list, kernel=ker)
+
+            npzf = Path(self.outputdir_cal, f'mean_velocity_{ker}_{self.index:05d}.npz')
+            # Index where x- and y- rates = 0, for saving the undrifted flow fields (sanity check)
+            idx0 = int(len(self.drift_rates) / 2)
+            np.savez_compressed(npzf,
+                                vx_top=vxs_top[idx0],
+                                vy_top=vys_top[idx0],
+                                vx_bot=vxs_bot[idx0],
+                                vy_bot=vys_bot[idx0],
+                                vxmeans_top=vxmeans_top,
+                                vxmeans_bot=vxmeans_bot,
+                                drift_rates=self.drift_rates,
+                                p_top=p_top,
+                                p_bot=p_bot,
+                                index=self.index)
+
+            # Concatenate above results in one single list and create a dictionnary with the concatenated keys
+            dict_vxmeans = OrderedDict(zip(vx_headers, vxmeans_top.tolist() + vxmeans_bot.tolist()))
+
+            dict_results = self.bt_params.copy()
+            dict_results['kernel'] = ker
+            dict_results['fwhm'] = self.fwhm
+            dict_results['p_top_0'] = p_top[0]
+            dict_results['p_top_1'] = p_top[1]
+            dict_results['p_bot_0'] = p_bot[0]
+            dict_results['p_bot_1'] = p_bot[1]
+            dict_results.update(dict_vxmeans)
+            dicts.append(dict_results)
+
+        df_fit = pd.DataFrame(dicts)
+        df_fit.to_csv(Path(self.outputdir_cal, f'param_sweep_{self.index:05d}.csv'))
+
+        return df_fit
 
 
-def calibration_run_fit(bt_params, ballpos_top_list, ballpos_bottom_list, outputdir, drift_rates, trange, fwhm, dims,
-                        fov_slices, csvfile, outputdir2=None, verbose=False):
+# def full_calibration(bt_params, drift_rates, trange, reprocess_bt, outputdir_cal, fwhm,
+#                      drift_images=None, drift_dirs=None, read_drift_images=False, save_ballpos_list=True,
+#                      verbose=False, ncpus=1):
 
-    if outputdir2 is None:
-        outputdir2 = outputdir
-
-    vx_headers_top = ['vx_top {:1.2f}'.format(vx[0]) for vx in drift_rates]
-    vx_headers_bottom = ['vx_bottom {:1.2f}'.format(vx[0]) for vx in drift_rates]
-    # Concatenate headers
-    vx_headers = vx_headers_top + vx_headers_bottom
-    # True velocity offsets
-    xrates = np.array(drift_rates)[:, 0]
-
-    dicts = []
-    for kernel in ['boxcar', 'gaussian']:
-        if verbose:
-            print('calibration top')
-        p_top, _, vxmeans_top, vxs_top, vys_top = fit_calibration(ballpos_top_list, xrates, trange, fwhm, dims, fov_slices, kernel)
-        if verbose:
-            print('calibration bottom')
-        p_bot, _, vxmeans_bot, vxs_bot, vys_bot = fit_calibration(ballpos_bottom_list, xrates, trange, fwhm, dims, fov_slices, kernel)
-
-        # Concatenate above results in one single list and create a dictionnary with the concatenated keys
-        dict_vxmeans = OrderedDict(zip(vx_headers, vxmeans_top.tolist() + vxmeans_bot.tolist()))
-
-        dict_results = bt_params.copy()
-        dict_results['kernel'] = kernel
-        dict_results['fwhm'] = fwhm
-        dict_results['p_top_0'] = p_top[0]
-        dict_results['p_top_1'] = p_top[1]
-        dict_results['p_bot_0'] = p_bot[0]
-        dict_results['p_bot_1'] = p_bot[1]
-        dict_results.update(dict_vxmeans)
-        dicts.append(dict_results)
-
-    df_fit = pd.DataFrame(dicts)
-    df_fit.to_csv(csvfile)
-    npzf = os.path.join(outputdir2, f'mean_velocity_{bt_params["index"]:05d}.npz')
-    # Index where xrates = 0. Used to save specific velocity map
-    idx0 = np.where(xrates == 0)[0][0]
-    np.savez_compressed(npzf,
-                        vx_top=vxs_top[idx0],
-                        vy_top=vys_top[idx0],
-                        vx_bot=vxs_bot[idx0],
-                        vy_bot=vys_bot[idx0],
-                        vxmeans_top=vxmeans_top,
-                        vxmeans_bot=vxmeans_bot,
-                        xrates=xrates,
-                        p_top=p_top,
-                        p_bot=p_bot,
-                        index=bt_params['index'])
-    if verbose:
-        print(f'saved dictionnary at {npzf}')
-
-    return dict_results
-
-# @ray.remote
-def full_calibration(bt_params, drift_rates, trange, fov_slices, reprocess_bt, outputdir, fwhm, dims,
-                     images=None, ray_drift_id=None, outputdir2=None, drift_dirs=None,
-                     read_drift_images=False,
-                     save_ballpos_list=True, verbose=False, nthreads=1):
+def full_calibration(bt_params, cal_args, cal_opt_args, reprocess_bt=True, verbose=False):
     """
+    Main calibration function. It considers top-side and bottom-side to be the same, but output their results
+    separately in the csv file. After multiple runs in the cluster, as many csv files are create with a unique
+    index defined in the list of bt_params
+    Do not use this function for a single calibration run where the top-side and bottom-side parameters need to be
+    different.
 
     Args:
         bt_params (dict): balltrack parameters: rs, intsteps, ballspacing, am, dp, sigma_factor, fourier_radius
-        drift_rates:
-        trange:
-        fov_slices:
-        reprocess_bt:
-        outputdir:
-        fwhm:
-        dims:
-        images:
-        ray_drift_id:
-        outputdir2:
-        drift_dirs:
-        read_drift_images: toggle whether (true) to read the images from disk on the fly, or (false) from a loaded array
-        save_ballpos_list:
-        verbose:
-        nthreads:
+        cal_args (dict): positional arguments passed to the Calibrator class instance.
+        reprocess_bt (bool): whether to reprocess balltracking over the drifted data or load existing results.
+        cal_opt_args(dict): optional arguments for the Calibrator class instance
+        verbose (bool): True or False for enabling / disabling verbosity
 
     Returns:
 
     """
-    print(f'Processing index {bt_params["index"]}')
 
-    if images is None and ray_drift_id is None and not read_drift_images:
-        print("Drift data do not exist. Source images must be set")
-        sys.exit(1)
+    # Set the index for having a unique identifier of each run of the parameter sweep
+    index = 0
+    if "index" in bt_params:
+        index = bt_params["index"]
 
-    # images = ray.get(ray_drift_id)
-    csvfile = os.path.join(outputdir, f'param_sweep_{bt_params["index"]:05d}.csv')
+    if verbose:
+        print(f'Processing index {index}')
+
+    # trange in calibration is set independently of the main balltracking run. The calibration
+    # must work on its own copy, and set calibration-specific trange in `bt_params` sent to the BT class instance
+    bt_params_cal = bt_params.copy()
+    bt_params_cal['trange'] = cal_args['trange']
+    # top-side and bottom-side parameters are considered the same.
+    cal = Calibrator(bt_params_cal, **cal_args, **cal_opt_args)
 
     if reprocess_bt:
-        # print(f'processing index {bt_params["index"]}')
-
-        # images = ray.get(ray_drift_id)
-
-        ballpos_top_list, ballpos_bottom_list = \
-            calibration_run_balltrack(bt_params, drift_rates, trange, outputdir,
-                                      images=images,
-                                      drift_dirs=drift_dirs,
-                                      read_drift_images=read_drift_images,
-                                      save_ballpos_list=save_ballpos_list,
-                                      verbose=verbose,
-                                      nthreads=nthreads)
+        if verbose:
+            print('Running balltracking at all rates')
+        ballpos_top_list, ballpos_bottom_list = cal.balltrack_all_rates()
 
     else:
-
-        ballpos_list_file = os.path.join(outputdir, f'ballpos_list_{bt_params["index"]:05d}.npz')
+        ballpos_list_file = Path(cal_args['outputdir'], f'ballpos_list_{index:05d}.npz')
         if not os.path.isfile(ballpos_list_file):
             sys.exit('Missing ballpos_list_file for calibration')
 
-        try:
-            with np.load(ballpos_list_file, allow_pickle=True) as npzfile:
-                ballpos_top_list = npzfile['ballpos_top_list']
-                ballpos_bottom_list = npzfile['ballpos_bottom_list']
-        except:
-            # For monitoring any fail from the terminal while the cluster is running the concurrent jobs.
-            print(f'failed at index{bt_params["index"]}')
-            return None
+        with np.load(ballpos_list_file, allow_pickle=True) as npzfile:
+            ballpos_top_list = npzfile['ballpos_top_list']
+            ballpos_bottom_list = npzfile['ballpos_bottom_list']
 
-    _ = calibration_run_fit(bt_params, ballpos_top_list, ballpos_bottom_list, outputdir, drift_rates,
-                            trange, fwhm, dims, fov_slices, csvfile, outputdir2=outputdir2, verbose=verbose)
+    _ = cal.calibration_run_fit(ballpos_top_list, ballpos_bottom_list)
 
-    return bt_params['index']
+    return index
 
 
-def create_drift_series(images, drift_rate, filepaths=None, filter_function=None):
+def create_drift_series(images, vx_rate, vy_rate, outputdir=None, filter_function=None):
     """
     Drift the image series by translating a moving reference by an input 2D velocity vector.
     The drift operates by shifting the phase of the Fourier transform that also circularly shifts the escaping pixels
@@ -1217,67 +1229,37 @@ def create_drift_series(images, drift_rate, filepaths=None, filter_function=None
 
     Args:
         images (ndarray): data cube to drift
-        drift_rate (list): list of [vx,vy] signed velocity values.
-        filepaths (list): paths where the driftes images are written.
+        vx_rate (float): signed value for the velocity drift on the x-direction.
+        vy_rate (float): signed value for the velocity drift on the y-direction.
+        outputdir (Path): output directory where the drifted images are saved.
         filter_function (function): optional filter to apply to the image
 
     Returns:
         drifted_images (ndarray): 3D array with images drifting at the given drift rate
     """
 
-    if drift_rate[0] == 0 and drift_rate[1] == 0:
+    nframes = images.shape[0]
+    if vx_rate == 0 and vy_rate == 0:
         drift_images = images
     else:
         drift_images = np.zeros(images.shape)
 
-    for i in range(images.shape[0]):
-        if (drift_rate[0] != 0) or (drift_rate[1] != 0):
-            dx = drift_rate[0] * float(i)
-            dy = drift_rate[1] * i
+    for i in range(nframes):
+        if (vx_rate != 0) or (vy_rate != 0):
+            dx = vx_rate * i
+            dy = vy_rate * i
             drift_images[i, :, :] = filters.translate_by_phase_shift(images[i, :, :], dx, dy)
 
         if filter_function is not None:
             drift_images[i, :, :] = filter_function(drift_images[i, :, :])
 
-        if filepaths is not None:
+        if outputdir is not None:
+            if not outputdir.exists():
+                os.makedirs(outputdir, exist_ok=True)
+            filepaths = [str(Path(outputdir, f'drifted_{k:02d}.fits')) for k in range(nframes)]
             fitstools.writefits(drift_images[i, :, :], filepaths[i])
 
-    return drift_images
-
-
-def fit_calibration(ballpos_list, shift_rates, trange, fwhm, dims, roi, kernel):
-
-    """
-    Fit a linear profile by calculating the mean velocity for each drift rate.
-    Edge effects exist and must be excluded by slicing an unaffected area 
-    
-    Args:
-        ballpos_list (ndarray): List of ball positions at each frame
-        shift_rates (list): drift velocity rates
-        trange (list):
-        fwhm (float):
-        dims (list):
-        roi (list):  area free of edge effects (ymin, ymax, xmin, xmax)
-        kernel (str): 2d smoothing kernel of the velocity field. Either 'gaussian' or 'boxcar'.
-
-    Returns:
-        p (list): fit parameters
-        rmse (float): root-mean-square error
-        vxmeans (float): mean value over the sliced velocity field
-        vxs (ndarray): non-averaged flow fields x-component (unsliced)
-        vys (ndarray): non-averaged flow fields y-components (unsliced)
-    """
-
-    vxs, vys, wplanes = zip(*[make_velocity_from_tracks(ballpos, dims, trange, fwhm, kernel=kernel)
-                              for ballpos in ballpos_list])
-    # Select an ROI that contains valid data. At least one should exclude edges as wide as the ball radius.
-    # Beware of bias due to differential rotation!
-    vxmeans = np.array([vx[roi[0]:roi[1], roi[2]:roi[3]].mean() for vx in vxs])
-
-    p, r, _, _, _ = np.polyfit(vxmeans, shift_rates, 1, full=True)
-    rmse = np.sqrt(r[0]/vxmeans.size)
-
-    return p, rmse, vxmeans, vxs, vys
+    return drift_images, outputdir
 
 
 def check_file_series(filepaths):
@@ -1298,7 +1280,11 @@ def check_file_series(filepaths):
         return False
 
 
-def make_euler_velocity(ballpos_top, ballpos_bottom, cal_top, cal_bottom, dims, trange, fwhm, kernel, outputdir=None):
+def make_euler_velocity(ballpos_top, ballpos_bottom, cal_top, cal_bottom, dims, fwhm,
+                        trange=None, kernel='gaussian', header=None, outputdir=None):
+
+    if trange is None:
+        trange = [0, ballpos_top.shape[-1]]
 
     vx_top, vy_top, wplane_top = make_velocity_from_tracks(ballpos_top, dims, trange, fwhm, kernel)
     vx_bottom, vy_bottom, wplane_bottom = make_velocity_from_tracks(ballpos_bottom, dims, trange, fwhm, kernel)
@@ -1312,46 +1298,86 @@ def make_euler_velocity(ballpos_top, ballpos_bottom, cal_top, cal_bottom, dims, 
     vy = 0.5 * (vy_top + vy_bottom)
 
     if outputdir is not None:
-        np.savez_compressed(
-            os.path.join(outputdir, 'vxy_{:s}_fwhm_{:d}_avg_{:d}.npz'.format(kernel, fwhm, trange[1])),
-            vx=vx, vy=vy)
+        if header is not None:
+            header['BSCALE'] = 1
+            header['BZERO'] = 0
+            header['BITPIX'] = -32
+        np.savez_compressed(Path(outputdir, f'vxy_{kernel}_fwhm{fwhm}_t{trange[0]}_{trange[1]}.npz'),
+                            vx=vx.astype(np.float32), vy=vy.astype(np.float32), header=header)
 
     return vx, vy
 
 
-def make_euler_velocity_lanes(ballpos_top, ballpos_bottom, cal_top, cal_bottom, dims, tranges, fwhm, nsteps, maxstep, outputdir, kernel='gaussian'):
+def make_euler_vel_lanes(ballpos_top, ballpos_bottom, cal_top, cal_bottom, dims, fwhm,
+                                nsteps=40, maxstep=1, outputdir=None, kernel='gaussian', header=None):
+
+    trange = [0, ballpos_top.shape[-1]]
+    vx, vy = make_euler_velocity(ballpos_top, ballpos_bottom, cal_top, cal_bottom, dims, fwhm, trange, kernel=kernel)
+    lanes = make_lanes(vx, vy, nsteps, maxstep)
+    if outputdir is not None:
+        # Write fits file
+        if header is not None:
+            header['BITPIX'] = -32
+            header['BZERO'] = 0
+            header['BSCALE'] = 1
+        else:
+            header = None
+
+        np.savez_compressed(Path(outputdir, f'vxy_{kernel}_fwhm{fwhm}_tALL.npz'),
+                            vx=vx.astype(np.float32), vy=vy.astype(np.float32), lanes=lanes, header=header)
+
+        fitstools.writefits(lanes,
+                            Path(outputdir, f'lanes_{kernel}_fwhm{fwhm}_tALL.fits'),
+                            header=header,
+                            compressed=False)
+
+    return vx, vy, lanes
+
+
+def make_euler_vel_lanes_series(ballpos_top, ballpos_bottom, cal_top, cal_bottom, dims, fwhm, tranges,
+                                nsteps=40, maxstep=1, outputdir=None, kernel='gaussian', headers=None):
 
     vxl = []
     vyl = []
     lanesl = []
     for i, trange in enumerate(tranges):
-        tavg = trange[1] - trange[0]
         # Velocity field
-        vx, vy = make_euler_velocity(ballpos_top, ballpos_bottom, cal_top, cal_bottom, dims, trange, fwhm, kernel=kernel)
+        vx, vy = make_euler_velocity(ballpos_top, ballpos_bottom, cal_top, cal_bottom, dims, fwhm, trange=trange, kernel=kernel)
         # lanes
         lanes = make_lanes(vx, vy, nsteps, maxstep)
-        # Write fits file
-        fitstools.writefits(vx, os.path.join(outputdir, 'vx_fwhm%d_tavg%03d_%03d.fits'%(fwhm, tavg, i)))
-        fitstools.writefits(vy, os.path.join(outputdir, 'vy_fwhm%d_tavg%03d_%03d.fits'%(fwhm, tavg, i)))
-        fitstools.writefits(lanes, os.path.join(outputdir, 'lanes_fwhm%d_tavg%03d_nsteps%d_%03d.fits' %(fwhm, tavg, nsteps, i)))
+
+        if outputdir is not None:
+            # Write fits file
+            if headers is not None:
+                header = headers[i]
+                header['BITPIX'] = -32
+                header['BZERO'] = 0
+                header['BSCALE'] = 1
+            else:
+                header = None
+
+            np.savez_compressed(Path(outputdir, f'vxy_{kernel}_fwhm{fwhm}_t{trange[0]}_{trange[1]}.npz'),
+                                vx=vx.astype(np.float32), vy=vy.astype(np.float32), lanes=lanes, header=header)
+
+            fitstools.writefits(lanes,
+                                Path(outputdir, f'lanes_{kernel}_fwhm{fwhm}_t{trange[0]}_{trange[1]}.fits'),
+                                header=header,
+                                compressed=False)
 
         vxl.append(vx)
         vyl.append(vy)
         lanesl.append(lanes)
 
-        # plt.figure(figsize=(10, 10))
-        # plt.imshow(lanes, origin='lower', cmap='gray_r')
-        # plt.xlabel('x [px]')
-        # plt.ylabel('y [px]')
-        # plt.title('Supergranular lanes at fwhm = %d px ; tavg = %d ; map # %03d'%(fwhm, tavg, i))
-        # plt.tight_layout()
-        # plt.savefig(os.path.join(outputdir, 'lanes_fwhm%d_tavg%03d_%03d.png'%(fwhm, tavg, i)))
-        # plt.close()
+    run_avg_lanes = np.array(lanesl).mean(axis=0)
+    fitstools.writefits(run_avg_lanes,
+                        Path(outputdir, f'lanes_{kernel}_fwhm{fwhm}_run_avg.fits'),
+                        header=headers[len(headers) // 2],
+                        compressed=False)
 
-    return vxl, vyl, lanesl
+    return vxl, vyl, lanesl, run_avg_lanes
 
 
-def make_lanes(vx, vy, nsteps, maxstep):
+def make_lanes(vx, vy, nsteps=40, maxstep=1):
 
     dims = vx.shape
 
@@ -1410,159 +1436,6 @@ def make_lanes(vx, vy, nsteps, maxstep):
     lanes = np.sqrt(gxx**2 + gyy**2)
 
     return lanes
-
-
-def make_lanes_visualization(vx, vy, nsteps, maxstep):
-
-    dims = vx.shape
-
-    # Gamma scale the data
-    vmag = np.sqrt(vx**2 + vy**2)
-    vmax = vmag.max()
-    vn = vmag/vmax
-    gamma = 0.5
-    g = vn**(gamma-1)
-    vxn = vx/vmax
-    vyn = vy/vmax
-    vxng = vxn*g
-    vyng = vyn*g
-
-    vblank = np.zeros([dims[0]+2*maxstep, dims[1]+2*maxstep], dtype=DTYPE)
-    vx2 = vblank.copy()
-    vy2 = vblank.copy()
-    vx2[maxstep : dims[0] + maxstep, maxstep :dims[1] + maxstep] = vxng.astype(DTYPE)
-    vy2[maxstep : dims[0] + maxstep, maxstep :dims[1] + maxstep] = vyng.astype(DTYPE)
-
-    vx2 *= -1
-    vy2 *= -1
-
-    x0, y0 = np.meshgrid( maxstep + np.arange(dims[1]) , maxstep + np.arange(dims[0]))
-    xold = x0.flatten().astype(DTYPE)
-    yold = y0.flatten().astype(DTYPE)
-
-    maxv = np.sqrt(vx2.max() ** 2 + vy2.max() ** 2)
-
-    # Create a storage array for the intermediate integration steps
-    xtracks = np.zeros([nsteps+1, x0.size], dtype=DTYPE)
-    ytracks = np.zeros([nsteps+1, y0.size], dtype=DTYPE)
-    xtracks[0, :] = xold
-    ytracks[0, :] = yold
-    lanes_series = np.empty([nsteps+1, *dims])
-    lanes_series[0, ...] = np.zeros(dims)
-
-    for n in range(nsteps):
-
-        dx1 = maxstep * cinterp.cbilin_interp1(vx2, xtracks[n, :], ytracks[n, :])/maxv
-        dy1 = maxstep * cinterp.cbilin_interp1(vy2, xtracks[n, :], ytracks[n, :])/maxv
-
-        dx2 = maxstep * cinterp.cbilin_interp1(vx2, xtracks[n, :]+dx1, ytracks[n, :]+dy1) / maxv
-        dy2 = maxstep * cinterp.cbilin_interp1(vy2, xtracks[n, :]+dx1, ytracks[n, :]+dy1) / maxv
-
-        newx = xtracks[n, :] + (dx1 + dx2)/2
-        newy = ytracks[n, :] + (dy1 + dy2)/2
-        xtracks[n + 1, :] = newx.copy()
-        ytracks[n + 1, :] = newy.copy()
-
-        newx -= maxstep
-        newy -= maxstep
-
-        newx = newx.reshape(dims)
-        newy = newy.reshape(dims)
-
-        # Clip the positions in case they overshoot due to maxstep
-        np.clip(newx, 0, dims[1]-1, out=newx)
-        np.clip(newy, 0, dims[0]-1, out=newy)
-
-        gxx = np.gradient(newx, axis=1)
-        gyy = np.gradient(newy, axis=0)
-
-        lanes_series[n + 1, ...] = np.sqrt(gxx**2 + gyy**2)
-
-    np.clip(xtracks - maxstep, 0, dims[1] - 1, out=xtracks)
-    np.clip(ytracks - maxstep, 0, dims[0] - 1, out=ytracks)
-
-    return lanes_series, [xtracks.reshape([nsteps+1, *dims]), ytracks.reshape([nsteps+1, *dims])]
-
-
-def balltrack_calibration(bt_params, drift_rates, trange, fov_slices, reprocess_bt, outputdir, kernel, fwhm, dims,
-                          drift_dir=None, images=None, basename='drift', save_ballpos_list=True, csvfile=None, verbose=False, nthreads=1):
-
-    if 'index' not in bt_params:
-        print('bt_params missing "index" key')
-        sys.exit(1)
-
-    if verbose:
-        print(bt_params)
-
-    xrates = np.array(drift_rates)[:, 0]
-    idx0 = np.where(xrates == 0)[0][0]
-    ballpos_list_file = os.path.join(outputdir, 'ballpos_list.npz')
-
-    if (reprocess_bt is True) or (reprocess_bt == 'once' and not os.path.isfile(ballpos_list_file)):
-
-        cal = Calibrator(images, drift_rates, trange,
-                         bt_params['rs'],
-                         bt_params['ballspacing'],
-                         bt_params['dp'],
-                         bt_params['sigma_factor'],
-                         bt_params['fourier_radius'],
-                         bt_params['intsteps'],
-                         outputdir,
-                         drift_dir=drift_dir,
-                         output_prep_data=False,
-                         basename=basename,
-                         save_ballpos_list=save_ballpos_list,
-                         nthreads=nthreads,
-                         verbose=verbose)
-
-        ballpos_top_list, ballpos_bottom_list = cal.balltrack_all_rates()
-        ballposf = os.path.join(outputdir, 'ballpos_{:s}.npz'.format(str(bt_params['index'])))
-        np.savez(ballposf, ballpos_top=ballpos_top_list[idx0], ballpos_bottom=ballpos_bottom_list[idx0])
-
-    else:
-        npzfile = np.load(ballpos_list_file)
-        ballpos_top_list = npzfile['ballpos_top_list']
-        ballpos_bottom_list = npzfile['ballpos_bottom_list']
-
-    vx_headers_top = ['vx_top {:1.2f}'.format(vx[0]) for vx in drift_rates]
-    vx_headers_bottom = ['vx_bottom {:1.2f}'.format(vx[0]) for vx in drift_rates]
-    # Concatenate headers
-    vx_headers = vx_headers_top + vx_headers_bottom
-
-    p_top, _, vxmeans_top, vxs_top, vys_top = fit_calibration(ballpos_top_list, xrates, trange, fwhm, dims, fov_slices, kernel)
-    p_bot, _, vxmeans_bot, vxs_bot, vys_bot = fit_calibration(ballpos_bottom_list, xrates, trange, fwhm, dims, fov_slices, kernel)
-
-    # Concatenate above results in one single list and create a dictionnary with the concatenated keys
-    dict_vxmeans = OrderedDict(zip(vx_headers, vxmeans_top.tolist() + vxmeans_bot.tolist()))
-
-    dict_results = bt_params.copy()
-    dict_results['kernel'] = kernel
-    dict_results['fwhm'] = fwhm
-    dict_results['p_top_0'] = p_top[0]
-    dict_results['p_top_1'] = p_top[1]
-    dict_results['p_bot_0'] = p_bot[0]
-    dict_results['p_bot_1'] = p_bot[1]
-    dict_results.update(dict_vxmeans)
-
-    if csvfile is None:
-        csvfile = os.path.join(outputdir, 'param_sweep_{:s}.csv'.format(str(bt_params['index'])))
-    with open(csvfile, 'w') as outfile:
-        csvwriter = csv.writer(outfile)
-        csvwriter.writerow(list(dict_results.keys()))
-        csvwriter.writerow(list(dict_results.values()))
-
-    npzf = os.path.join(outputdir, 'mean_velocity_{:s}.npz'.format(str(bt_params['index'])))
-    # Index where xrates = 0. Used to save specific velocity map
-
-    np.savez_compressed(npzf,
-                        vx_top=vxs_top[idx0],
-                        vy_top=vys_top[idx0],
-                        vx_bot=vxs_bot[idx0],
-                        vy_bot=vys_bot[idx0])
-    if verbose:
-        print(f'saved dictionnary at {npzf}')
-
-    return dict_results
 
 
 def meshgrid_params_to_list(param_dict):

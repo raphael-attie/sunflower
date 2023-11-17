@@ -20,5 +20,5 @@ for i, vx_r in enumerate(vx_rates):
     drift_rate = [vx_r, 0]
     subdir = Path(outputdir, f'drift_{i:02d}')
     os.makedirs(subdir, exist_ok=True)
-    filepaths = [str(Path(subdir, f'im_drifted_{k:02d}.fits')) for k in range(60)]
+    filepaths = [str(Path(subdir, f'im_drifted_{k:02d}.fits')) for k in range(nframes)]
     _ = blt.create_drift_series(images, drift_rate, filepaths=filepaths)

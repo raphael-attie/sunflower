@@ -1,7 +1,7 @@
 import balltracking.balltrack as blt
 from functools import partial
 from time import time
-import inputs
+from optimization import inputs
 
 if __name__ == '__main__':
 

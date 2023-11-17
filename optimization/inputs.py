@@ -47,12 +47,6 @@ bt_params_list = bt_params_list[0:ncpus]
 read_drift_images = True
 # If True, must provide directories, one per drift rate.
 drift_dirs = sorted(list(Path(os.environ['DATA3'], 'sanity_check/stein_series/calibration3').glob('drift*')))
-# Alternatively, load the images
-# imfiles = sorted(glob.glob(os.path.join(os.environ['DATA'], 'Ben/SteinSDO/SDO_int*.fits')))[0:nframes]
-# images = fitstools.fitsread(imfiles)
-# Prepare images for Ray object store - shared resource
-# drifted_images = [blt.create_drift_series(images, dr) for dr in drift_rates]
-# drifted_images_id = ray.put(drifted_images)
 ######
 # Provide the drift parameters. Even if the drifted images are read from disk, must provide what was used for the
 # calibration fit.
@@ -64,7 +58,7 @@ vx_rates = np.arange(-0.2, 0.21, dv)
 # Set the middle one to zero, for having an non-drifted flow
 vx_rates[int(len(vx_rates) / 2)] = 0
 # Stack those values, with vy at 0. Can be changed to have a drift an y-axis as well
-drift_rates = np.stack((vx_rates, np.zeros(len(vx_rates))), axis=1).tolist()
+drift_rates = np.stack((vx_rates, np.zeros(len(vx_rates))), axis=1)
 ###
 # Parameters for the averaging with Lagrange to Euler conversion
 ###
