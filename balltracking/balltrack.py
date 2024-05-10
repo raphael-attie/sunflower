@@ -14,6 +14,7 @@ from scipy.signal import convolve2d
 from cython_modules import interp as cinterp
 import filters
 import fitstools
+from astropy.io import fits
 
 DTYPE = np.float32
 
@@ -157,7 +158,7 @@ class BT:
         self.pos[1, :] = self.ystart.flatten()
         self.zstart = put_balls_on_surface(self.surface, self.xstart.ravel(), self.ystart.ravel(), self.rs, self.dp)
         self.pos[2, :] = self.zstart.copy()
-        # Setup the coarse grid: populate edges to avoid "leaks" of balls ~ balls falling off.
+        # Set the coarse grid: populate edges to avoid "leaks" of balls ~ balls falling off.
         # Although can't remember if that was actually ever used in the Matlab implementation
         self.coarse_grid[0,:] = 1
         self.coarse_grid[:, 0] = 1
@@ -165,8 +166,17 @@ class BT:
         self.coarse_grid[:, -1] = 1
 
     def coarse_grid_pos(self, x, y):
-        """ x, y coordinates in the image into coarse grid coordinates"""
+        """
+            Convert the x,y coordinates of the balls dropped on the surface into coordinates in the coarse grid.
 
+        Args:
+            x (np.ndarray): x-coordinates of the balls
+            y (np.ndarray): y-coordinates of the balls
+
+        Returns:
+            x,y coordinates on the coarse grid, and corresponding 1D coordinates
+        """
+        #
         # Get the position on the coarse grid, clipped to the edges of that grid.
         xcoarse = np.uint32(np.clip(np.floor(x / self.ballspacing), 0, self.nxc_ - 1))
         ycoarse = np.uint32(np.clip(np.floor(y / self.ballspacing), 0, self.nyc_ - 1))
@@ -247,7 +257,7 @@ class BT:
         -------
 
         """
-        # See discussion at https://stackoverflow.com/questions/44802033/efficiently-index-2d-numpy-array-using-two-1d-arrays
+        # See https://stackoverflow.com/questions/44802033/efficiently-index-2d-numpy-array-using-two-1d-arrays
         # and https://stackoverflow.com/questions/36863404/accumulate-constant-value-in-numpy-array
         # xpos0, ypos0, zpos0 = bt.pos
 
@@ -267,14 +277,14 @@ class BT:
         # Get the 1D position on the coarse grid, clipped to the edges of that grid.
         _, _, coarse_pos = self.coarse_grid_pos(xpos, ypos)
 
-        # Get ball number and balls age sorted by position, sort positions too, and array of valid balls indices as well!!!
+        # Get ball number and balls age sorted by position, and array of valid balls indices
         sorted_balls = np.argsort(coarse_pos)
         balls_age = balls_age[sorted_balls]
         coarse_pos = coarse_pos[sorted_balls]
         valid_balls_idx = valid_balls_idx[sorted_balls]
         # There can be repetitions in the coarse_pos because there can be more than one ball per finegrid cell.
         # The point is to keep only one ball per coarse grid point: the oldest.
-        # So we need to sort coarse_pos further using the balls age as weight and extract a unique set where each ball is the oldest
+        # Sort coarse_pos further using the balls age as weight and extract a unique set where each ball is the oldest
         sidx = np.lexsort([balls_age, coarse_pos])
         # Indices of the valid balls to keep
         unique_oldest_balls = valid_balls_idx[sidx[np.r_[np.flatnonzero(coarse_pos[1:] != coarse_pos[:-1]), -1]]]
@@ -404,7 +414,7 @@ def track_instance(params, side_direction, datafiles=None, data=None):
         params (dict): ball parameters for the BT class
         side_direction (tuple): (BT.side) and (BT.direction) listed as ('top', 'forward') or ('bottom', 'backward')
         datafiles (list): path to data cube file or list of FITS files. Ignored if `data` is provided.
-        data (ndarray): 3D array with time on the 1st dimension: (time, y-axis, x-axis).
+        data (np.ndarray): 3D array with time on the 1st dimension: (time, y-axis, x-axis).
 
     Returns:
         BT.ballpos : Array storing the positions of the balls at each frame
@@ -440,14 +450,14 @@ def balltrack_all(bt_params_top, bt_params_bottom, outputdir,
         bt_params_bottom (dict): Bottom-side ball parameters relevant to the BT class
         outputdir (str): output directory to save the 3D arrays of ball positions
         datafiles (str or list): path to data cube file or list of FITS files
-        data (ndarray): Series of 3D Numpy arrays with time on the 3rd index: (y-axis, x-axis, time-axis)
+        data (np.ndarray): Series of 3D Numpy arrays with time on the 3rd index: (y-axis, x-axis, time-axis)
         write_ballpos (bool): sets whether to write the array of ball positions
         ncores: number of cores to use for running the 4 sides/directions in parallel
             Default is 1 for sequential processing. There can up to 4 workers for these parallel tasks (2-3x speed-up)
 
     Returns:
-        ballpos_top (ndarray): 3D array of ball positions for top-side tracking -> [xyz, ball #, time]
-        ballpos_bottom (ndarray): 3D array of ball positions for bottom-side tracking -> [xyz, ball #, time]
+        ballpos_top (np.ndarray): 3D array of ball positions for top-side tracking -> [xyz, ball #, time]
+        ballpos_bottom (np.ndarray): 3D array of ball positions for bottom-side tracking -> [xyz, ball #, time]
 
     """
 
@@ -504,7 +514,7 @@ def calculate_invalid_mask(data, threshold=5):
     The default threshold is 5 times the standard deviation below the mean
 
     Args:
-        data (ndarray): balltracking input image, e.g as loaded from BT.datafiles or BT.data
+        data (np.ndarray): balltracking input image, e.g as loaded from BT.datafiles or BT.data
         threshold (int): multiplier to the standard deviation (sigma)
     Returns:
         out (MaskedArray): Numpy Masked Array with off-threshold values masked out
@@ -522,7 +532,7 @@ def filter_image(image, pixel_radius=0):
     Filter the image to enhance granulation signal
 
     Args:
-        image (ndarray): input image e.g. continuum intensity from SDO/HMI (2D array).
+        image (np.ndarray): input image e.g. continuum intensity from SDO/HMI (2D array).
         pixel_radius (int): radius of the fourier filter in spatial domain units (pixels) instead of k-space.
 
     Returns:
@@ -557,12 +567,12 @@ def rescale_frame(data, offset, norm_factor):
     See http://mathworld.wolfram.com/HanningFunction.html
 
     Args:
-        data (ndarray): 2D frame (e.g: continuum image or magnetogram)
+        data (np.ndarray): 2D frame (e.g: continuum image or magnetogram)
         offset (float): scalar that offsets the data. Typically the mean of the data or of masked data
         norm_factor (float): scalar that divides the data. Typically a multiple of the standard deviation
 
     Returns:
-        rescaled_data (ndarray): rescaled image
+        rescaled_data (np.ndarray): rescaled image
     """
     rescaled_data = data - offset
     rescaled_data = rescaled_data / norm_factor
@@ -578,14 +588,14 @@ def prep_data(image, mean, sigma, sigma_factor=1):
     on the statistical properties of the image series. The data intensity is centered around the mean.
 
     Args:
-        image (ndarray): image to be rescaled. E.g continuum intensity from SDO/HMI
+        image (np.ndarray): image to be rescaled. E.g continuum intensity from SDO/HMI
         mean (float): offset for rescaling the image as a data surface to make it centered around the mean
         sigma (float): standard deviation to normalize with, it can be the one of the image itself,
         or of another one in the series
         sigma_factor (float): Multiplier to sigma
 
     Returns:
-        surface (ndarray): data surface (2D array)
+        surface (np.ndarray): data surface (2D array)
     """
 
     # Filter the image to isolate granulation
@@ -608,12 +618,12 @@ def prep_data2(image, sigma_factor=1, pixel_radius=0):
         - Generate the data surface from the image with the masked mean and sigma
 
     Args:
-        image (ndarray): input image e.g continuum intensity from SDO/HMI
+        image (np.ndarray): input image e.g continuum intensity from SDO/HMI
         sigma_factor (float): Multiplier to the standard deviation
         pixel_radius (float): radius of the fourier filter converted in spatial domain units (pixels) instead of k-space
 
     Returns:
-        surface (ndarray): data surface
+        surface (np.ndarray): data surface
         mean: mean of the data used to offset
         sigma: standard deviation of the filtered image used to normalize before multiplying by the sigma_factor
     """
@@ -668,7 +678,7 @@ def integrate_motion(bt, surface, return_copies=False):
     vyt += fyt
     vzt += fzt
     # Integrate position including effect of a damped velocity
-    # Damping is added arbitrarily for the stability of the code.
+    # Damping is added arbitrarily for the stability of the code, fine-tuned with a grid-based optimization.
     xt += vxt * bt.tdx * (1 - bt.e_tdx_)
     yt += vyt * bt.tdy * (1 - bt.e_tdy_)
     zt += vzt * bt.zdamping * (1 - bt.e_tdz_)
@@ -694,7 +704,7 @@ def compute_force(rs, am, k_force, brows, bcols, xt, yt, zt, ds):
     delta_z = ds - zt
 
     r = np.sqrt(delta_x**2 + delta_y**2 + delta_z**2)
-    # Singularity at r = 0. Need to get rid of them and force beyond the radius must be set to zero
+    # Singularity at r = 0. Need to get rid of them. The force beyond the radius must be set to zero
     # Need to fill the masked values before the summation. Otherwise, subtracting bt.am on a masked value still gives a
     # masked value, instead of -bt.am = -1.0.
     rmask = np.logical_or(r == 0, r > rs)
@@ -716,14 +726,6 @@ def compute_force(rs, am, k_force, brows, bcols, xt, yt, zt, ds):
     return fxt, fyt, fzt
 
 
-def ravel_index(x, dims):
-    i = 0
-    for dim, j in zip(dims, x):
-        i *= dim
-        i += j
-    return int(i)
-
-
 def get_off_edges_mask(rs, nx, ny, x, y):
     """
     Create a mask that flags the positions of balls that have crossed the edges of the image
@@ -732,11 +734,11 @@ def get_off_edges_mask(rs, nx, ny, x, y):
         rs (int): balls radius
         nx (int): horizontal image size in pixels
         ny (int): vertical image size in pixels
-        x (ndarray): array of balls x-coordinates
-        y (ndarray): array of balls y-coordinates
+        x (np.ndarray): array of balls x-coordinates
+        y (np.ndarray): array of balls y-coordinates
 
     Returns:
-        off_edges_mask (ndarray) : mask of flagged positions. 1-valued where the balls are off the edges.
+        off_edges_mask (np.ndarray) : mask of flagged positions. 1-valued where the balls are off the edges.
 
     """
     off_edge_left = x - rs < 0
@@ -756,16 +758,16 @@ def make_velocity_from_tracks(ballpos, dims, trange, fwhm, kernel='gaussian'):
     convert to Euler ref. frame.
 
     Args:
-        ballpos (ndarray): array of ball positions. Dimensions are [xyz, ball number, time]
+        ballpos (np.ndarray): array of ball positions. Dimensions are [xyz, ball number, time]
         dims (tuple): (ny, nx) dimensions of the images used for the tracking.
         trange (sequence): sequence of [1st index, last index[ on time axis over which the flows are averaged
         fwhm (int): full width at half maximum for the spatial gaussian smoothing.
         kernel (str): kernel for smoothing the velocity: either 'gaussian' or 'boxcar'
 
     Returns:
-        vx (ndarray): 2D x-component of the flow field
-        vy (ndarray): 2D y-component of the flow field
-        wplane (ndarray): weight plane
+        vx (np.ndarray): 2D x-component of the flow field
+        vy (np.ndarray): 2D y-component of the flow field
+        wplane (np.ndarray): weight plane
     """
 
     # Slices for differentiating the ball positions, in ascending start & end frame number
@@ -839,32 +841,6 @@ def make_velocity_from_tracks(ballpos, dims, trange, fwhm, kernel='gaussian'):
     vy_euler /= wplane
 
     return vx_euler, vy_euler, wplane
-
-
-def bilin_interp_d(image, x, y):
-    """ Bilinear interpolation. About 7x to 10x slower than the Cython implementation. """
-
-    x0 = np.floor(x).astype(int)
-    x1 = x0 + 1
-    y0 = np.floor(y).astype(int)
-    y1 = y0 + 1
-
-    q00 = image[y0, x0]
-    q01 = image[y1, x0]
-    q10 = image[y0, x1]
-    q11 = image[y1, x1]
-
-    dx0 = x - x0
-    dy0 = y - y0
-    dx1 = x1 - x
-    dy1 = y1 - y
-
-    w11 = dx1 * dy1
-    w10 = dx1 * dy0
-    w01 = dx0 * dy1
-    w00 = dx0 * dy0
-
-    return w11*q00 + w10*q01 + w01*q10 + w00*q11
 
 
 def mesh_ball(rs, npts=20):
@@ -991,8 +967,8 @@ class Calibrator:
             rate_idx (int): index in the list of drift rates
 
         Returns:
-            ballpos_top (ndarray): ball positions from top-side tracking
-            ballpos_bottom (ndarray): ball positions from bottom-side tracking
+            ballpos_top (np.ndarray): ball positions from top-side tracking
+            ballpos_bottom (np.ndarray): ball positions from bottom-side tracking
         """
 
         if self.verbose:
@@ -1016,8 +992,8 @@ class Calibrator:
         results saved as npz file with top-side tracking and bottom-side tracking in two different lists.
 
         Returns:
-            ballpos_top_list (ndarray): arrays of ball positions for top-side tracking at all drift rates.
-            ballpos_bottom_list (ndarray): arrays of ball positions for bottom-side tracking at all drift rates.
+            ballpos_top_list (np.ndarray): arrays of ball positions for top-side tracking at all drift rates.
+            ballpos_bottom_list (np.ndarray): arrays of ball positions for bottom-side tracking at all drift rates.
         """
 
         ballpos_top_list, ballpos_bottom_list = None, None
@@ -1076,15 +1052,15 @@ class Calibrator:
         Edge effects exist and must be excluded by slicing an unaffected area
 
         Args:
-            ballpos_list (ndarray): List of ball positions at each drift rate.
+            ballpos_list (np.ndarray): List of ball positions at each drift rate.
             kernel (str): 2d smoothing kernel of the velocity field. Either 'gaussian', 'boxcar'
 
         Returns:
             p (list): fit parameters
             rmse (float): root-mean-square error
             vxmeans (float): mean value over the sliced velocity field
-            vxs (ndarray): non-averaged flow fields x-component (unsliced)
-            vys (ndarray): non-averaged flow fields y-components (unsliced)
+            vxs (np.ndarray): non-averaged flow fields x-component (unsliced)
+            vys (np.ndarray): non-averaged flow fields y-components (unsliced)
         """
 
         if kernel is None:
@@ -1164,11 +1140,7 @@ class Calibrator:
         return df_fit
 
 
-# def full_calibration(bt_params, drift_rates, trange, reprocess_bt, outputdir_cal, fwhm,
-#                      drift_images=None, drift_dirs=None, read_drift_images=False, save_ballpos_list=True,
-#                      verbose=False, ncpus=1):
-
-def full_calibration(bt_params, cal_args, cal_opt_args, reprocess_bt=True, verbose=False):
+def full_calibration(datafiles, bt_params, cal_args, cal_opt_args, make_drift_images=True, reprocess_bt=True, verbose=False):
     """
     Main calibration function. It considers top-side and bottom-side to be the same, but output their results
     separately in the csv file. After multiple runs in the cluster, as many csv files are create with a unique
@@ -1177,6 +1149,7 @@ def full_calibration(bt_params, cal_args, cal_opt_args, reprocess_bt=True, verbo
     different.
 
     Args:
+        datafiles (list or str): list of FITS files, or path to FITS cube
         bt_params (dict): balltrack parameters: rs, intsteps, ballspacing, am, dp, sigma_factor, fourier_radius
         cal_args (dict): positional arguments passed to the Calibrator class instance.
         reprocess_bt (bool): whether to reprocess balltracking over the drifted data or load existing results.
@@ -1186,6 +1159,18 @@ def full_calibration(bt_params, cal_args, cal_opt_args, reprocess_bt=True, verbo
     Returns:
 
     """
+
+    # Read the images
+    images = fitstools.fitsread(datafiles)
+
+    if make_drift_images:
+        # Create the drift images for the calibration
+        images_select = images[cal_args['trange'][0]:cal_args['trange'][1]]
+        if cal_args['outputdir_cal'] is not None:
+            _, drift_dirs = zip(*[create_drift_series(images_select, drx, dry,
+                                                      outputdir=Path(cal_args['outputdir_cal'], f'drift_{i:02d}'))
+                                  for i, (drx, dry) in
+                                  enumerate(zip(cal_args['vx_rates'], cal_args['vy_rates']))])
 
     # Set the index for having a unique identifier of each run of the parameter sweep
     index = 0
@@ -1208,7 +1193,7 @@ def full_calibration(bt_params, cal_args, cal_opt_args, reprocess_bt=True, verbo
         ballpos_top_list, ballpos_bottom_list = cal.balltrack_all_rates()
 
     else:
-        ballpos_list_file = Path(cal_args['outputdir'], f'ballpos_list_{index:05d}.npz')
+        ballpos_list_file = Path(cal_args['outputdir_cal'], f'ballpos_list_{index:05d}.npz')
         if not os.path.isfile(ballpos_list_file):
             sys.exit('Missing ballpos_list_file for calibration')
 
@@ -1216,7 +1201,7 @@ def full_calibration(bt_params, cal_args, cal_opt_args, reprocess_bt=True, verbo
             ballpos_top_list = npzfile['ballpos_top_list']
             ballpos_bottom_list = npzfile['ballpos_bottom_list']
 
-    _ = cal.calibration_run_fit(ballpos_top_list, ballpos_bottom_list)
+    _ = cal.calibration_run_fit(ballpos_top_list, ballpos_bottom_list, verbose=verbose)
 
     return index
 
@@ -1228,14 +1213,14 @@ def create_drift_series(images, vx_rate, vy_rate, outputdir=None, filter_functio
     back to the other edge.
 
     Args:
-        images (ndarray): data cube to drift
+        images (np.ndarray): data cube to drift
         vx_rate (float): signed value for the velocity drift on the x-direction.
         vy_rate (float): signed value for the velocity drift on the y-direction.
         outputdir (Path): output directory where the drifted images are saved.
         filter_function (function): optional filter to apply to the image
 
     Returns:
-        drifted_images (ndarray): 3D array with images drifting at the given drift rate
+        drifted_images (np.ndarray): 3D array with images drifting at the given drift rate
     """
 
     nframes = images.shape[0]
@@ -1281,8 +1266,28 @@ def check_file_series(filepaths):
 
 
 def make_euler_velocity(ballpos_top, ballpos_bottom, cal_top, cal_bottom, dims, fwhm,
-                        trange=None, kernel='gaussian', header=None, outputdir=None):
+                        trange=None, kernel='gaussian', header=None, outputdir=None, generate_lanes=False, **kwargs):
+    """
+    Create the dense flow fields, on a regular, cartesian grid, from the ball positions.
 
+    Args:
+        ballpos_top(np.ndarray): 3D cube of ball position [xy(z), nb of balls, nb of frames] for top-side tracking
+        ballpos_bottom: 3D cube of ball position [xy(z), nb of balls, nb of frames] for bottom-side tracking
+        cal_top (float): Calibration multiplier for the top-side tracking
+        cal_bottom (float): Calibration multiplier for the bottom-side tracking
+        dims (list or tuple): image dimension (width, height)
+        fwhm (int): gaussian FWHM smoothing or width of boxcar average
+        trange (list): list of (start frame, end frame) over which to integrate the ball positions
+        kernel (str): Spatial smoothing kernel, either 'gaussian' or 'boxcar'
+        header (dict): header information, usually from the fits file of the middle of the series
+        outputdir (Path or str): where to save the output npz files of the vx and vy flow fields
+        generate_lanes (bool): whether to generate the map of the supergranular boundaries ("lanes" for short)
+        **kwargs: Additional keyword arguments to be passed to make_lanes()
+
+    Returns:
+        Dense Vx and Vy flow fields
+
+    """
     if trange is None:
         trange = [0, ballpos_top.shape[-1]]
 
@@ -1297,88 +1302,84 @@ def make_euler_velocity(ballpos_top, ballpos_bottom, cal_top, cal_bottom, dims, 
     vx = 0.5 * (vx_top + vx_bottom)
     vy = 0.5 * (vy_top + vy_bottom)
 
+    if generate_lanes:
+        lanes = make_lanes(vx, vy, **kwargs)
+    else:
+        lanes = None
+
     if outputdir is not None:
         if header is not None:
             header['BSCALE'] = 1
             header['BZERO'] = 0
             header['BITPIX'] = -32
+
         np.savez_compressed(Path(outputdir, f'vxy_{kernel}_fwhm{fwhm}_t{trange[0]}_{trange[1]}.npz'),
-                            vx=vx.astype(np.float32), vy=vy.astype(np.float32), header=header)
+                            vx=vx.astype(np.float32), vy=vy.astype(np.float32), header=header, lanes=lanes)
 
-    return vx, vy
-
-
-def make_euler_vel_lanes(ballpos_top, ballpos_bottom, cal_top, cal_bottom, dims, fwhm,
-                                nsteps=40, maxstep=1, outputdir=None, kernel='gaussian', header=None):
-
-    trange = [0, ballpos_top.shape[-1]]
-    vx, vy = make_euler_velocity(ballpos_top, ballpos_bottom, cal_top, cal_bottom, dims, fwhm, trange, kernel=kernel)
-    lanes = make_lanes(vx, vy, nsteps, maxstep)
-    if outputdir is not None:
-        # Write fits file
-        if header is not None:
-            header['BITPIX'] = -32
-            header['BZERO'] = 0
-            header['BSCALE'] = 1
-        else:
-            header = None
-
-        np.savez_compressed(Path(outputdir, f'vxy_{kernel}_fwhm{fwhm}_tALL.npz'),
-                            vx=vx.astype(np.float32), vy=vy.astype(np.float32), lanes=lanes, header=header)
-
-        fitstools.writefits(lanes,
-                            Path(outputdir, f'lanes_{kernel}_fwhm{fwhm}_tALL.fits'),
-                            header=header,
-                            compressed=False)
-
-    return vx, vy, lanes
+    return vx, vy, lanes, header
 
 
-def make_euler_vel_lanes_series(ballpos_top, ballpos_bottom, cal_top, cal_bottom, dims, fwhm, tranges,
-                                nsteps=40, maxstep=1, outputdir=None, kernel='gaussian', headers=None):
+def make_euler_velocity_series(tranges, *args, headers=None, **kwargs):
+
+    """
+    Create a series of dense flow fields and supergranular maps over a timeline given by 'tranges'. The pairs of time range can overlap for smoother
+    visualizations. For example [(0, 50), (25, 75), (50, 100), ...].
+
+    Args:
+        tranges(list or tuple): list of 2-element tuple as defined by "trange" in make_euler_velocity()
+        *args: positional arguments to be passed to make_euler_velocity()
+        headers (list): list of headers (dict) from the fits files
+        **kwargs: Additional keyword arguments to be passed to make_lanes()
+
+    Returns:
+        Dense Vx and Vy flow fields
+
+    """
 
     vxl = []
     vyl = []
-    lanesl = []
+    lanes_list = []
+    header = None
     for i, trange in enumerate(tranges):
-        # Velocity field
-        vx, vy = make_euler_velocity(ballpos_top, ballpos_bottom, cal_top, cal_bottom, dims, fwhm, trange=trange, kernel=kernel)
-        # lanes
-        lanes = make_lanes(vx, vy, nsteps, maxstep)
-
-        if outputdir is not None:
-            # Write fits file
-            if headers is not None:
-                header = headers[i]
-                header['BITPIX'] = -32
-                header['BZERO'] = 0
-                header['BSCALE'] = 1
-            else:
-                header = None
-
-            np.savez_compressed(Path(outputdir, f'vxy_{kernel}_fwhm{fwhm}_t{trange[0]}_{trange[1]}.npz'),
-                                vx=vx.astype(np.float32), vy=vy.astype(np.float32), lanes=lanes, header=header)
-
-            fitstools.writefits(lanes,
-                                Path(outputdir, f'lanes_{kernel}_fwhm{fwhm}_t{trange[0]}_{trange[1]}.fits'),
-                                header=header,
-                                compressed=False)
+        # Generate the flow fields
+        if headers is not None:
+            header = headers[i]
+        vx, vy, lanes, header = make_euler_velocity(*args, trange=trange, header=header, **kwargs)
 
         vxl.append(vx)
         vyl.append(vy)
-        lanesl.append(lanes)
+        lanes_list.append(lanes)
+        headers.append(header)
 
-    run_avg_lanes = np.array(lanesl).mean(axis=0)
-    fitstools.writefits(run_avg_lanes,
-                        Path(outputdir, f'lanes_{kernel}_fwhm{fwhm}_run_avg.fits'),
-                        header=headers[len(headers) // 2],
-                        compressed=False)
+    # Make a running average of the series of supergranular maps
+    generate_lanes = kwargs.get('generate_lanes', False)
+    run_avg_lanes = None
+    if generate_lanes:
+        run_avg_lanes = np.array(lanes_list).mean(axis=0)
 
-    return vxl, vyl, lanesl, run_avg_lanes
+    outputdir = kwargs.get('outputdir', None)
+    if outputdir is not None:
+        np.savez_compressed(Path(outputdir, f"vxy_{kwargs.get('kernel', 'gaussian')}_fwhm{args[5]}_run_avg.npz"),
+                            run_avg_lanes=run_avg_lanes, header=headers[len(headers) // 2])
+
+    return vxl, vyl, lanes_list, run_avg_lanes
 
 
 def make_lanes(vx, vy, nsteps=40, maxstep=1):
+    """
+        Create the scalar map of the supergranular lanes
 
+    Args:
+        vx (np.ndarray): x-component of the velocity field
+        vy (np.ndarray): y-component of the velocity field
+        nsteps (int): Nb of integration steps. The higher the sharper, at the cost of missing small-scale convective cells
+        maxstep (int): Accelerator factor in case of oversampled data, will make the code converge faster but with the
+        risk losing resolution. Leave it at 1 if computing time is not an issue.
+
+    Returns:
+        2D array of the map of the convective cells. High intensity values are the boundaries of the cells
+
+    """
     dims = vx.shape
 
     # Gamma scale the data
@@ -1438,6 +1439,70 @@ def make_lanes(vx, vy, nsteps=40, maxstep=1):
     return lanes
 
 
+def calibrate_flows(datafiles, calibration_file, balltrack_dir, maps_params):
+    """
+    Create the Euler, dense flow maps from the ball positions.
+    Each map is spatially smoothed and time-averaged over the user-set parameters. Another flow map, averaged over the
+    whole tracking time, is also created.
+
+    Args:
+        datafiles (Path or str): input FITS files
+        calibration_file (Path or str): path to csv file containing the fit parameters of the calibration
+        balltrack_dir (Path or str): directory where the
+        maps_params:
+
+    Returns:
+
+    """
+    # Make calibrated euler flows
+    df_fit = (pd.read_csv(calibration_file).query(f"kernel=='{maps_params['kernel']}'"))
+    cal_top = df_fit['p_top_0'].values[0]
+    cal_bottom = df_fit['p_bot_0'].values[0]
+
+    # Load ball posisions arrays computed in an earlier balltrack run
+    arr = np.load(Path(balltrack_dir, 'ballpos.npz'))
+    ballpos_top, ballpos_bottom = [arr['ballpos_top'], arr['ballpos_bottom']]
+
+    # Number of images used in balltracking
+    nimgs = ballpos_top.shape[-1]
+    # Create the list of pairs of (start, end) times for defining the timeline of time-averaged flows
+    tranges = [[i, i + maps_params['navg']] for i in range(0, nimgs - maps_params['navg'], maps_params['dt'])]
+    # Get FITS headers
+    headers = [fits.getheader(datafiles[tr[0] + maps_params['navg']//2], maps_params['hdu_n']) for tr in tranges]
+
+    # Make average the flow field over the entire integration time
+    vx_avg, vy_avg, lanes_avg, avg_header = make_euler_velocity(ballpos_top, ballpos_bottom, cal_top, cal_bottom,
+                                                                maps_params['im_dims'], maps_params['fwhm'],
+                                                                header=headers[len(headers) // 2],
+                                                                outputdir=balltrack_dir,
+                                                                generate_lanes=maps_params['generate_lanes'],
+                                                                nsteps=maps_params['nsteps'])
+    v_avg_dict = {
+        'vx_avg': vx_avg,
+        'vy_avg': vy_avg,
+        'lanes_avg': lanes_avg,
+        'avg_header': avg_header
+    }
+
+    # Make average flow fields every time steps of tranges.
+    vxs, vys, lanes_list, run_avg_lanes = make_euler_velocity_series(tranges, ballpos_top, ballpos_bottom, cal_top,
+                                                                     cal_bottom,
+                                                                     maps_params['im_dims'], maps_params['fwhm'],
+                                                                     headers=headers,
+                                                                     outputdir=balltrack_dir,
+                                                                     generate_lanes=maps_params['generate_lanes'],
+                                                                     nsteps=maps_params['nsteps'])
+
+    v_series_dict = {
+        'vxs': vxs,
+        'vys': vys,
+        'lanes_list': lanes_list,
+        'run_avg_lanes': run_avg_lanes
+    }
+
+
+    return v_series_dict, v_avg_dict
+
 def meshgrid_params_to_list(param_dict):
     """
     Generate a list of a flattened mesh of parameters. The mesh can have more than 2 dimensions.
@@ -1457,7 +1522,7 @@ def meshgrid_params_to_list(param_dict):
 
 def get_bt_params_list(param_dict):
     """
-
+        Generate a list of input balltrack paremeters for doing a parameter sweep from a grid
     Args:
         param_dict (dict): dictionnary of parameters. At least one value must be a list of more than 1 scalar.
 
@@ -1473,3 +1538,4 @@ def get_bt_params_list(param_dict):
         bt_params['index'] = i
         bt_params_list.append(bt_params)
     return bt_params_list
+

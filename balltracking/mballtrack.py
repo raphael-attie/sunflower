@@ -434,15 +434,17 @@ def load_npz(datafiles, n):
     return image
 
 
-def get_local_extrema(image, polarity, min_distance, threshold, local_min=False):
+def get_local_extrema(image, polarity, min_distance, threshold, local_min=False, xlims=None, ylims=None):
     """ Default to finding only local maxima. local_min = True will look only for local minima
 
     Args:
         image (ndarray): 2D frame displaying the features to track.
-        polarity (bool): if data are signed (e.g magnetograms), set which polarity is tracked >= 0 for positive polarity
+        polarity (bool): if data are signed (e.g. magnetograms), set which polarity is tracked >= 0 for positive polarity
         min_distance (int): minimum distance to search between local extrema
-        threshold (int): values setting the limit for searching for local extrema. Can be a signed value or min & max
+        threshold (int or tuple): values setting the limit for searching for local extrema. Can be a signed value or min & max
         local_min (int): if True, will look for local minima instead of local maxima
+        xlims (tuple): minimum and maximum pixel x-coordinate to look for peaks
+        ylims (tuple): minimum and maximum pixel y-coordinate to look for peaks
 
     Returns:
         xstart: list of x-coordinates of the local extrema
@@ -455,8 +457,14 @@ def get_local_extrema(image, polarity, min_distance, threshold, local_min=False)
             mask_thresh = image >= threshold
         else:
             mask_thresh = image <= -threshold
-    else: # Useful for active regions
-            mask_thresh = (image > min(threshold)) & (image < max(threshold))
+    else:  # Useful for active regions
+        mask_thresh = (image > min(threshold)) & (image < max(threshold))
+    if xlims is not None:
+        mask_thresh[:, 0:xlims[0]] = False
+        mask_thresh[:, xlims[1]:] = False
+    if ylims is not None:
+        mask_thresh[0:ylims[0], :] = False
+        mask_thresh[ylims[1]:, :] = False
 
     if local_min:
         # reverse the scale of the image so the local min are searched as local max

@@ -6,7 +6,7 @@ import pandas as pd
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
-from astropy.io import fits
+
 matplotlib.use('agg')
 
 if __name__ == "__main__":
@@ -17,81 +17,33 @@ if __name__ == "__main__":
             multiprocessing.set_start_method('spawn', force=True)
             print('spawned')
         except RuntimeError:
+            print('could not set the multiprocessing start method')
             pass
 
-    images = fitstools.fitsread(inputs.datafiles)
-
     if inputs.run_calibration:
-        if inputs.make_drift_images:
-            # Create the drift images but do not keep them in memory to avoid running out of memory for big series
-            images_select = images[inputs.cal_args['trange'][0]:inputs.cal_args['trange'][1]]
-            if inputs.cal_args['outputdir_cal'] is not None:
-                _, drift_dirs = zip(*[blt.create_drift_series(images_select, drx, dry,
-                                                              outputdir=Path(inputs.cal_args['outputdir_cal'],
-                                                                             f'drift_{i:02d}'))
-                                      for i, (drx, dry) in
-                                      enumerate(zip(inputs.cal_args['vx_rates'], inputs.cal_args['vy_rates']))])
-
-        _ = blt.full_calibration(inputs.bt_params, inputs.cal_args, inputs.cal_opt_args, verbose=True)
+        _ = blt.full_calibration(inputs.datafiles, inputs.bt_params, inputs.cal_args, inputs.cal_opt_args, verbose=True)
 
     if inputs.run_balltracking:
-        _, _ = blt.balltrack_main_hmi(inputs.bt_params, inputs.outputdir,
-                                      datafiles=inputs.datafiles, ncores=4)
+        _, _ = blt.balltrack_main_hmi(inputs.bt_params, inputs.outputdir, datafiles=inputs.datafiles, ncores=4)
 
-    # Make euler flows
-    df_fit = (pd.read_csv(Path(inputs.cal_args['outputdir_cal'], 'param_sweep_00000.csv')).
-              query('kernel=="gaussian"'))
-    cal_top = df_fit['p_top_0'].values[0]
-    cal_bottom = df_fit['p_bot_0'].values[0]
+    # Load the file created during the calibration
+    calibration_file = Path(inputs.cal_args['outputdir_cal'], 'param_sweep_00000.csv')
+    # Make calibrated euler flows
+    v_series, v_avg = blt.calibrate_flows(inputs.datafiles, calibration_file, inputs.outputdir, inputs.maps_params)
 
-    dims = images.shape[-2:]
-    fwhm = inputs.cal_args['fwhm']
-    tranges = [[i, i + inputs.navg] for i in range(0, len(images)-inputs.navg, inputs.dt)]
-    headers = []
-    for tr in tranges:
-        headers.append(fits.getheader(inputs.datafiles[tr[0] + inputs.navg//2], 1))
+    # Quick look on the flow maps
+    plt.figure()
+    plt.imshow(v_avg['vx_avg'], origin='lower', cmap='gray')
+    plt.savefig(Path(inputs.outputdir, 'quicklook_vx_avg.png'))
 
-    # Load ballpos arrays
-    arr = np.load(Path(inputs.outputdir, 'ballpos.npz'))
-    ballpos_top, ballpos_bottom = [arr['ballpos_top'], arr['ballpos_bottom']]
+    plt.figure()
+    plt.imshow(v_avg['vy_avg'], origin='lower', cmap='gray')
+    plt.savefig(Path(inputs.outputdir, 'quicklook_vy_avg.png'))
 
-    vxs, vys, lanesl, lanes_sup = blt.make_euler_vel_lanes_series(ballpos_top, ballpos_bottom, cal_top, cal_bottom,
-                                                                  dims, fwhm, tranges,
-                                                                  nsteps=inputs.nsteps,
-                                                                  outputdir=inputs.outputdir,
-                                                                  headers=headers)
+    plt.figure()
+    plt.imshow(v_avg['lanes_avg'], origin='lower', cmap='gray')
+    plt.savefig(Path(inputs.outputdir, 'quicklook_lanes_avg.png'))
 
-    vx_avg, vy_avg, lanes_avg = blt.make_euler_vel_lanes(ballpos_top, ballpos_bottom, cal_top, cal_bottom, dims, fwhm,
-                                                         nsteps=inputs.nsteps,
-                                                         outputdir=inputs.outputdir,
-                                                         header=headers[len(headers) // 2])
-
-    for i, (vx, vy) in enumerate(zip(vxs, vys)):
-
-        lanes = lanesl[i]
-        plt.figure(figsize=(16, 10))
-        plt.imshow(lanes, origin='lower', cmap='gray_r')
-        plt.xlabel('x [px] 1 px ~ 0.0301 deg.')
-        plt.ylabel('y [px] 1 px ~ 0.0301 deg.')
-        plt.title(f'convection boundary lanes (nsteps={inputs.nsteps})')
-        plt.tight_layout()
-        plt.savefig(Path(inputs.outputdir, f'lanes_nsteps{inputs.nsteps}_{i:03d}'), dpi=150)
-        plt.close('all')
-
-    plt.figure(figsize=(16, 10))
-    plt.imshow(lanes_sup, origin='lower', cmap='gray_r')
-    plt.xlabel('x [px] 1 px ~ 0.0301 deg.')
-    plt.ylabel('y [px] 1 px ~ 0.0301 deg.')
-    plt.title(f'running average boundary lanes (nsteps={inputs.nsteps})')
-    plt.tight_layout()
-    plt.savefig(Path(inputs.outputdir, f'lanes_nsteps{inputs.nsteps}_run_avg'), dpi=150)
-    plt.close('all')
-
-    plt.figure(figsize=(16, 10))
-    plt.imshow(lanes_avg, origin='lower', cmap='gray_r')
-    plt.xlabel('x [px] 1 px ~ 0.0301 deg.')
-    plt.ylabel('y [px] 1 px ~ 0.0301 deg.')
-    plt.title(f'Averaged convection boundary lanes (nsteps={inputs.nsteps})')
-    plt.tight_layout()
-    plt.savefig(Path(inputs.outputdir, f'lanes_nsteps{inputs.nsteps}_tALL'), dpi=150)
-    plt.close('all')
+    plt.figure()
+    plt.imshow(v_series['run_avg_lanes'], origin='lower', cmap='gray')
+    plt.savefig(Path(inputs.outputdir, 'quicklook_run_lanes_avg.png'))
