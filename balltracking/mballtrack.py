@@ -1,7 +1,8 @@
 import os
+import sys
 import numpy as np
 from numpy import pi
-from pathlib import PurePath
+from pathlib import Path
 import matplotlib.pyplot as plt
 from skimage.feature import peak_local_max
 from skimage.morphology import disk
@@ -17,7 +18,8 @@ class MBT:
     def __init__(self, rs=2, am=1, dp=0.3, td=None, tdx=5, tdy=5, zdamping=1,
                  ballspacing=10, intsteps=15, nt=1, mag_thresh=30, noise_level=20, polarity=1,
                  init_pos=None, track_emergence=False, datafiles=None, data=None, prep_function=None, local_min=False,
-                 roi=None, fig_dir=None, do_plots=False, astropy=False, verbose=True):
+                 roi=None, fig_dir=None, do_plots=0, axlims=None, figsize=None, fig_vmin_vmax=None, astropy=False,
+                 verbose=True):
 
         """ Main class for Magnetic Balltracking
 
@@ -43,7 +45,10 @@ class MBT:
             local_min (bool): True / False, resp., will track for local minima / maxima, resp.
             roi (tuple): (ymin, ymax, xmin, xmax) of a fixed region of interest in the images for faster computation
             fig_dir (str): directory path for storing figures
-            do_plots (bool): set whether to export intermediate steps as figures (mostly for debug)
+            do_plots (int): set to 0: figure export (default), or 1:every new image, or 2:every intermediate steps
+            axlims (tuple or list): axis limits in px when plotting the balls over the image [left, right, bottom, top]
+            figsize (tuple): size of the figure for the plots of the balls over the image
+            fig_vmin_vmax (tuple): percentiles for calculating vmin and vmax for the imshow() function
             astropy (bool): False will use the fitsio package for fits files. fitsio package does not work well on Windows.
             verbose (bool): toggles verbosity
         """
@@ -100,7 +105,6 @@ class MBT:
             self.nballs_max = int(self.nx * self.ny / 2)
         else:
             self.nballs_max = init_pos.shape[1]
-        print(f'nballs_max = {self.nballs_max}')
 
         # Current position, force and velocity components, updated after each frame
         self.pos = np.full([3, self.nballs_max], -1, dtype=DTYPE)
@@ -152,14 +156,19 @@ class MBT:
         self.new_valid_balls_mask[0:self.nballs] = True
         self.unique_valid_balls = np.arange(self.nballs)
         self.do_plots = do_plots
-
+        self.axlims = axlims
+        self.figsize = figsize
+        self.fig_vmin_vmax = fig_vmin_vmax
         self.fig_dir = fig_dir
         self.verbose = verbose
+
+        self.nbadballs = 0
 
     def track_all_frames(self):
         """Run Magnetic Balltracking on the self.nt images"""
 
-        print(f'Tracking with {self.nballs} initial balls')
+        if self.verbose:
+            print(f'Tracking with {self.nballs} initial balls')
         if self.do_plots:
             os.makedirs(self.fig_dir, exist_ok=True)
 
@@ -174,6 +183,7 @@ class MBT:
             else:
                 self.image = self.data[:, :, n]
             self.surface = self.prep_function(self.image)
+
             if n < self.nt - 1:
                 if self.data is None:
                     next_image = load_data(self.datafiles, n + 1, astropy=self.astropy, roi=self.roi)
@@ -189,20 +199,24 @@ class MBT:
             surface_i = self.surface.copy()
             for i in range(self.intsteps):
                 # print('intermediate step i=%d'%i)
-                if self.do_plots:
+                if self.do_plots == 2:
                     if self.polarity == 1:
-                        fig_title = PurePath(self.fig_dir, 'frame_pos_%d_%d.png'%(n,i))
+                        fig_path = Path(self.fig_dir, f'frame_pos_{n:04d}_{i:02d}.png')
                     else:
-                        fig_title = PurePath(self.fig_dir, 'frame_neg_%d_%d.png' % (n, i))
+                        fig_path = Path(self.fig_dir, f'frame_neg_{n:04d}_{i:02d}.png')
 
-                    plot_balls_over_frame(self.image, self.pos[0, :], self.pos[1, :], fig_title)
+                    plot_balls_over_frame(surface_i, self.pos[0, :], self.pos[1, :], fig_path,
+                                          z=self.pos[2, :],
+                                          figsize=self.figsize, axlims=self.axlims,
+                                          title=f'Frame #{n} - step #{i:02d}', cmap='gray',
+                                          vmin=self.fig_vmin_vmax[0], vmax=self.fig_vmin_vmax[1])
                 # Linearly interpolate surface at intermediate time steps: no effect at the last frame
-                surface_i = (surface_i*(self.intsteps - i) + next_surface * i)/self.intsteps
+                surface_i = (self.surface*(self.intsteps - i) + next_surface * i)/self.intsteps
                 blt.integrate_motion(self, surface_i)
 
             # set_bad_balls(self, self.pos)
             self.set_bad_balls()
-
+            self.nbadballs = self.bad_balls_mask.sum()
             # Flag the bad balls with -1
             self.pos[:, self.bad_balls_mask] = -1
             self.vel[:, self.bad_balls_mask] = np.nan
@@ -212,9 +226,24 @@ class MBT:
             self.balls_age_t[:, n] = self.balls_age.copy()
             self.valid_balls_mask_t[:,n] = self.new_valid_balls_mask
 
+            if self.do_plots == 1:
+                if self.polarity == 1:
+                    fig_path = Path(self.fig_dir, f'frame_pos_{n:04d}.png')
+                else:
+                    fig_path = Path(self.fig_dir, f'frame_neg_{n:04d}.png')
+
+                ballvel = None
+                if n > 0:
+                    ballvel = (self.ballpos[:, :, n] - self.ballpos[:, :, n-1])
+
+                plot_balls_over_frame(self.image, self.pos[0, :], self.pos[1, :], fig_path,
+                                      figsize=self.figsize, cmap='gray_r', axlims=self.axlims, ballvel=ballvel,
+                                      title=f'Frame # {n}', vmin=self.fig_vmin_vmax[0], vmax=self.fig_vmin_vmax[1])
+
         # Trim the array down to the actual number of balls used so far.
         # That number has been incremented each time new balls were added, in self.populate_emergence
-        print(f'Total number of balls used self.nballs = {self.nballs}')
+        if self.verbose:
+            print(f'Total number of balls used self.nballs = {self.nballs}')
         self.ballpos = self.ballpos[:, 0:self.nballs, :]
         self.balls_age_t = self.balls_age_t[0:self.nballs, :]
         self.valid_balls_mask_t = self.valid_balls_mask_t[0:self.nballs, :]
@@ -314,12 +343,18 @@ class MBT:
         if check_polarity:
             same_polarity_mask = np.sign(self.image[pos2[1, :], pos2[0, :]]) * self.polarity >= 0
             valid_balls_mask2 = np.logical_and(valid_balls_mask2, same_polarity_mask)
+            if not any(valid_balls_mask2.ravel()):
+                print('All the balls crossed to opposite polarity. Tracking interrupted.')
+                sys.exit(1)
 
         if check_noise:
             # Track only above noise level. Balls below that noise level are considered "sinking".
             # Use absolute values to make it independent of the polarity that's being tracked.
             noise_mask = np.abs(self.image[pos2[1, :], pos2[0, :]]) > self.noise_level
             valid_balls_mask2 = np.logical_and(valid_balls_mask2, noise_mask)
+            if not any(valid_balls_mask2.ravel()):
+                print('All the balls are sitting on noise. Tracking interrupted.')
+                sys.exit(1)
 
         if check_sinking:
             # This assumes the vertical position have already been set
@@ -327,6 +362,9 @@ class MBT:
             # Thus this check should be set to false during initialization
             unsunk_mask = pos2[2, :] > self.surface[pos2[1, :], pos2[0, :]] - self.min_ds_
             valid_balls_mask2 = np.logical_and(valid_balls_mask2, unsunk_mask)
+            if not any(valid_balls_mask2.ravel()):
+                print('All the balls have sunk below maximum allowed depth. Tracking interrupted.')
+                sys.exit(1)
 
         # Get indices in the original array. Remember that valid_balls_mask2 has the same size as pos2
         valid_balls_idx = valid_balls_idx[valid_balls_mask2]
@@ -371,7 +409,7 @@ class MBT:
         """
         for n in range(0, self.nt):
             image = load_data(self.datafiles, n, astropy=self.astropy, roi=self.roi)
-            fig_title = PurePath(self.fig_dir, f'track_figures_{n:04d}.png')
+            fig_title = Path(self.fig_dir, f'track_figures_{n:04d}.png')
             plot_balls_over_frame(image, self.ballpos[0, :, n], self.ballpos[1, :, n], fig_title, axlims=axlims, **kwargs)
 
 
@@ -441,7 +479,7 @@ def get_local_extrema(image, polarity, min_distance, threshold, local_min=False,
         image (ndarray): 2D frame displaying the features to track.
         polarity (bool): if data are signed (e.g. magnetograms), set which polarity is tracked >= 0 for positive polarity
         min_distance (int): minimum distance to search between local extrema
-        threshold (int or tuple): values setting the limit for searching for local extrema. Can be a signed value or min & max
+        threshold (float or tuple): values setting the limit for searching for local extrema. Can be a signed value or min & max
         local_min (int): if True, will look for local minima instead of local maxima
         xlims (tuple): minimum and maximum pixel x-coordinate to look for peaks
         ylims (tuple): minimum and maximum pixel y-coordinate to look for peaks
@@ -475,7 +513,9 @@ def get_local_extrema(image, polarity, min_distance, threshold, local_min=False,
         #ystart, xstart = np.array( peak_local_max(np.abs(image), indices=True, footprint=se,labels=mask_maxi)).T
         ystart, xstart = peak_local_max(np.abs(image), min_distance=min_distance, labels=mask_thresh).T
 
-    # Because transpose only creates a view, and this is eventually given to a C function, it needs to be copied as C-ordered
+    # Because transpose only creates a view, and this is eventually given to a C function,
+    # it needs to be copied as C-ordered
+    # TODO: revisit this...
     return xstart.copy(order='C'), ystart.copy(order='C')
 
 
@@ -686,18 +726,49 @@ def merge_watershed(labels_p, borders_p, nballs_p, labels_n, borders_n):
     return ws_labels, borders
 
 
-def plot_balls_over_frame(frame, x, y, fig_title, figsize=None, axlims=None, **kwargs):
+def plot_balls_over_frame(frame, ballpos_x, ballpos_y, fig_path, z=None, figsize=None, axlims=None,
+                          title=None, ms=4, ballvel=None, **kwargs):
+
     plt.figure(0, figsize=figsize)
-    plt.imshow(frame, **kwargs)
-    plt.plot(x, y, ls='none', marker='+', color='red', markerfacecolor='none', ms=6)
-    if axlims is None:
-        plt.axis([0, frame.shape[1], 0, frame.shape[0]])
+    plt.imshow(frame, origin='lower', **kwargs)
+    plt.plot(ballpos_x, ballpos_y, 'ro', markerfacecolor='None', ms=2*ms)
+    nbadballs = np.count_nonzero(ballpos_x == -1)
+    print('nb of bad balls = ', nbadballs)
+    if title is not None:
+        title = title + f'    # of bad balls = {nbadballs}'
     else:
+        title = f' # of bad balls = {nbadballs}'
+
+    plt.title(title)
+    if axlims is not None:
         plt.axis(axlims)
     plt.xlabel('X [px]')
     plt.ylabel('Y [px]')
     plt.colorbar()
+
+    for b in range(ballpos_x.size):
+        x = ballpos_x[b]
+        y = ballpos_y[b]
+
+        if x > 0 and y > 0:
+            if z is not None:
+                plt.text(x+2, y+2, f'z={z[b]:2.0f}', color='red', clip_on=True, fontsize=5)
+            if ballvel is not None:
+
+                vx = ballvel[0, b]
+                if vx >= 0:
+                    color = 'purple'
+                else:
+                    color = 'cyan'
+
+                plt.plot(x, y, marker='o', markeredgecolor=color, markerfacecolor='None', ms=2 * ms)
+                plt.quiver(x, y, vx, 0,
+                           color=color, angles='xy', scale_units='xy', scale=0.2,
+                           width=0.004,
+                           headwidth=2, headlength=2, headaxislength=2)
+
+
     plt.tight_layout()
-    plt.savefig(fig_title, dpi=180)
+    plt.savefig(fig_path, dpi=180)
     plt.close()
 
