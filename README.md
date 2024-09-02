@@ -6,8 +6,9 @@ These algorithms track plasma motions from intensity continuum image series (Bal
 
 ### How do I get set up? ###
 
+What follows has been tested on Python version 8 till version 10.
 Necessary packages are given in requirements.txt. Check the requirements file for the exact version number. 
-In particular, you will need the following packages: 
+In particular, you will need the following dependencies: 
 
 - Numpy
 - Astropy
@@ -30,12 +31,21 @@ Some Cython code is also present that requires compilation for your architecture
 - If present (e.g. from a past installation) remove ``interp.c`` file
 - run ``python setup_cbinterp.py build_ext --inplace`` 
 
-# Download Example SDO/HMI data
+### Check you have installed all dependencies correctly
+From your Jupyter Notebook, make your current working directory is the sunflower directory that you cloned. 
+Then run the following import command:
+
+```from balltracking import balltrack```
+
+If you do not have any error message, all packages are installed correctly. 
+
+### Download Example SDO/HMI data
 Please download the data that will be used during the hands-on session at:
 https://drive.google.com/file/d/10C0wICYds_nG2eRUXb-Gik45ez9gIUTY/view?usp=sharing
 It is a ~1GB tar file. Untar it. You will see a few FITS file which are 3D data cube containing time series of 2D images and magnetograms, 
 all sliced at the same time, but at different latitudes. These are SDO/HMI data remapped using Postel projection. 
 Please contact me at rattie at gmu dot edu if you have trouble downloading. 
+
 
 
 ### How do I get the code running
