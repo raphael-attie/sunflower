@@ -32,7 +32,7 @@ Some Cython code is also present that requires compilation for your architecture
 
 # Download Example SDO/HMI data
 Please download the data that will be used during the hands-on session at:
-https://m-270d81.db769.8540.data.globus.org/groups/RATTIE/home/samba/data/Data/SDO/HMI/polar_study/mtrack_20110627_200034_TAI_20110628_000033_TAI.tar
+https://drive.google.com/file/d/10C0wICYds_nG2eRUXb-Gik45ez9gIUTY/view?usp=sharing
 It is a ~1GB tar file. Untar it. You will see a few FITS file which are 3D data cube containing time series of 2D images and magnetograms, 
 all sliced at the same time, but at different latitudes. These are SDO/HMI data remapped using Postel projection. 
 Please contact me at rattie at gmu dot edu if you have trouble downloading. 
