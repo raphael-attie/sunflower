@@ -4,7 +4,6 @@ from collections import OrderedDict
 import numpy as np
 import numpy.ma as ma
 from numpy import pi, cos, sin
-import csv
 import pandas as pd
 from scipy.ndimage.filters import gaussian_filter
 from multiprocessing import Pool
@@ -71,21 +70,15 @@ class BT:
         self.direction = direction
 
         self.trange = trange
-        self.nt = trange[-1] - trange[0] + 1
+        self.nframes = trange[-1] - trange[0]
 
 
         # Get a sample. 1st of the series in forward direction. last of the series in backward direction.
 
         if self.data is None:
-            if self.direction == 'forward':
-                self.sample = self.image_reader(self.datafiles, tslice=trange[0], cube=False).astype(DTYPE)
-            else:
-                self.sample = self.image_reader(self.datafiles, tslice=trange[1], cube=False).astype(DTYPE)
+            self.sample = self.image_reader(self.datafiles, tslice=trange[0], cube=False).astype(DTYPE)
         else:
-            if self.direction == 'forward':
-                self.sample = self.data[trange[0], :, :]
-            else:
-                self.sample = self.data[trange[-1], :, :]
+            self.sample = self.data[trange[0], :, :]
 
 
         # Set frame dimensions
@@ -140,11 +133,10 @@ class BT:
         self.pos = np.zeros([3, self.nballs], dtype=DTYPE)
         self.vel = np.zeros([3, self.nballs], dtype=DTYPE)
         self.force = np.zeros([3, self.nballs], dtype=DTYPE)
-        self.balls_age_t = np.zeros([self.nballs, self.nt], dtype=np.uint32)
+        self.balls_age_t = np.zeros([self.nballs, self.nframes], dtype=np.uint32)
         # Storage arrays of the above, for all time steps
-        self.ballpos = np.zeros([3, self.nballs, self.nt], dtype=DTYPE)
-        # Check for ballvel dimension: may only be self.nt-1 for the time length.
-        self.ballvel = np.zeros([3, self.nballs, self.nt], dtype=DTYPE)
+        self.ballpos = np.zeros([3, self.nballs, self.nframes], dtype=DTYPE)
+        self.ballvel = np.zeros([3, self.nballs, self.nframes], dtype=DTYPE)
 
         # Ball grid and mesh. Add +1 at the np.arange stop for including right-hand side boundary
         self.ballgrid = np.arange(-self.rs, self.rs + 1, dtype=DTYPE)
@@ -205,7 +197,7 @@ class BT:
         # Outer loop goes over the data frames.
         # If data is a fits cube, we just access a slice of it
 
-        for n in range(self.trange[0], self.trange[1] + 1):
+        for n in range(self.trange[0], self.trange[1]):
             if self.verbose:
                 print("Tracking direction {}/{}, frame {:d}".format(self.direction, self.side, n))
 
@@ -216,9 +208,9 @@ class BT:
                     image = self.data[n, :, :]
             else:
                 if self.data is None:
-                    image = self.image_reader(self.datafiles, tslice=self.nt - 1 - n, cube=False).astype(DTYPE)
+                    image = self.image_reader(self.datafiles, tslice=self.nframes - 1 - n, cube=False).astype(DTYPE)
                 else:
-                    image = self.data[self.nt - 1 - n, :, :]
+                    image = self.data[self.nframes - 1 - n, :, :]
 
 
             # TODO: check the choice of prep_data regarding mean normalization with fixed mean or time-dependent one
@@ -797,12 +789,12 @@ def make_velocity_from_tracks(ballpos, dims, trange, fwhm, kernel='gaussian'):
     bposy[nan_mask] = np.nan
 
     # Watch out: slicing excludes the last index. Adding +1 to trange[1] makes sure we reach index trange[1]
-    vx_lagrange = bposx[:, trange[0]+1:trange[1]+1] - bposx[:, trange[0]:trange[1]]
-    vy_lagrange = bposy[:, trange[0]+1:trange[1]+1] - bposy[:, trange[0]:trange[1]]
+    vx_lagrange = bposx[:, trange[0]+1:trange[1]] - bposx[:, trange[0]:trange[1]-1]
+    vy_lagrange = bposy[:, trange[0]+1:trange[1]] - bposy[:, trange[0]:trange[1]-1]
 
     # px where bposx == -1 will give -1. Same for py
-    px_lagrange = np.round((bposx[:, trange[0]:trange[1]] + bposx[:, trange[0]+1:trange[1]+1])/2)
-    py_lagrange = np.round((bposy[:, trange[0]:trange[1]] + bposy[:, trange[0]+1:trange[1]+1])/2)
+    px_lagrange = np.round((bposx[:, trange[0]:trange[1]-1] + bposx[:, trange[0]+1:trange[1]])/2)
+    py_lagrange = np.round((bposy[:, trange[0]:trange[1]-1] + bposy[:, trange[0]+1:trange[1]])/2)
     # Exclude the -1 and NaN flagged positions using a mask.
     valid_mask = np.isfinite(vx_lagrange)
     # Taking the mask of the 2D arrays convert them to 1D arrays

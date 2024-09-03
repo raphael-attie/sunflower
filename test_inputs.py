@@ -2,8 +2,6 @@ import os
 from pathlib import Path
 import numpy as np
 
-use_multiprocessing = False
-
 # Set whether to run balltracking and calibration
 # If False, will go through either just the calibration and/or the Euler Flow map creation, assuming
 # Balltracking and calibration have been run before and output files available at the expected location (see outputdir)
@@ -12,7 +10,7 @@ run_calibration = True
 # Paths to FITS files. Time series presented as one 3D fits "cube" is supported, but file path to datacube should be a string.
 # datafiles = sorted(list(Path(os.environ['DATA'], 'HMI', 'Ben_Short', 'JSOC_20231030_3381').glob('*.fits')))
 datacube_file = "/mnt/c/Users/attie/data/HMI/polar_study/mtrack_20110627_200034_TAI_20110628_000033_TAI_Postel_060.4_00.0_continuum.fits"
-# Output directory for the Balltracking algorithm
+# Output directory for the Balltracking algorithm: replace with whatever applied to you
 outputdir = Path(os.environ['DATA'], 'HMI', 'solarmhd2024')
 
 ##########################
@@ -20,7 +18,7 @@ outputdir = Path(os.environ['DATA'], 'HMI', 'solarmhd2024')
 ##########################
 
 bt_params = {
-    'rs': 2,  # Ball radius
+    'rs': 2,  # Ball radius - in pixels
     'intsteps': 3,  # Number of integration steps between images
     'ballspacing': 1,  # Minimum spacing between balls
     'am': 0.3,  # Characteristic acceleration
@@ -70,7 +68,7 @@ cal_args = {
     'vy_rates': vy_rates,  # Drift rates y-axis
     'fwhm': maps_params['fwhm'],   # for the spatial gaussian smooth during the calibration
     'images': None,  # in-memory series of images. If None, read directly from disk (more ram-friendly)
-    'outputdir_cal': Path(outputdir, 'hmi_drifted')  # can be different from the balltracking output dir.
+    'outputdir_cal': Path(outputdir, 'hmi_drifted')  # can be different from the balltracking output dir. Replace it to your own case. 
 }
 
 cal_opt_args = {
@@ -79,6 +77,6 @@ cal_opt_args = {
     'read_drift_images': True,  # Set whether we read images from disk (True) or use `images` in-memory
     'save_ballpos_list': True,  # Save the arrays of ball positions to disk?
     'verbose': True,
-    'ncpus': 11  # # number of cpus to use for parallelization over the drift rates, <= len(vx_rates).
+    'ncpus': 1  # # number of cpus to use for parallelization over the drift rates, <= len(vx_rates).
 }
 

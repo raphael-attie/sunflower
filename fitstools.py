@@ -1,39 +1,33 @@
 import numpy as np
 from astropy.io import fits
-from astropy.io.fits import getdata
 # The fitsio python package installation often does not work in Windows or in linux with latest Python version
 import importlib.util
-fitsio_found = importlib.util.find_spec("fitsio")
-if fitsio_found is not None:
-    import fitsio
+from pathlib import Path
 
+def fitsread(filepaths, xslice=slice(None), yslice=slice(None), tslice=slice(None), cube=True, header=False):
 
-def fitsread(files, xslice=slice(None), yslice=slice(None), tslice=slice(None), cube=True, header=False):
-
-    if isinstance(files, str):
+    if isinstance(filepaths, str) or isinstance(filepaths, Path):
         if cube:
             # for now, in Windows, with python fitsio package not compiling, this won't work.
-            with fitsio.FITS(files) as fitsfile:
-                if fitsfile[0].has_data():
-                    data = np.squeeze(fitsfile[0][tslice, yslice, xslice])
-                else:
-                    data = np.squeeze(fitsfile[1][tslice, yslice, xslice])
+            with fits.open(filepaths) as hdul:
+                    data = np.squeeze(hdul[-1].section[tslice, yslice, xslice])
         else:
             # Load as single file and single image
             if header:
-                data, hdr = getdata(files, header=True)
+                data, hdr = fits.getdata(filepaths, header=True)
                 return data, hdr
             else:
-                data = getdata(files)
+                data = fits.getdata(filepaths)
+
+  
             
-    else:
-        if isinstance(tslice, int):
+    elif isinstance(tslice, int):
             # There's only 1 file to read.
-            data = getdata(files[tslice])
-        else: # Assume and read list of files
-            # Load sample to get dimensions
-            fitsfiles = files[tslice]
-            data = np.array([getdata(f) for f in fitsfiles])
+            data = fits.getdata(filepaths[tslice])
+    else:
+        # Assume and read list of files
+        subset_files = filepaths[tslice]
+        data = np.array([fits.getdata(f) for f in subset_files])
 
     return data
 
