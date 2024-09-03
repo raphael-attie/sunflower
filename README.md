@@ -46,6 +46,9 @@ It is a ~1GB tar file. Untar it. You will see a few FITS files which are 3D data
 all sliced at the same time, but at different latitudes. These are SDO/HMI data remapped using Postel projection. 
 Please contact me at rattie at gmu dot edu if you have trouble downloading. 
 
+### Update the test_inputs.py file
+- Edit "datacube_file" to the path to the datacube that you downloaded (see link above)
+- Edit "outputdir" to point to output directory of your choice, but be mindful to not have that directory in the sunflower git directory, as it will mess things when you pull my updates. 
 
 
 ### How do I get the code running
@@ -55,3 +58,4 @@ Some generic scripts and example scripts are provided in the "scripts" directory
 
 Dr. Raphael Attie, contractor at NASA/Goddard Space Flight Center with George Mason University
 Emails: raphael dot attie at nasa.gov, and CC to rattie at gmu.com
+ 
