@@ -23,7 +23,7 @@ class BT:
 
     def __init__(self, rs, dp, am, ballspacing, intsteps, sigma_factor, fourier_radius, trange,
                  side='top', direction='forward', datafiles=None, data=None, outputdir_prep=None, verbose=False,
-                 image_reader=None, roi=None):
+                 image_reader=None):
 
         """ This is the class hosting all the parameters and intermediate results of balltracking.
 
@@ -45,7 +45,6 @@ class BT:
             outputdir_prep (str): output directory to write out the intermediary surface data. For sanity check.
             verbose (bool): toggle verbosity
             image_reader (ufunc): user-supplied function to read the image files
-            roi (tuple): region of interest to process horizontal dimension first: [xstart, xlast, ystart, yend]
 
         """
 
@@ -73,8 +72,7 @@ class BT:
 
         self.trange = trange
         self.nt = trange[-1] - trange[0] + 1
-        # Optional region of interest
-        self.roi = roi
+
 
         # Get a sample. 1st of the series in forward direction. last of the series in backward direction.
 
@@ -89,8 +87,6 @@ class BT:
             else:
                 self.sample = self.data[trange[-1], :, :]
 
-        if roi is not None:
-            self.sample = self.sample[roi[2]:roi[3], roi[0]:roi[1]]
 
         # Set frame dimensions
         self.nx = int(self.sample.shape[1])
@@ -223,9 +219,6 @@ class BT:
                     image = self.image_reader(self.datafiles, tslice=self.nt - 1 - n, cube=False).astype(DTYPE)
                 else:
                     image = self.data[self.nt - 1 - n, :, :]
-
-            if self.roi is not None:
-                image = image[self.roi[2]:self.roi[3], self.roi[0]:self.roi[1]]
 
 
             # TODO: check the choice of prep_data regarding mean normalization with fixed mean or time-dependent one
@@ -884,7 +877,7 @@ def mesh_ball(rs, npts=20):
 class Calibrator:
 
     def __init__(self, bt_params, vx_rates, vy_rates, trange, fwhm, images, outputdir_cal,
-                 component='x', kernel='gaussian', roi=None, read_drift_images=False,
+                 component='x', kernel='gaussian', read_drift_images=False,
                  save_ballpos_list=True, reprocess_existing=True, verbose=False, return_ballpos=False,
                  ncpus=1):
 
@@ -940,20 +933,11 @@ class Calibrator:
         else:
             self.index = 0
 
-        if roi is None:
-            self.roi = self.get_roi()
-        else:
-            self.roi = roi
-
         # Get frame dimensions
         sample_file = sorted(list(self.drift_dirs[0].glob('*.fits')))[self.trange[0]].as_posix()
         print('sample file: ', sample_file)
         self.sample = fitstools.fitsread(sample_file, cube=False)
-        if roi is not None:
-            self.sample = self.sample[roi[2]:roi[3], roi[0]:roi[1]]
-            print('sample shape: ', self.sample.shape)
 
-        # The dimensions must correspond to the size of the roi (if any)
         self.dims = self.sample.shape[-2:]
 
         if self.kernel == 'boxcar' or self.kernel == 'gaussian':
@@ -1011,7 +995,7 @@ class Calibrator:
         # The calibration uses the same bt_params for top and bottom.
         # To track top and bottom with different parameters, just create different calibrators
         ballpos_top, ballpos_bottom = balltrack_all(self.bt_params, self.bt_params, self.drift_dirs[rate_idx],
-                                                    data=drift_images, roi=self.roi,
+                                                    data=drift_images,
                                                     # ballpos arrays will be written after all rates are processed
                                                     # Thus disabling saving them in each run
                                                     write_ballpos=False)
@@ -1063,14 +1047,6 @@ class Calibrator:
 
         return ballpos_top_list, ballpos_bottom_list
 
-    def get_roi(self):
-        """
-        Calculate amount of cropping necessary to avoid edge effects
-        """
-        trim = int(self.drift_rates.max() * self.nframes + self.fwhm + 2)
-        # roi should be ordered with [xstart, xlast, ystart, yend], using x* as horitonzal axis
-        roi = [trim, self.dims[1] - trim, trim, self.dims[0] - trim]
-        return roi
 
     def fit_mean_velocities(self, velocities, rates):
         vel_means = np.array([vel.mean() for vel in velocities])
@@ -1186,25 +1162,20 @@ def full_calibration(datafiles, bt_params, cal_args, cal_opt_args, image_reader=
         datafiles (list or str): list of FITS files, or path to FITS cube
         bt_params (dict): balltrack parameters: rs, intsteps, ballspacing, am, dp, sigma_factor, fourier_radius
         cal_args (dict): positional arguments passed to the Calibrator class instance.
-        reprocess_bt (bool): whether to reprocess balltracking over the drifted data or load existing results.
         cal_opt_args(dict): optional arguments for the Calibrator class instance
+        reprocess_bt (bool): whether to reprocess balltracking over the drifted data or load existing results.
         verbose (bool): True or False for enabling / disabling verbosity
 
     Returns:
-
+        index (int): identifier for the run.
     """
-
-    # Read the images. For efficiency, we load them all at one in a cube. Since we are only loading a subset,
-    # we can afford to load them all at once.
-    print('reading images...')
-    datafiles_selected = datafiles[cal_args['trange'][0]:cal_args['trange'][1]+1]
 
     if make_drift_images:
         print('Creating drift images...')
         # Create the drift images for the calibration.
         if cal_args['outputdir_cal'] is not None:
             for i, (drx, dry) in enumerate(zip(cal_args['vx_rates'], cal_args['vy_rates'])):
-                create_drift_series(datafiles_selected, drx, dry,
+                create_drift_series(datafiles, drx, dry, trange=cal_args['trange'],
                                     outputdir=Path(cal_args['outputdir_cal'], f'drift_{i:02d}'),
                                     image_reader=image_reader)
 
@@ -1243,7 +1214,7 @@ def full_calibration(datafiles, bt_params, cal_args, cal_opt_args, image_reader=
     return index
 
 
-def create_drift_series(datafiles, vx_rate, vy_rate, outputdir=None, filter_function=None, image_reader=None, **kwargs):
+def create_drift_series(datafiles, vx_rate, vy_rate, trange=None, outputdir=None, filter_function=None, image_reader=None, **kwargs):
     """
     Drift the image series by translating a moving reference by an input 2D velocity vector.
     The drift operates by shifting the phase of the Fourier transform that also circularly shifts the escaping pixels
@@ -1260,14 +1231,17 @@ def create_drift_series(datafiles, vx_rate, vy_rate, outputdir=None, filter_func
         None
     """
 
-    nframes = len(datafiles)
-
     if image_reader is None:
         image_reader = fitstools.fitsread
 
-    for i in range(nframes):
+    if trange is None:
+        trange = range(0, len(datafiles))
+    else:
+        trange = range(*trange)
+
+    for i in trange:
         # Load the image from disk one by one
-        image_to_drift = image_reader(datafiles[i], **kwargs)
+        image_to_drift = image_reader(datafiles, tslice=i, **kwargs)
 
         if (vx_rate != 0) or (vy_rate != 0):
             dx = vx_rate * i

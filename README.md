@@ -42,7 +42,7 @@ If you do not have any error message, all packages are installed correctly.
 ### Download Example SDO/HMI data
 Please download the data that will be used during the hands-on session at:
 https://drive.google.com/file/d/10C0wICYds_nG2eRUXb-Gik45ez9gIUTY/view?usp=sharing
-It is a ~1GB tar file. Untar it. You will see a few FITS file which are 3D data cube containing time series of 2D images and magnetograms, 
+It is a ~1GB tar file. Untar it. You will see a few FITS files which are 3D data cubes containing time series of 2D images and magnetograms, 
 all sliced at the same time, but at different latitudes. These are SDO/HMI data remapped using Postel projection. 
 Please contact me at rattie at gmu dot edu if you have trouble downloading. 
 
