@@ -34,7 +34,6 @@ datafiles = sorted(datadir.glob('*.fits'))
 nfiles = len(datafiles)
 print(nfiles, datafiles[0])
 
-outputdir = Path(datadir, 'balltracking')
 sample = fitstools.fitsread(datafiles[0].as_posix(), cube=False)
 sampleNaN = sample.copy()
 sampleNaN[sampleNaN == -1] = np.NaN
@@ -65,6 +64,9 @@ zdamping = 1.7
 intsteps = 80
 noise_level = 1.03
 
+outputdir = Path(datadir, 'balltracking',
+                 f'gamma{gamma}_noise{noise_level}_thresh{threshold}_tdxy{tdx}_z{zdamping}_intsteps{intsteps}')
+
 mbt_dict = {"nt": 10,
             "rs": 2,
             "am": 1,
@@ -85,8 +87,9 @@ mbt_dict = {"nt": 10,
             "figsize": (12, 5),
             "fig_vmin_vmax": (1.01, 1.06),  # (1.02, 1.06),
             "astropy": False,
+            "outputdir": outputdir,
             "verbose": True,
-            "fig_dir": Path(datadir, f'figures/with_surface_i_gamma{gamma}_noise{noise_level}_thresh{threshold}_tdxy{tdx}_z{zdamping}_intsteps{intsteps}')}
+            "fig_dir": Path(outputdir, f'figures')}
 
 # mbt_p, mbt_n = mblt.mballtrack_main(**mbt_dict)
 

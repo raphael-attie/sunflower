@@ -19,7 +19,7 @@ class MBT:
                  ballspacing=10, intsteps=15, nt=1, mag_thresh=30, noise_level=20, polarity=1,
                  init_pos=None, track_emergence=False, datafiles=None, data=None, prep_function=None, local_min=False,
                  roi=None, fig_dir=None, do_plots=0, axlims=None, figsize=None, fig_vmin_vmax=None, astropy=False,
-                 verbose=True):
+                 outputdir = None, verbose=True):
 
         """ Main class for Magnetic Balltracking
 
@@ -160,6 +160,7 @@ class MBT:
         self.figsize = figsize
         self.fig_vmin_vmax = fig_vmin_vmax
         self.fig_dir = fig_dir
+        self.outputdir = outputdir
         self.verbose = verbose
 
         self.nbadballs = 0
@@ -240,6 +241,7 @@ class MBT:
                                       figsize=self.figsize, cmap='gray_r', axlims=self.axlims, ballvel=ballvel,
                                       title=f'Frame # {n}', vmin=self.fig_vmin_vmax[0], vmax=self.fig_vmin_vmax[1])
 
+
         # Trim the array down to the actual number of balls used so far.
         # That number has been incremented each time new balls were added, in self.populate_emergence
         if self.verbose:
@@ -247,6 +249,10 @@ class MBT:
         self.ballpos = self.ballpos[:, 0:self.nballs, :]
         self.balls_age_t = self.balls_age_t[0:self.nballs, :]
         self.valid_balls_mask_t = self.valid_balls_mask_t[0:self.nballs, :]
+
+        if self.outputdir is not None:
+            np.savez_compressed(Path(self.outputdir, 'ballpos.npz'), ballpos=self.ballpos)
+            print(f'ballpos.npz saved to {self.outputdir}')
 
     def track_start_intermediate(self):
         """ Track the first intermediate steps that follows the initialization"""
