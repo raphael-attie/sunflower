@@ -1,0 +1,9 @@
+astropy==5.3.4
+Cython==3.0.3
+fitsio==1.2.0
+matplotlib==3.8.0
+numpy==2.1.0
+pandas==2.2.2
+scipy==1.14.1
+setuptools==68.1.2
+skimage==0.22.0
