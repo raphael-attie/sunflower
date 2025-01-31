@@ -74,10 +74,10 @@ class BT:
         self.trange = trange
         self.nt = trange[-1] - trange[0] + 1
         # Optional region of interest
-        self.roi = roi
+        self._roi = roi
+        self._roi_slice = self._compute_roi_slice()
 
         # Get a sample. 1st of the series in forward direction. last of the series in backward direction.
-
         if self.data is None:
             if self.direction == 'forward':
                 self.sample = self.image_reader(self.datafiles, tslice=trange[0], cube=False).astype(DTYPE)
@@ -89,8 +89,7 @@ class BT:
             else:
                 self.sample = self.data[trange[-1], :, :]
 
-        if roi is not None:
-            self.sample = self.sample[roi[2]:roi[3], roi[0]:roi[1]]
+        self.sample = self.sample[self.roi_slice]
 
         # Set frame dimensions
         self.nx = int(self.sample.shape[1])
@@ -181,6 +180,25 @@ class BT:
         self.coarse_grid[-1,:] = 1
         self.coarse_grid[:, -1] = 1
 
+    def _compute_roi_slice(self):
+        if self._roi is None:
+            return np.s_[None]
+
+        return np.s_[self._roi[2]:self._roi[3], self._roi[0]:self._roi[1]]
+
+    @property
+    def roi_slice(self):
+        """Getter for roi_slice"""
+        return self._roi_slice  # Compute dynamically
+
+
+    @roi_slice.setter
+    def roi_slice(self, roi):
+        """Setter for roi_slice to update roi and recompute the slice."""
+        self._roi = roi
+        self._roi_slice = self._compute_roi_slice()
+
+
     def coarse_grid_pos(self, x, y):
         """
             Convert the x,y coordinates of the balls dropped on the surface into coordinates in the coarse grid.
@@ -224,8 +242,9 @@ class BT:
                 else:
                     image = self.data[self.nt - 1 - n, :, :]
 
-            if self.roi is not None:
-                image = image[self.roi[2]:self.roi[3], self.roi[0]:self.roi[1]]
+            # Here the slicing occurs before the fourier filter. Keep this order in mind when calculating the slice,
+            # to avoid unexpected Fourier artefacts.
+            image = image[self.roi_slice]
 
 
             # TODO: check the choice of prep_data regarding mean normalization with fixed mean or time-dependent one
@@ -884,7 +903,7 @@ def mesh_ball(rs, npts=20):
 class Calibrator:
 
     def __init__(self, bt_params, vx_rates, vy_rates, trange, fwhm, images, outputdir_cal,
-                 component='x', kernel='gaussian', roi=None, read_drift_images=False,
+                 component='x', kernel='gaussian', roi=None, read_drift_images=False, image_reader=None,
                  save_ballpos_list=True, reprocess_existing=True, verbose=False, return_ballpos=False,
                  ncpus=1):
 
@@ -940,21 +959,24 @@ class Calibrator:
         else:
             self.index = 0
 
-        if roi is None:
-            self.roi = self.get_roi()
+        if image_reader is None:
+            self.image_reader = fitstools.fitsread
         else:
-            self.roi = roi
+            self.image_reader = image_reader
 
         # Get frame dimensions
         sample_file = sorted(list(self.drift_dirs[0].glob('*.fits')))[self.trange[0]].as_posix()
         print('sample file: ', sample_file)
-        self.sample = fitstools.fitsread(sample_file, cube=False)
-        if roi is not None:
-            self.sample = self.sample[roi[2]:roi[3], roi[0]:roi[1]]
-            print('sample shape: ', self.sample.shape)
-
-        # The dimensions must correspond to the size of the roi (if any)
+        self.sample = fits.getdata(sample_file)
+        # The dimensions must correspond to the size of the roi_slice (if any)
         self.dims = self.sample.shape[-2:]
+
+        self._roi = roi
+        self._roi_slice = self._compute_roi_slice()
+
+        self.sample = self.sample[self.roi_slice]
+        print('sample shape: ', self.sample.shape)
+
 
         if self.kernel == 'boxcar' or self.kernel == 'gaussian':
             self.kernels = [self.kernel]
@@ -965,20 +987,43 @@ class Calibrator:
 
         os.makedirs(self.outputdir_cal, exist_ok=True)
 
+
+    def _compute_roi_slice(self):
+        """Calculate the amount of cropping necessary to avoid edge effects."""
+        if self._roi is None:
+            trim = int(self.drift_rates.max() * self.nframes + self.fwhm + 2)
+            return np.s_[trim:self.dims[1] - trim, trim:self.dims[0] - trim]
+        else:
+            # Remove the drift trim after cropping the image
+            return np.s_[self._roi[2]:self._roi[3], self._roi[0]:self._roi[1]]
+
+
+    @property
+    def roi_slice(self):
+        return self._roi_slice
+
+
+    @roi_slice.setter
+    def roi_slice(self, roi):
+        """Setter for roi_slice to update roi and recompute the slice."""
+        self._roi = roi
+        self._roi_slice = self._compute_roi_slice()
+
+
     def get_drift_images(self, rate_idx):
 
         if self.read_drift_images:
             if self.verbose:
                 print(self.drift_dirs[rate_idx])
             # Files supposed to be created or to be read if already exist.
-            filepaths = sorted(list(Path(self.drift_dirs[rate_idx]).glob('*.fits')))[self.trange[0]:self.trange[1]]
+            filepaths = sorted(list(Path(self.drift_dirs[rate_idx]).glob('*.fits')))[self.trange[0]:self.trange[1]+1]
             if not check_file_series(filepaths):
                 print("Drift data do not exist. Sources images not provided. Must provide them as input")
                 sys.exit(1)
             if self.verbose:
                 print(f"Reading from fits existing drift images at rate: {self.drift_rates[rate_idx]} px/frame")
 
-            drift_images = fitstools.fitsread(filepaths)
+            drift_images = self.image_reader(filepaths)
 
         else:
             if self.images is None:
@@ -1011,7 +1056,7 @@ class Calibrator:
         # The calibration uses the same bt_params for top and bottom.
         # To track top and bottom with different parameters, just create different calibrators
         ballpos_top, ballpos_bottom = balltrack_all(self.bt_params, self.bt_params, self.drift_dirs[rate_idx],
-                                                    data=drift_images, roi=self.roi,
+                                                    data=drift_images, roi=self.roi_slice,
                                                     # ballpos arrays will be written after all rates are processed
                                                     # Thus disabling saving them in each run
                                                     write_ballpos=False)
@@ -1063,17 +1108,10 @@ class Calibrator:
 
         return ballpos_top_list, ballpos_bottom_list
 
-    def get_roi(self):
-        """
-        Calculate amount of cropping necessary to avoid edge effects
-        """
-        trim = int(self.drift_rates.max() * self.nframes + self.fwhm + 2)
-        # roi should be ordered with [xstart, xlast, ystart, yend], using x* as horitonzal axis
-        roi = [trim, self.dims[1] - trim, trim, self.dims[0] - trim]
-        return roi
+
 
     def fit_mean_velocities(self, velocities, rates):
-        vel_means = np.array([vel.mean() for vel in velocities])
+        vel_means = np.array([vel[self.roi_slice].mean() for vel in velocities])
         p, r, _, _, _ = np.polyfit(vel_means, rates, 1, full=True)
         rmse = np.sqrt(r[0] / vel_means.size)
         return p, rmse, vel_means
@@ -1243,7 +1281,7 @@ def full_calibration(datafiles, bt_params, cal_args, cal_opt_args, image_reader=
     return index
 
 
-def create_drift_series(datafiles, vx_rate, vy_rate, outputdir=None, filter_function=None, image_reader=None, **kwargs):
+def create_drift_series(datafiles, vx_rate, vy_rate, outputdir=None, filter_function=None, **kwargs):
     """
     Drift the image series by translating a moving reference by an input 2D velocity vector.
     The drift operates by shifting the phase of the Fourier transform that also circularly shifts the escaping pixels
@@ -1262,12 +1300,9 @@ def create_drift_series(datafiles, vx_rate, vy_rate, outputdir=None, filter_func
 
     nframes = len(datafiles)
 
-    if image_reader is None:
-        image_reader = fitstools.fitsread
-
     for i in range(nframes):
         # Load the image from disk one by one
-        image_to_drift = image_reader(datafiles[i], **kwargs)
+        image_to_drift = fits.getdata(datafiles[i])
 
         if (vx_rate != 0) or (vy_rate != 0):
             dx = vx_rate * i
@@ -1591,4 +1626,3 @@ def get_bt_params_list(param_dict):
         bt_params['index'] = i
         bt_params_list.append(bt_params)
     return bt_params_list
-

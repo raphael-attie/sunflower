@@ -28,12 +28,10 @@ def fitsread(files, xslice=slice(None), yslice=slice(None), tslice=slice(None), 
             
     else:
         if isinstance(tslice, int):
-            # There's only 1 file to read.
+            # Read at given index
             data = getdata(files[tslice])
-        else: # Assume and read list of files
-            # Load sample to get dimensions
-            fitsfiles = files[tslice]
-            data = np.array([getdata(f) for f in fitsfiles])
+        else: # Read list of files
+            data = np.array([getdata(f) for f in files[tslice]])
 
     return data
 
