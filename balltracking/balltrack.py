@@ -183,6 +183,8 @@ class BT:
     def _compute_roi_slice(self):
         if self._roi is None:
             return np.s_[None]
+        elif isinstance(self._roi, tuple) and len(self._roi) == 2:
+            return self._roi
 
         return np.s_[self._roi[2]:self._roi[3], self._roi[0]:self._roi[1]]
 
@@ -1212,7 +1214,7 @@ class Calibrator:
 
 
 def full_calibration(datafiles, bt_params, cal_args, cal_opt_args, image_reader=None, make_drift_images=True,
-                     reprocess_bt=True, verbose=False):
+                     reprocess_bt=True, verbose=False, datacube=False):
     """
     Main calibration function. It considers top-side and bottom-side to be the same, but output their results
     separately in the csv file. After multiple runs in the cluster, as many csv files are create with a unique
@@ -1232,19 +1234,21 @@ def full_calibration(datafiles, bt_params, cal_args, cal_opt_args, image_reader=
 
     """
 
-    # Read the images. For efficiency, we load them all at one in a cube. Since we are only loading a subset,
-    # we can afford to load them all at once.
-    print('reading images...')
-    datafiles_selected = datafiles[cal_args['trange'][0]:cal_args['trange'][1]+1]
+    print('reading images for drift...')
+    if datacube:
+        # Load as a cube and slice it to the input range of interest
+        data = fits.getdata(datafiles)[cal_args['trange'][0]:cal_args['trange'][1]]
+    else:
+        datafiles_selected = datafiles[cal_args['trange'][0]:cal_args['trange'][1]]
+        data = [fits.getdata(f) for f in datafiles_selected]
 
     if make_drift_images:
         print('Creating drift images...')
         # Create the drift images for the calibration.
         if cal_args['outputdir_cal'] is not None:
             for i, (drx, dry) in enumerate(zip(cal_args['vx_rates'], cal_args['vy_rates'])):
-                create_drift_series(datafiles_selected, drx, dry,
-                                    outputdir=Path(cal_args['outputdir_cal'], f'drift_{i:02d}'),
-                                    image_reader=image_reader)
+                create_drift_series(data, drx, dry,
+                                    outputdir=Path(cal_args['outputdir_cal'], f'drift_{i:02d}'))
 
 
     # Set the index for having a unique identifier of each run of the parameter sweep
@@ -1281,14 +1285,14 @@ def full_calibration(datafiles, bt_params, cal_args, cal_opt_args, image_reader=
     return index
 
 
-def create_drift_series(datafiles, vx_rate, vy_rate, outputdir=None, filter_function=None, **kwargs):
+def create_drift_series(data, vx_rate, vy_rate, outputdir=None, filter_function=None):
     """
     Drift the image series by translating a moving reference by an input 2D velocity vector.
     The drift operates by shifting the phase of the Fourier transform that also circularly shifts the escaping pixels
     back to the other edge.
 
     Args:
-        datafiles (list): list of image file paths to drift
+        data (list or ndarray): list of 2D array
         vx_rate (float): signed value for the velocity drift on the x-direction.
         vy_rate (float): signed value for the velocity drift on the y-direction.
         outputdir (Path): output directory where the drifted images are saved.
@@ -1298,18 +1302,16 @@ def create_drift_series(datafiles, vx_rate, vy_rate, outputdir=None, filter_func
         None
     """
 
-    nframes = len(datafiles)
+    nframes = len(data)
 
     for i in range(nframes):
-        # Load the image from disk one by one
-        image_to_drift = fits.getdata(datafiles[i])
 
         if (vx_rate != 0) or (vy_rate != 0):
             dx = vx_rate * i
             dy = vy_rate * i
-            drifted_image = filters.translate_by_phase_shift(image_to_drift, dx, dy)
+            drifted_image = filters.translate_by_phase_shift(data[i], dx, dy)
         else:
-            drifted_image = image_to_drift
+            drifted_image = data[i]
 
         if filter_function is not None:
             drifted_image = filter_function(drifted_image)
