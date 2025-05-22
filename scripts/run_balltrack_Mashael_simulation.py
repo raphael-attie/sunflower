@@ -1,5 +1,5 @@
 import balltracking.balltrack as blt
-from scripts import inputs_Mashael_HMI as inputs
+from scripts import inputs_Mashael_simulation as inputs
 from pathlib import Path
 import matplotlib
 import matplotlib.pyplot as plt

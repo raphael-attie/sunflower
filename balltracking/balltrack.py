@@ -1221,8 +1221,8 @@ class Calibrator:
         return df_fit
 
 
-def full_calibration(datafiles, bt_params, cal_args, cal_opt_args, image_reader=None, make_drift_images=True,
-                     reprocess_bt=True, verbose=False, datacube=False):
+def full_calibration(datafiles, bt_params, cal_args, cal_opt_args, make_drift_images=True,
+                     reprocess_bt=True, verbose=False):
     """
     Main calibration function. It considers top-side and bottom-side to be the same, but output their results
     separately in the csv file. After multiple runs in the cluster, as many csv files are create with a unique
@@ -1243,11 +1243,11 @@ def full_calibration(datafiles, bt_params, cal_args, cal_opt_args, image_reader=
     """
 
     print('reading images for drift...')
-    if datacube:
+    if isinstance(datafiles, str) or isinstance(datafiles, Path):
         # Load as a cube and slice it to the input range of interest
-        data = fits.getdata(datafiles)[cal_args['trange'][0]:cal_args['trange'][1]]
+        data = fits.getdata(datafiles)[cal_args['trange'][0]:cal_args['trange'][1]+1]
     else:
-        datafiles_selected = datafiles[cal_args['trange'][0]:cal_args['trange'][1]]
+        datafiles_selected = datafiles[cal_args['trange'][0]:cal_args['trange'][1]+1]
         data = [fits.getdata(f) for f in datafiles_selected]
 
     if make_drift_images:
