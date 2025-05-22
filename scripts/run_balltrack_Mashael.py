@@ -41,9 +41,9 @@ if __name__ == "__main__":
     plt.savefig(Path(inputs.outputdir, 'quicklook_vy_avg.png'))
 
     plt.figure()
-    plt.imshow(v_avg['lanes_avg'], origin='lower', cmap='gray')
+    plt.imshow(v_avg['lanes_avg'], origin='lower', cmap='Blues')
     plt.savefig(Path(inputs.outputdir, 'quicklook_lanes_avg.png'))
 
     plt.figure()
-    plt.imshow(v_series['run_avg_lanes'], origin='lower', cmap='gray')
+    plt.imshow(v_series['run_avg_lanes'], origin='lower', cmap='Blues')
     plt.savefig(Path(inputs.outputdir, 'quicklook_run_lanes_avg.png'))
