@@ -1,5 +1,5 @@
 import balltracking.balltrack as blt
-from scripts import inputs_Mashael as inputs
+from scripts import inputs_Mashael_HMI as inputs
 from pathlib import Path
 import matplotlib
 import matplotlib.pyplot as plt
@@ -20,10 +20,11 @@ if __name__ == "__main__":
 
     if inputs.run_calibration:
         _ = blt.full_calibration(inputs.datafiles, inputs.bt_params, inputs.cal_args, inputs.cal_opt_args,
-                                 datacube=True, verbose=True)
+                                 datacube=False, verbose=True)
+        print('calibration finished.')
 
     if inputs.run_balltracking:
-        _, _ = blt.balltrack_main_hmi(inputs.bt_params, inputs.outputdir, datafiles=inputs.datafiles, ncores=4)
+        _, _ = blt.balltrack_main_hmi(inputs.bt_params, inputs.outputdir, datafiles=inputs.datafiles, ncores=1)
 
     # Load the file created during the calibration
     calibration_file = Path(inputs.cal_args['outputdir_cal'], 'param_sweep_00000.csv')

@@ -87,9 +87,10 @@ class BT:
             if self.direction == 'forward':
                 self.sample = self.data[trange[0], :, :]
             else:
-                self.sample = self.data[trange[-1], :, :]
+                self.sample = self.data[trange[-1]-1, :, :]
 
-        self.sample = self.sample[self.roi_slice]
+        if self.roi_slice is not None:
+            self.sample = self.sample[self.roi_slice]
 
         # Set frame dimensions
         self.nx = int(self.sample.shape[1])
@@ -172,6 +173,7 @@ class BT:
         self.pos[0, :] = self.xstart.flatten()
         self.pos[1, :] = self.ystart.flatten()
         self.zstart = put_balls_on_surface(self.surface, self.xstart.ravel(), self.ystart.ravel(), self.rs, self.dp)
+        print(self.pos.shape, self.zstart.shape)
         self.pos[2, :] = self.zstart.copy()
         # Set the coarse grid: populate edges to avoid "leaks" of balls ~ balls falling off.
         # Although can't remember if that was actually ever used in the Matlab implementation
@@ -238,15 +240,16 @@ class BT:
                     image = self.image_reader(self.datafiles, tslice=n, cube=False).astype(DTYPE)
                 else:
                     image = self.data[n, :, :]
-            else:
+            else: # going backward
                 if self.data is None:
-                    image = self.image_reader(self.datafiles, tslice=self.nt - 1 - n, cube=False).astype(DTYPE)
+                    image = self.image_reader(self.datafiles, tslice=self.trange[1] - n, cube=False).astype(DTYPE)
                 else:
-                    image = self.data[self.nt - 1 - n, :, :]
+                    image = self.data[self.trange[1] - n, :, :]
 
             # Here the slicing occurs before the fourier filter. Keep this order in mind when calculating the slice,
             # to avoid unexpected Fourier artefacts.
-            image = image[self.roi_slice]
+            if self.roi_slice is not None:
+                image = image[self.roi_slice]
 
 
             # TODO: check the choice of prep_data regarding mean normalization with fixed mean or time-dependent one
@@ -973,10 +976,12 @@ class Calibrator:
         # The dimensions must correspond to the size of the roi_slice (if any)
         self.dims = self.sample.shape[-2:]
 
+        #todo: need to review that, it's ugly
         self._roi = roi
         self._roi_slice = self._compute_roi_slice()
 
-        self.sample = self.sample[self.roi_slice]
+        if self.roi_slice is not None:
+            self.sample = self.sample[self.roi_slice]
         print('sample shape: ', self.sample.shape)
 
 
@@ -1113,7 +1118,10 @@ class Calibrator:
 
 
     def fit_mean_velocities(self, velocities, rates):
-        vel_means = np.array([vel[self.roi_slice].mean() for vel in velocities])
+        if self.roi_slice is not None: #could be redundant
+            vel_means = np.array([vel[self.roi_slice].mean() for vel in velocities])
+        else:
+            vel_means = np.array([vel[self.roi_slice].mean() for vel in velocities])
         p, r, _, _, _ = np.polyfit(vel_means, rates, 1, full=True)
         rmse = np.sqrt(r[0] / vel_means.size)
         return p, rmse, vel_means
