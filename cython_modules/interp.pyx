@@ -16,7 +16,7 @@ DTYPEd = np.double
 # type with a _t-suffix.
 ctypedef np.float32_t DTYPE_tf
 ctypedef np.double_t DTYPE_td
-ctypedef np.uint_t DTYPE_tui
+ctypedef np.uint32_t DTYPE_tui
 
 cimport cython
 @cython.boundscheck(False) # turn off bounds-checking for entire function
