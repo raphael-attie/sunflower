@@ -297,7 +297,8 @@ class BT:
         """
         Mask out all the balls that are outside the tracking requirements.
 
-        Returns
+        This updates self.bad_balls_mask in place based on outliers and
+        overpopulated cells.
         -------
 
         """
@@ -347,7 +348,9 @@ class BT:
         """
         Create the mask of balls that are falling off the 3D surface.
 
-        Returns
+        Returns:
+            outliers_mask (np.ndarray): Boolean mask where True indicates a ball
+            has sunk too low or moved off the edge.
         -------
 
         """
@@ -362,13 +365,13 @@ class BT:
         """
         Repopulate the data surface with a new set of balls whose number is consistent with the masked out balls.
 
-        Parameters
-        ----------
-        surface : data surface to be repopulated
+        Args:
+            surface (np.ndarray): data surface to be repopulated
 
-        Returns
-        -------
-        Array of x,y coordinates of the new balls
+        Returns:
+            tuple: (xnew, ynew)
+                * xnew (np.ndarray): x-coordinates of the new balls
+                * ynew (np.ndarray): y-coordinates of the new balls
         """
         nbadballs = self.bad_balls_mask.sum()
         # Get the mask of the valid balls that we are going to keep
@@ -541,6 +544,21 @@ def balltrack_all(bt_params_top, bt_params_bottom, outputdir,
 
 
 def balltrack_main_hmi(bt_params, outputdir, datafiles=None, data=None, ncores=1, **kwargs):
+    """
+        Main wrapper for Balltracking on HMI data.
+        Calibration is so far considering the same top-side and bottom-side parameters.
+
+        Args:
+            bt_params (dict): Dictionary of ball tracking parameters.
+            outputdir (str): Path to the output directory.
+            datafiles (list, optional): List of data files. Defaults to None.
+            data (np.ndarray, optional): 3D data array. Defaults to None.
+            ncores (int, optional): Number of cores for parallel processing. Defaults to 1.
+            **kwargs: Additional keyword arguments passed to balltrack_all.
+
+        Returns:
+            tuple: (ballpos_top, ballpos_bottom)
+    """
 
     # Calibration HMI is so far considering the same top-side and bottom-side parameters
     ballpos_top, ballpos_bottom = balltrack_all(bt_params, bt_params, outputdir,
@@ -689,7 +707,19 @@ def prep_data2(image, sigma_factor=1, pixel_radius=0):
 
 
 def put_balls_on_surface(surface, x, y, rs, dp):
-    """Initialize the vertical position of the balls for given x,y coordinates"""
+    """
+    Initialize the vertical position of the balls for given x,y coordinates
+
+    Args:
+        surface (np.ndarray): 2D array representing the data surface.
+        x (np.ndarray): 1D array of x-coordinates.
+        y (np.ndarray): 1D array of y-coordinates.
+        rs (float): Ball radius.
+        dp (float): Percentage depth.
+
+    Returns:
+        z (np.ndarray): The vertical z-coordinates of the balls on the surface.
+    """
 
     if x.ndim != 1 or y.ndim != 1:
         sys.exit("Input coordinates have incorrect dimensions. "
@@ -701,7 +731,17 @@ def put_balls_on_surface(surface, x, y, rs, dp):
 
 
 def integrate_motion(bt, surface, return_copies=False):
-    """Integrate balls position for one integration step"""
+    """
+    Integrate balls position for one integration step
+
+    Args:
+        bt (BT): Instance of the BallTracking class containing position and velocity state.
+        surface (np.ndarray): 2D array of the current data surface.
+        return_copies (bool): If True, returns copies of pos, vel, and force.
+
+    Returns:
+        tuple: (pos, vel, force) if return_copies is True, otherwise None.
+    """
 
     # Get the valid balls & unpack vector components for better readability
     #print("Get the valid balls")
@@ -743,7 +783,23 @@ def integrate_motion(bt, surface, return_copies=False):
 
 
 def compute_force(rs, am, k_force, brows, bcols, xt, yt, zt, ds):
-    """Compute the Newtonian forces that pushes the balls toward local minima"""
+    """
+        Compute the Newtonian forces that pushes the balls toward local minima
+
+        Args:
+            rs (float): Ball radius.
+            am (float): Acceleration factor.
+            k_force (float): Force scaling factor.
+            brows (np.ndarray): Row coordinates of ball grid.
+            bcols (np.ndarray): Column coordinates of ball grid.
+            xt (np.ndarray): x-positions of balls.
+            yt (np.ndarray): y-positions of balls.
+            zt (np.ndarray): z-positions of balls.
+            ds (np.ndarray): Interpolated surface height at ball grid positions.
+
+        Returns:
+            tuple: (fxt, fyt, fzt) - Force components in x, y, and z directions.
+        """
 
     delta_x = xt - bcols
     delta_y = yt - brows
@@ -1337,10 +1393,15 @@ def create_drift_series(data, vx_rate, vy_rate, outputdir=None, filter_function=
 
 def check_file_series(filepaths):
     """
-    Check if all files in a list exist
-    :param filepaths: list of file paths. Can be of type string or Path objects. Converted to the latter in case of string.
-    :return:
-    """
+        Check if all files in a list exist
+
+        Args:
+            filepaths (list): List of file paths. Can be of type string or Path objects.
+                              Converted to the latter in case of string.
+
+        Returns:
+            bool: True if all files exist, False otherwise.
+        """
 
     if not any(isinstance(x,Path) for x in filepaths):
         paths = [Path(x) for x in filepaths]
@@ -1533,18 +1594,20 @@ def make_lanes(vx, vy, nsteps=40, maxstep=1):
 
 def calibrate_flows(datafiles, calibration_file, balltrack_dir, maps_params):
     """
-    Create the Euler, dense flow maps from the ball positions.
-    Each map is spatially smoothed and time-averaged over the user-set parameters. Another flow map, averaged over the
-    whole tracking time, is also created.
+        Create the Euler, dense flow maps from the ball positions.
+        Each map is spatially smoothed and time-averaged over the user-set parameters. Another flow map, averaged over the
+        whole tracking time, is also created.
 
-    Args:
-        datafiles (Path or str): input FITS files
-        calibration_file (Path or str): path to csv file containing the fit parameters of the calibration
-        balltrack_dir (Path or str): directory where the
-        maps_params:
+        Args:
+            datafiles (Path or str): input FITS files
+            calibration_file (Path or str): path to csv file containing the fit parameters of the calibration
+            balltrack_dir (Path or str): directory where the ball tracking output is stored.
+            maps_params (dict): Dictionary of parameters for map generation (e.g., 'kernel', 'navg', 'dt', 'im_dims', 'fwhm').
 
-    Returns:
-
+        Returns:
+            tuple: (v_series_dict, v_avg_dict)
+                * v_series_dict (dict): Contains 'vxs', 'vys', 'lanes_list', 'run_avg_lanes'.
+                * v_avg_dict (dict): Contains 'vx_avg', 'vy_avg', 'lanes_avg', 'avg_header'.
     """
     # Make calibrated euler flows
     df_fit = (pd.read_csv(calibration_file).query(f"kernel=='{maps_params['kernel']}'"))
