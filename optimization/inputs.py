@@ -6,7 +6,7 @@ import balltracking.balltrack as blt
 # the multiprocessing start method can only bet set once
 use_multiprocessing = False
 # number of cpus to use for parallelization
-ncpus = 32
+ncpus = 64
 # multiprocessing.set_start_method('spawn')
 # TODO: check directory content to not overwrite files that will have the same index
 # Output directory for the balltracking results
