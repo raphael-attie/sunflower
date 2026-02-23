@@ -42,5 +42,5 @@ if __name__ == '__main__':
     etime = (end - start)/60
     print(f'Elapsed time: {etime:0.2f} min')
 
-# At the end of this parallel job, use "parameter_sweep_velocity_calibration.py" to aggregate everything
+# At the end of this parallel job, use "parameter_sweep_aggregation.py" to aggregate everything
 
