@@ -1,74 +1,90 @@
 import os
+import sys
 from pathlib import Path
 from collections import OrderedDict
 import numpy as np
 import balltracking.balltrack as blt
 # the multiprocessing start method can only bet set once
-use_multiprocessing = False
+use_multiprocessing = False # os.getenv('USE_MULTIPROCESSING', '0').lower().strip() in ('1', 'true', 'yes', 'y', 'on')
 # number of cpus to use for parallelization
-ncpus = 64
+default_cpus = os.cpu_count() if use_multiprocessing else 1
+ncpus = int(os.getenv('MAX_CPUS', default_cpus))# 32
 # multiprocessing.set_start_method('spawn')
 # TODO: check directory content to not overwrite files that will have the same index
+
+if 'DATA' not in os.environ:
+    print("ERROR: The 'DATA' environment variable is not set. Please set it to the root directory containing your FITS files before running the script.", file=sys.stderr)
+    sys.exit(1)
+
+datafiles = sorted(list(Path(os.environ['DATA'], 'SteinSDO/').glob('SDO_int*.fits')))
 # Output directory for the balltracking results
-outputdir = Path(os.environ['DATA3'], 'sanity_check/stein_series/calibration3')
-# Output directory for the calibration results
-outputdir_cal = outputdir
+outputdir = Path(os.environ['DATA'], 'sanity_check/stein_series/calibration4')
 # Run balltracking (True) or re-use balltracked positions from a previous run?
 reprocess_bt = True
-# Number of frames to process
-nframes = 60
-# Time range [start, end[ within the series of images to consider in the calibration.
-# To take them all, just put [0, nframes]
-trange = [0, nframes]
 
 # TODO: See if we can order Pandas rows so that the index do not depend anymore on the order the grid search
 # Create the gridded list for the parameter sweep
 bt_params = OrderedDict({
-    'rs': 2,
-    'intsteps': [3, 4, 5, 6],
-    'ballspacing': [1, 2],
-    'am': [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
-    'dp': [0.1, 0.15, 0.2, 0.25, 0.3, 0.35],
-    'sigma_factor': [1.0, 1.25, 1.5, 1.75, 2],
-    'fourier_radius': np.arange(0, 5)
+    'rs': 2,    # Ball radius
+    'intsteps': [3, 4, 5, 6],   # Number of integration steps between images
+    'ballspacing': [1, 2],  # Minimum spacing between balls
+    'am': [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], # Characteristic acceleration
+    'dp': [0.1, 0.15, 0.2, 0.25, 0.3, 0.35],    # Characteristic depth of floatation
+    'sigma_factor': [1.0, 1.25, 1.5, 1.75, 2],  # The target standard deviation of the Z-height of the output data surface
+    'fourier_radius': np.arange(0, 5),  # Width of high-pass Fourier filter (k-space). Adapt to instruments, image resolution, ...
+    'trange': (0, 181),  # Time range (1st index, last index+1) of the series of images to use for tracking.
+    'verbose': True
 })
 bt_params_list = blt.get_bt_params_list(bt_params)
-# If restricting only to a subset
-# bt_params_list = [params for params in bt_params_list if ((params['am'] < 0.5 or
-#
-#                                                           params['dp'] < 0.2))]
 
-# Testing another subset with one task per cpu in parallel
-bt_params_list = bt_params_list[0:ncpus]
+################################
+# Flow maps parameters
+################################
+maps_params = {
+    'generate_lanes': True,  # Toggle creation of the supergranular maps
+    'im_dims': [256, 256],  # Image dimension [width, height] in pixels
+    'navg': 40,  # in nb of frame ~ must translate to ~30 min minimum with HMI @45s cadence
+    'dt': 20,  # Time step in number of frames between averaged flow maps. Use dt < navg for having smoother transitions
+    'nsteps': 40,  # Nb of integration steps for the supergranular boundary mapping
+    'kernel': 'gaussian',  # Smoothing kernel: 'gaussian', 'boxcar', or 'both'
+    'fwhm': 7,   # spatial gaussian smooth of the Euler dense flow maps
+    'hdu_n': 1  # index of the header in the FITS header data unit. Often 0, but 1 for RICE-compressed from JSOC
+}
+
 ##########################
 # Calibration parameters
 ##########################
-# Read images from disk?
-read_drift_images = True
-# If True, must provide directories, one per drift rate.
-drift_dirs = sorted(list(Path(os.environ['DATA3'], 'sanity_check/stein_series/calibration3').glob('drift*')))
-######
-# Provide the drift parameters. Even if the drifted images are read from disk, must provide what was used for the
-# calibration fit.
-######
-# Step size between each offset velocity
-dv = 0.04
-# Vector of offset velocities
-vx_rates = np.arange(-0.2, 0.21, dv)
-# Set the middle one to zero, for having an non-drifted flow
+# The calibration gives the velocity magnitude multiplication factors from a linear fit
+# on rigidly drifting images at known rates.
+# It is necessary for any new set of data and/or new set of input parameters.
+# Note that the multiplication factors for the top-side tracking and bottom-side tracking are different,
+# which why it is necessary to run that calibration even if you are not analyzing the velocities in physical units.
+# The calibration can be long to run, depending on the data volume.
+
+# If the drift images do not exist yet, create them. True will overwrite if they already exist
+make_drift_images = True
+# Set the vector of offset velocities (drift rates), define them independently the x and y direction
+vx_rates = np.arange(-0.2, 0.21, 0.04)
+# Set the middle one to zero, for having a non-drifted flow (optional, but encouraged)
 vx_rates[int(len(vx_rates) / 2)] = 0
-# Stack those values, with vy at 0. Can be changed to have a drift an y-axis as well
-drift_rates = np.stack((vx_rates, np.zeros(len(vx_rates))), axis=1)
-###
-# Parameters for the averaging with Lagrange to Euler conversion
-###
-# FWHM for the spatial gaussian smooth
-fwhm = 7
-# Dimensions of the input image.
-dims = [263, 263]
-# To avoid edge effects, set some cropping parameters, for the metrics of the flow field (correlation, rmse, etc...)
-trim = int(vx_rates.max() * nframes + fwhm + 2)
-fov_slices = np.s_[trim:dims[0] - trim, trim:dims[1] - trim]
-# Save the arrays of ball positions to disk?
-save_ballpos_list = False
-verbose = False
+# vy_rates typically set to zeros, but calibration can be tested on both axes at the same time
+vy_rates = np.zeros(len(vx_rates))
+
+# Positional arguments passed to blt.Calibrator()
+cal_args = {
+    'trange': [0, 60],  # [first, last[ Indices of images to drift and track in the time series
+    'vx_rates': vx_rates,  # Drift rates x-axis
+    'vy_rates': vy_rates,  # Drift rates y-axis
+    'fwhm': maps_params['fwhm'],   # for the spatial gaussian smooth during the calibration
+    'images': None,  # in-memory series of images. If None, read directly from disk (more ram-friendly)
+    'outputdir_cal': outputdir  # can be different from the balltracking output dir.
+}
+
+# Optional arguments passed to blt.Calibrator()
+cal_opt_args = {
+    'component': 'x',  # Velocity component(s) where the drift is applied. Can be 'x', 'y' or 'xy' for both.
+    'kernel': maps_params['kernel'],  # Smoothing kernel: 'gaussian', 'boxcar', or 'both'
+    'save_ballpos_list': True,  # Save the arrays of ball positions to disk?
+    'verbose': True,
+    'ncpus': 1  # number of cpus to use for parallelization over the drift rates, <= len(vx_rates).
+}

@@ -31,8 +31,9 @@ module load openmpi4/4.1.2
 source ~/envs/MPIpool/bin/activate
 
 ## Export project-specific paths
-export DATA3=/scratch/rattie/Data
+export DATA=/scratch/rattie/Data
 export PYTHONPATH=~/dev/sunflower
+export MAX_CPUS=$SLURM_NTASKS
 
 ## Run using the automatically defined 64 tasks from $SLURM_NTASKS
 mpirun -np $SLURM_NTASKS python -m mpi4py.futures ~/dev/sunflower/optimization/balltrack_parameter_sweep.py
