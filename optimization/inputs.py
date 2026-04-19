@@ -20,7 +20,7 @@ datafiles = sorted(list(Path(os.environ['DATA'], 'SteinSDO/').glob('SDO_int*.fit
 # Output directory for the balltracking results
 outputdir = Path(os.environ['DATA'], 'sanity_check/stein_series/calibration4')
 # Run balltracking (True) or re-use balltracked positions from a previous run?
-reprocess_bt = True
+run_balltracking = True
 
 # TODO: See if we can order Pandas rows so that the index do not depend anymore on the order the grid search
 # Create the gridded list for the parameter sweep

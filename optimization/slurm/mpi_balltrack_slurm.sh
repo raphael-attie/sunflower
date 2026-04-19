@@ -7,7 +7,8 @@
 ## Separate output and error messages into 2 files
 #SBATCH --output=/scratch/%u/%x-%N-%j.out
 #SBATCH --error=/scratch/%u/%x-%N-%j.err
-
+## Force intel architecture
+#SBATCH --constraint=intel
 ## Task count reduced for better scheduling and node alignment
 #SBATCH --ntasks=64
 
@@ -31,7 +32,7 @@ module load openmpi4/4.1.2
 source ~/envs/MPIpool/bin/activate
 
 ## Export project-specific paths
-export DATA=/scratch/rattie/Data
+export DATA=/scratch/rattie/Data/Ben
 export PYTHONPATH=~/dev/sunflower
 export MAX_CPUS=$SLURM_NTASKS
 

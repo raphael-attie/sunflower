@@ -87,11 +87,12 @@ class BT:
         # and crop it in one go
 
         idx = trange[0] if direction == 'forward' else trange[-1]
+        self.is_cube = isinstance(self.datafiles, (str, Path))
         if self.data is not None:
             self.sample = self.data[idx, :, :][self.roi_slice].astype(DTYPE)
         else:
             # (Using your existing reader logic)
-            self.sample = self.image_reader(self.datafiles, tslice=idx, cube=False)[self.roi_slice].astype(DTYPE)
+            self.sample = self.image_reader(self.datafiles, tslice=idx, cube=self.is_cube)[self.roi_slice].astype(DTYPE)
 
         # Now set dimensions based on the cropped sample
         self.ny, self.nx = self.sample.shape
@@ -217,12 +218,12 @@ class BT:
 
             if self.direction == 'forward':
                 if self.data is None:
-                    image = self.image_reader(self.datafiles, tslice=n, cube=False).astype(DTYPE)
+                    image = self.image_reader(self.datafiles, tslice=n, cube=self.is_cube).astype(DTYPE)
                 else:
                     image = self.data[n, :, :]
             else: # going backward
                 if self.data is None:
-                    image = self.image_reader(self.datafiles, tslice=self.trange[1] - n, cube=False).astype(DTYPE)
+                    image = self.image_reader(self.datafiles, tslice=self.trange[1] - n, cube=self.is_cube).astype(DTYPE)
                 else:
                     image = self.data[self.trange[1] - n, :, :]
 
@@ -491,7 +492,7 @@ def balltrack_all(bt_params_top, bt_params_bottom, outputdir,
     """
 
     # Check user data input
-    if (datafiles is None or not isinstance(datafiles, str)) and not isinstance(datafiles, list) and data is None:
+    if data is None and not isinstance(datafiles, (str, Path, list)):
         sys.exit('missing data or datafiles in balltrack_all')
     # Get a BT instance with the above parameters
     side_direction_list = (('top', 'forward'),
@@ -1246,7 +1247,7 @@ def full_calibration(datafiles, bt_params, cal_args, cal_opt_args, make_drift_im
     """
 
     print('reading images for drift...')
-    if isinstance(datafiles, str) or isinstance(datafiles, Path):
+    if isinstance(datafiles, (str, Path)):
         # Load as a cube and slice it to the input range of interest
         data = fits.getdata(datafiles)[cal_args['trange'][0]:cal_args['trange'][1]+1]
     else:
@@ -1573,7 +1574,11 @@ def calibrate_flows(datafiles, calibration_file, balltrack_dir, maps_params):
     headers=None
     avg_header = None
     if maps_params['use_headers']:
-        headers = [fits.getheader(datafiles[tr[0] + maps_params['navg']//2], maps_params['hdu_n']) for tr in tranges]
+        if isinstance(datafiles, (str, Path)): 
+            # FITS Cube would only have one header
+            headers = [fits.getheader(datafiles, ext=maps_params['hdu_n'])] * len(tranges)
+        else:
+            headers = [fits.getheader(datafiles[tr[0] + maps_params['navg']//2], ext=maps_params['hdu_n']) for tr in tranges]
         avg_header = headers[len(headers) // 2]
 
     # Make average the flow field over the entire integration time

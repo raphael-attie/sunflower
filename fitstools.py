@@ -1,23 +1,19 @@
 import numpy as np
 from astropy.io import fits
 from astropy.io.fits import getdata
-# The fitsio python package installation often does not work in Windows or in linux with latest Python version
-import importlib.util
-fitsio_found = importlib.util.find_spec("fitsio")
-if fitsio_found is not None:
-    import fitsio
 
+
+from pathlib import Path
 
 def fitsread(files, xslice=slice(None), yslice=slice(None), tslice=slice(None), cube=True, header=False):
 
-    if isinstance(files, str):
+    if isinstance(files, (str, Path)):
         if cube:
-            # for now, in Windows, with python fitsio package not compiling, this won't work.
-            with fitsio.FITS(files) as fitsfile:
-                if fitsfile[0].has_data():
-                    data = np.squeeze(fitsfile[0][tslice, yslice, xslice])
+            with fits.open(files, memmap=True) as hdul:
+                if hdul[0].data is not None:
+                    data = np.squeeze(hdul[0].data[tslice, yslice, xslice]).copy()
                 else:
-                    data = np.squeeze(fitsfile[1][tslice, yslice, xslice])
+                    data = np.squeeze(hdul[1].data[tslice, yslice, xslice]).copy()
         else:
             # Load as single file and single image
             if header:

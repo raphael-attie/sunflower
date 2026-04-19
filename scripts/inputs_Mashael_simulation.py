@@ -12,7 +12,7 @@ run_calibration = True
 # Paths to FITS files (replace with whatever applies to you).
 # Time series presented as one 3D fits "cube" is supported. Make sure to sort your files even if you have consistent
 # names as 'glob' does not do it by default. (print them out to make sure you have the in the right oder).
-datafiles = '/Users/rattie/data/Mashael/intensity_30frames.fits'
+datafiles = Path('/Users/rattie/data/Mashael/intensity_30frames.fits')
 # Output directory for the Balltracking algorithm
 outputdir = Path('/Users/rattie/data/Mashael/balltracking_simulation')
 
@@ -67,18 +67,17 @@ vx_rates[int(len(vx_rates) / 2)] = 0
 vy_rates = np.zeros(len(vx_rates))
 
 cal_args = {
+    'trange': [0, 29],  # Indices of images to drift.
     'vx_rates': vx_rates,  # Drift rates x-axis
     'vy_rates': vy_rates,  # Drift rates y-axis
-    'trange': [0, 29],  # Indices of images to drift.
     'fwhm': maps_params['fwhm'],   # for the spatial gaussian smooth during the calibration
     'images': None,  # in-memory series of images. If None, read directly from disk (more ram-friendly)
-    'outputdir_cal': Path(outputdir, 'hmi_drifted')  # can be different from the balltracking output dir.
+    'outputdir_cal': outputdir  # can be different from the balltracking output dir.
 }
 
 cal_opt_args = {
     'component': 'x',  # Velocity component(s) where the drift is applied. Can be 'x', 'y' or 'xy' for both.
     'kernel': maps_params['kernel'],  # Smoothing kernel: 'gaussian', 'boxcar', or 'both'
-    'read_drift_images': True,  # Set whether we read images from disk (True) or use `images` in-memory
     'save_ballpos_list': True,  # Save the arrays of ball positions to disk?
     'verbose': True,
     'ncpus': 1  # # number of cpus to use for parallelization over the drift rates, <= len(vx_rates).

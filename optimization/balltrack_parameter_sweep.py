@@ -38,6 +38,7 @@ if __name__ == '__main__':
                                 cal_args=inputs.cal_args,
                                 cal_opt_args=inputs.cal_opt_args,
                                 make_drift_images=False,
+                                reprocess_bt=inputs.run_balltracking,
                                 verbose=True)
 
     start = time()

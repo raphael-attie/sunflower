@@ -1,3 +1,7 @@
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 import balltracking.balltrack as blt
 from scripts import inputs_Mashael_simulation as inputs
 from pathlib import Path
@@ -20,6 +24,7 @@ if __name__ == "__main__":
 
     if inputs.run_calibration:
         _ = blt.full_calibration(inputs.datafiles, inputs.bt_params, inputs.cal_args, inputs.cal_opt_args,
+                                 make_drift_images=inputs.make_drift_images,
                                  verbose=True)
         print('calibration finished.')
 
