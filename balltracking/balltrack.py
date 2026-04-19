@@ -10,10 +10,39 @@ from multiprocessing import Pool
 from functools import partial
 from pathlib import Path
 from scipy.signal import convolve2d
-from cython_modules import interp as cinterp
 import filters
 import fitstools
 from astropy.io import fits
+
+# Need to check and compile C cython_modules/interp.pyx if missing
+try:
+    from cython_modules import interp as cinterp
+except ImportError:
+    import subprocess
+    print("Cython module 'interp' not found for this architecture. Compiling now...")
+    
+    # Dynamically find the cython_modules directory relative to this file
+    cython_dir = Path(__file__).parent.parent / 'cython_modules' 
+    
+    # Run the build command as a subprocess
+    result = subprocess.run(
+        [sys.executable, "setup_cbinterp.py", "build_ext", "--inplace"],
+        cwd=cython_dir,
+        capture_output=True,
+        text=True
+    )
+    
+    # Check if the compilation was successful
+    if result.returncode != 0:
+        print(f"Failed to compile Cython module:\n{result.stderr}")
+        raise RuntimeError("Could not compile Cython module cbinterp. Do you have a C compiler loaded?")
+        
+    print("Successfully compiled Cython module! Re-importing...")
+    
+    # Try importing again now that the .so file exists
+    from cython_modules import interp as cinterp
+
+
 
 DTYPE = np.float32
 
