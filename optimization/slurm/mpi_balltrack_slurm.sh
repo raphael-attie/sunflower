@@ -7,10 +7,8 @@
 ## Separate output and error messages into 2 files
 #SBATCH --output=/scratch/%u/%x-%N-%j.out
 #SBATCH --error=/scratch/%u/%x-%N-%j.err
-## Force intel architecture
-#SBATCH --constraint=intel
 ## Task count reduced for better scheduling and node alignment
-#SBATCH --ntasks=128
+#SBATCH --ntasks=256
 
 ## Memory per CPU core (adjust to 16G if 8G is insufficient)
 #SBATCH --mem-per-cpu=4G
@@ -36,5 +34,5 @@ export DATA=/scratch/rattie/Data/Ben
 export PYTHONPATH=~/dev/sunflower
 export MAX_CPUS=$SLURM_NTASKS
 
-## Run using the automatically defined 64 tasks from $SLURM_NTASKS
+## Run using the automatically defined 128 tasks from $SLURM_NTASKS
 mpirun -np $SLURM_NTASKS python -m mpi4py.futures ~/dev/sunflower/optimization/balltrack_parameter_sweep.py
