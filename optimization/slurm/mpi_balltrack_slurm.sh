@@ -10,13 +10,13 @@
 ## Force intel architecture
 #SBATCH --constraint=intel
 ## Task count reduced for better scheduling and node alignment
-#SBATCH --ntasks=64
+#SBATCH --ntasks=128
 
 ## Memory per CPU core (adjust to 16G if 8G is insufficient)
-#SBATCH --mem-per-cpu=8G
+#SBATCH --mem-per-cpu=4G
 
 ## Increased walltime to account for fewer parallel workers
-#SBATCH --time=0-11:00
+#SBATCH --time=2-00:00:00
 
 ## Notification settings
 #SBATCH --mail-type=BEGIN,END,FAIL
