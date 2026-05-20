@@ -36,3 +36,9 @@ export MAX_CPUS=$SLURM_NTASKS
 
 ## Run using the automatically defined 128 tasks from $SLURM_NTASKS
 mpirun -np $SLURM_NTASKS python -m mpi4py.futures ~/dev/sunflower/optimization/balltrack_parameter_sweep.py
+
+# Navigate to the output directory defined in inputs.py
+cd "$DATA/sanity_check/stein_series/calibration4"
+# Create a compressed tar archive of the output subfolders using zstd
+# -T0 tells zstd to use all available CPU cores
+tar -cvf - mean_velocity_files param_sweep_files | zstd -T0 > optimization_results.tar.zst

@@ -1,21 +1,21 @@
 import os, glob, sys
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from pathlib import Path
 import pandas as pd
 import numpy as np
-import fitsio
+from astropy.io.fits import getdata
 from scipy.signal import convolve2d
 from scipy.ndimage import gaussian_filter
+from optimization import inputs
 
 
 def load_vel_mean(v_files, trange):
     """ Load the velocity files and average over a time range """
     vx_files_subset = v_files[0][trange[0]:trange[1]]
     vy_files_subset = v_files[1][trange[0]:trange[1]]
-    vxs = [fitsio.read(f) for f in vx_files_subset]
-    vys = [fitsio.read(f) for f in vy_files_subset]
     # Get the mean of the velocity components
-    vx = np.array(vxs).mean(axis=0)
-    vy = np.array(vys).mean(axis=0)
+    vx = np.array([getdata(f) for f in vx_files_subset]).mean(axis=0)
+    vy = np.array([getdata(f) for f in vy_files_subset]).mean(axis=0)
     return vx, vy
 
 
@@ -47,14 +47,12 @@ def calc_c_pearson(vx1, vx2, vy1, vy2, fov=None):
     return c_pearson
 
 
-# directory for the drifting images
-datadir_stein = Path(os.environ['DATA2'], 'Ben/SteinSDO/')
-datadir = Path(os.environ['DATA2'], 'sanity_check/stein_series/calibration3')
+
 # number of parameter sets
 # These files don't really need to be ordered. This will be taken care for by sorting per index key.
-filelist = sorted(Path(datadir).glob('param_sweep_*.csv'))
+filelist_csv = sorted(Path(inputs.outputdir, 'param_sweep_files').glob('param_sweep_*.csv'))
 # Concatenate all csv file content into one dataframe
-df = pd.concat([pd.read_csv(f) for f in filelist], axis=0, ignore_index=True)
+df = pd.concat([pd.read_csv(f) for f in filelist_csv], axis=0, ignore_index=True)
 df.drop(df.columns[0], axis=1, inplace=True)
 df.set_index(['index', 'kernel'], inplace=True)
 df.sort_index(inplace=True)
@@ -81,32 +79,28 @@ df.insert(24, 'MAE_discrep', -1)
 df.insert(25, 'MAPE', -1)
 df.insert(26, 'MAPD', -1)
 
-# unit in m/s for Stein simulation for 1 px / frame interval
+# unit in m/s for sim simulation for 1 px / frame interval
 u = 368000 / 60
 
 
-trange = [0, 60]
-fwhm = 7
+trange = inputs.bt_params['trange']
+fwhm = inputs.maps_params['fwhm']
 trim = 10 # Same as Benoit
 fov = np.s_[trim:-trim:fwhm, trim:-trim:fwhm]
-# Get Stein velocity
-svx_files = sorted(Path(datadir_stein).glob('SDO_vx*.fits'))
-svy_files = sorted(Path(datadir_stein).glob('SDO_vy*.fits'))
-vx_stein, vy_stein = load_vel_mean((svx_files, svy_files), trange)
-# smooth the Stein velocities
-kernels = ['boxcar', 'gaussian']
-vx_stein_sm_, vy_stein_sm_ = zip(*[smooth_vel(vx_stein, vy_stein, fwhm, kernel=k) for k in kernels])
+# Get the ground truth velocity (simulation)
+svx_files = sorted(Path(inputs.inputdir).glob('SDO_vx*.fits'))
+svy_files = sorted(Path(inputs.inputdir).glob('SDO_vy*.fits'))
+vx_sim, vy_sim = load_vel_mean((svx_files, svy_files), trange)
+# smooth the simulation velocities
+kernel = inputs.maps_params['kernel']
+vx_sim_sm, vy_sim_sm = smooth_vel(vx_sim, vy_sim, fwhm, kernel=kernel)
+# magnitude
+v_sim = np.sqrt(vx_sim_sm ** 2 + vy_sim_sm ** 2)
 
-
-for k, kernel in enumerate(kernels):
-    vx_stein_sm = vx_stein_sm_[k]
-    vy_stein_sm = vy_stein_sm_[k]
-    # magnitude
-    v_stein = np.sqrt(vx_stein_sm ** 2 + vy_stein_sm ** 2)
-    # List of balltracked velocity flows
-    filelist = sorted(glob.glob(os.path.join(datadir, f'mean_velocity_{kernel}*.npz')))
-    for f in filelist:
-        with np.load(f) as vel:
+# List of balltracked velocity flows
+filelist_npz = sorted(glob.glob(os.path.join(inputs.outputdir, 'mean_velocity_files', f'mean_velocity_{kernel}*.npz')))
+for f in filelist_npz:
+    with np.load(f) as vel:
             idx = int(vel['index'])
             print(f'file: {f} - idx = {idx}')
             # Query string to get the dataframe rows at the right kernel
@@ -126,36 +120,36 @@ for k, kernel in enumerate(kernels):
             v_ball_bot_cal = np.sqrt(vx_bot_cal**2 + vy_bot_cal ** 2)
             v_ball_cal = np.sqrt(vx_ball_cal ** 2 + vy_ball_cal ** 2)
 
-            error_vx_cal_top = (vx_stein_sm[fov].ravel() - vx_top_cal[fov].ravel())
-            error_vx_cal_bot = (vx_stein_sm[fov].ravel() - vx_bot_cal[fov].ravel())
+            error_vx_cal_top = (vx_sim_sm[fov].ravel() - vx_top_cal[fov].ravel())
+            error_vx_cal_bot = (vx_sim_sm[fov].ravel() - vx_bot_cal[fov].ravel())
             df.loc[(idx, kernel), 'MAE_cal_vx_top'] = np.mean(np.abs(error_vx_cal_top))
             df.loc[(idx, kernel), 'MAE_cal_vx_bot'] = np.mean(np.abs(error_vx_cal_bot))
             df.loc[(idx, kernel), 'RMSE_cal_vx_top'] = np.sqrt(np.mean(error_vx_cal_top ** 2))
             df.loc[(idx, kernel), 'RMSE_cal_vx_bot'] = np.sqrt(np.mean(error_vx_cal_bot ** 2))
 
-            error_uncal_vx = (vx_stein_sm[fov].ravel() - vx_ball_uncal[fov].ravel())
+            error_uncal_vx = (vx_sim_sm[fov].ravel() - vx_ball_uncal[fov].ravel())
             df.loc[(idx, kernel), 'RMSE_uncal_vx'] = np.sqrt(np.mean(error_uncal_vx ** 2))
             df.loc[(idx, kernel), 'MAE_uncal_vx'] = np.mean(np.abs(error_uncal_vx))
 
-            error_uncal_vy = (vy_stein_sm[fov].ravel() - vy_ball_uncal[fov].ravel())
+            error_uncal_vy = (vy_sim_sm[fov].ravel() - vy_ball_uncal[fov].ravel())
             df.loc[(idx, kernel), 'RMSE_uncal_vy'] = np.sqrt(np.mean(error_uncal_vy ** 2))
             df.loc[(idx, kernel), 'MAE_uncal_vy'] = np.mean(np.abs(error_uncal_vy))
 
-            error_cal_vx = (vx_stein_sm[fov].ravel() - vx_ball_cal[fov].ravel())
+            error_cal_vx = (vx_sim_sm[fov].ravel() - vx_ball_cal[fov].ravel())
             df.loc[(idx, kernel), 'RMSE_cal_vx'] = np.sqrt(np.mean(error_cal_vx ** 2))
             df.loc[(idx, kernel), 'MAE_cal_vx'] = np.mean(np.abs(error_cal_vx))
 
-            error_cal_vy = (vy_stein_sm[fov].ravel() - vy_ball_cal[fov].ravel())
+            error_cal_vy = (vy_sim_sm[fov].ravel() - vy_ball_cal[fov].ravel())
             df.loc[(idx, kernel), 'RMSE_cal_vy'] = np.sqrt(np.mean(error_cal_vy ** 2))
             df.loc[(idx, kernel), 'MAE_cal_vy'] = np.mean(np.abs(error_cal_vy))
 
-            # Calculate correlation with Stein simulation
-            df.loc[(idx, kernel), 'corr_uncal'] = calc_c_pearson(vx_stein_sm, vx_ball_uncal, vy_stein_sm, vy_ball_uncal, fov=fov)
-            df.loc[(idx, kernel), 'corr'] = calc_c_pearson(vx_stein_sm, vx_ball_cal, vy_stein_sm, vy_ball_cal, fov=fov)
-            df.loc[(idx, kernel), 'corr_top'] = calc_c_pearson(vx_stein_sm, vx_top_cal, vy_stein_sm, vy_top_cal, fov=fov)
-            df.loc[(idx, kernel), 'corr_bot'] = calc_c_pearson(vx_stein_sm, vx_bot_cal, vy_stein_sm, vy_bot_cal, fov=fov)
+            # Calculate correlation with sim simulation
+            df.loc[(idx, kernel), 'corr_uncal'] = calc_c_pearson(vx_sim_sm, vx_ball_uncal, vy_sim_sm, vy_ball_uncal, fov=fov)
+            df.loc[(idx, kernel), 'corr'] = calc_c_pearson(vx_sim_sm, vx_ball_cal, vy_sim_sm, vy_ball_cal, fov=fov)
+            df.loc[(idx, kernel), 'corr_top'] = calc_c_pearson(vx_sim_sm, vx_top_cal, vy_sim_sm, vy_top_cal, fov=fov)
+            df.loc[(idx, kernel), 'corr_bot'] = calc_c_pearson(vx_sim_sm, vx_bot_cal, vy_sim_sm, vy_bot_cal, fov=fov)
 
-            df.loc[(idx, kernel), 'MAPE'] = np.median(np.abs((v_stein - v_ball_cal)[fov] / v_stein[fov]).ravel()) * 100
+            df.loc[(idx, kernel), 'MAPE'] = np.median(np.abs((v_sim - v_ball_cal)[fov] / v_sim[fov]).ravel()) * 100
 
             # Top/bottom discrepancy
             v_ball_discrep = np.abs(v_ball_top_cal - v_ball_bot_cal)
@@ -164,4 +158,4 @@ for k, kernel in enumerate(kernels):
 
 
 # Don't ignore the index, it is a multi-level index that needs to be preserved.
-df.to_csv(Path(datadir, 'correlation_dataframe_boxcar_gaussian.csv'))
+df.to_csv(Path(inputs.outputdir, f'correlation_dataframe_{kernel}.csv'))

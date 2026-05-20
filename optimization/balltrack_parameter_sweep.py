@@ -6,6 +6,8 @@ import balltracking.balltrack as blt
 from functools import partial
 from time import time
 from optimization import inputs
+import subprocess
+import shutil
 
 
 if __name__ == '__main__':
@@ -71,6 +73,17 @@ if __name__ == '__main__':
     end = time()
     etime = (end - start)/60
     print(f'Elapsed time: {(end - start) / 60:0.2f} min')
+    print('Moving output files to subdirectories...')
+    mean_vel_dir = inputs.outputdir / 'mean_velocity_files'
+    param_sweep_dir = inputs.outputdir / 'param_sweep_files'
+    
+    mean_vel_dir.mkdir(exist_ok=True)
+    param_sweep_dir.mkdir(exist_ok=True)
+    
+    for f in inputs.outputdir.glob('mean_velocity*.npz'):
+        shutil.move(str(f), str(mean_vel_dir / f.name))
+        
+    for f in inputs.outputdir.glob('param_sweep_*.csv'):
+        shutil.move(str(f), str(param_sweep_dir / f.name))
 
-# At the end of this parallel job, use "parameter_sweep_aggregation.py" to aggregate everything
 

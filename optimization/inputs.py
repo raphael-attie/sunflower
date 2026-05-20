@@ -16,8 +16,11 @@ if 'DATA' not in os.environ:
     print("ERROR: The 'DATA' environment variable is not set. Please set it to the root directory containing your FITS files before running the script.", file=sys.stderr)
     sys.exit(1)
 
-datafiles = sorted(list(Path(os.environ['DATA'], 'SteinSDO/').glob('SDO_int*.fits')))
-# Output directory for the balltracking results
+# directory for the input data files
+inputdir = Path(os.environ['DATA'], 'SteinSDO/')
+datafiles = sorted(list(inputdir.glob('SDO_int*.fits')))
+
+# directory for the balltracking results
 outputdir = Path(os.environ['DATA'], 'sanity_check/stein_series/calibration4')
 # Run balltracking (True) or re-use balltracked positions from a previous run?
 run_balltracking = True
@@ -32,7 +35,7 @@ bt_params = OrderedDict({
     'dp': [0.1, 0.15, 0.2, 0.25, 0.3, 0.35],    # Characteristic depth of floatation
     'sigma_factor': [1.0, 1.25, 1.5, 1.75, 2],  # The target standard deviation of the Z-height of the output data surface
     'fourier_radius': np.arange(0, 5),  # Width of high-pass Fourier filter (k-space). Adapt to instruments, image resolution, ...
-    'trange': (0, 181),  # Time range (1st index, last index+1) of the series of images to use for tracking.
+    'trange': (0, 60),  # Time range (1st index, last index+1) of the series of images to use for tracking.
     'verbose': True
 })
 bt_params_list = blt.get_bt_params_list(bt_params)
@@ -72,7 +75,7 @@ vy_rates = np.zeros(len(vx_rates))
 
 # Positional arguments passed to blt.Calibrator()
 cal_args = {
-    'trange': [0, 60],  # [first, last[ Indices of images to drift and track in the time series
+    'trange': bt_params['trange'],  # [first, last[ Indices of images to drift and track in the time series
     'vx_rates': vx_rates,  # Drift rates x-axis
     'vy_rates': vy_rates,  # Drift rates y-axis
     'fwhm': maps_params['fwhm'],   # for the spatial gaussian smooth during the calibration
