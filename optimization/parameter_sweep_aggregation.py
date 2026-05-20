@@ -99,6 +99,8 @@ v_sim = np.sqrt(vx_sim_sm ** 2 + vy_sim_sm ** 2)
 
 # List of balltracked velocity flows
 filelist_npz = sorted(glob.glob(os.path.join(inputs.outputdir, 'mean_velocity_files', f'mean_velocity_{kernel}*.npz')))
+print(f'len(filelist_npz) = {len(filelist_npz)}')
+
 for f in filelist_npz:
     with np.load(f) as vel:
             idx = int(vel['index'])
