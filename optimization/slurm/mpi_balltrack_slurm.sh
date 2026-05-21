@@ -34,7 +34,7 @@ export DATA=/scratch/rattie/Data
 export PYTHONPATH=~/dev/sunflower
 export MAX_CPUS=$SLURM_NTASKS
 
-## Run using the automatically defined 128 tasks from $SLURM_NTASKS
+## Run using the $SLURM_NTASKS parallel workers automatically defined by the --ntasks option
 mpirun -np $SLURM_NTASKS python -m mpi4py.futures ~/dev/sunflower/optimization/balltrack_parameter_sweep.py
 
 # Run aggregation script after balltracking completes
