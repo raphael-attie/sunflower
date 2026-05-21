@@ -1,6 +1,7 @@
 import os
 import sys
 from pathlib import Path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from collections import OrderedDict
 import numpy as np
 import balltracking.balltrack as blt

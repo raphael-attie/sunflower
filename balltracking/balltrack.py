@@ -1,6 +1,7 @@
 import sys
 import os
 from collections import OrderedDict
+import itertools
 import numpy as np
 import numpy.ma as ma
 from numpy import pi, cos, sin
@@ -1645,38 +1646,30 @@ def calibrate_flows(datafiles, calibration_file, balltrack_dir, maps_params):
 
     return v_series_dict, v_avg_dict
 
-def meshgrid_params_to_list(param_dict):
-    """
-    Generate a list of a flattened mesh of parameters. The mesh can have more than 2 dimensions.
-
-    Args:
-        param_dict (dict): dictionnary of parameters. At least one value must be a list of more than 1 scalar.
-
-    Returns:
-        List of flattened mesh-gridded parameters
-    """
-    param_list = list(param_dict.values())
-    mesh = np.meshgrid(*param_list, indexing='ij')
-    list_ravel = [np.ravel(m) for m in mesh]
-    args_list = [list(a) for a in zip(*list_ravel)]
-    return args_list
-
 
 def get_bt_params_list(param_dict):
     """
-        Generate a list of input balltrack paremeters for doing a parameter sweep from a grid
-    Args:
-        param_dict (dict): dictionnary of parameters. At least one value must be a list of more than 1 scalar.
-
-    Returns:
-        Mesh-gridded list of balltracking input dictionnaries.
+    Generate a list of input balltrack parameters for doing a parameter sweep 
+    from a grid, preserving original data types like tuples and booleans.
     """
-    param_mesh_list = meshgrid_params_to_list(param_dict)
+    # Ensure every value is iterable (turn single scalars/tuples/booleans into a list of 1 element)
+    grid_inputs = []
+    for key, val in param_dict.items():
+        if isinstance(val, (list, np.ndarray)):
+            grid_inputs.append(val)
+        else:
+            # This safely wraps integers, booleans, and your (0, 60) tuple so they don't get broken apart
+            grid_inputs.append([val])
+            
+    # Use itertools.product to generate every combination
     bt_params_list = []
-    for i, p_list in enumerate(param_mesh_list):
+    for i, combination in enumerate(itertools.product(*grid_inputs)):
+        # Rebuild the dictionary for this specific combination
         bt_params = OrderedDict()
-        for n, key in enumerate(param_dict.keys()):
-            bt_params[key] = p_list[n]
+        for key, val in zip(param_dict.keys(), combination):
+            bt_params[key] = val
+        
         bt_params['index'] = i
         bt_params_list.append(bt_params)
+        
     return bt_params_list
