@@ -10,7 +10,7 @@
 ## Task count reduced for better scheduling and node alignment
 #SBATCH --ntasks=256
 
-## Memory per CPU core (adjust to 16G if 8G is insufficient)
+## Memory per CPU core (4 GB enough with up to 263 x 263 px images)
 #SBATCH --mem-per-cpu=4G
 
 ## Increased walltime to account for fewer parallel workers
@@ -37,8 +37,11 @@ export MAX_CPUS=$SLURM_NTASKS
 ## Run using the automatically defined 128 tasks from $SLURM_NTASKS
 mpirun -np $SLURM_NTASKS python -m mpi4py.futures ~/dev/sunflower/optimization/balltrack_parameter_sweep.py
 
+# Run aggregation script after balltracking completes
+python ~/dev/sunflower/optimization/parameter_sweep_aggregation.py
+
 # Navigate to the output directory defined in inputs.py
-cd "$DATA/sanity_check/stein_series/calibration4"
-# Create a compressed tar archive of the output subfolders using zstd
-# -T0 tells zstd to use all available CPU cores
-tar -cvf - mean_velocity_files param_sweep_files | zstd -T0 > optimization_results.tar.zst
+# cd "$DATA/sanity_check/stein_series/calibration4"
+# # Create a compressed tar archive of the output subfolders using zstd
+# # -T0 tells zstd to use all available CPU cores
+# tar -cvf - mean_velocity_files param_sweep_files | zstd -T0 > optimization_results.tar.zst
