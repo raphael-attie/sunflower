@@ -14,7 +14,7 @@
 #SBATCH --mem-per-cpu=4G
 
 ## Increased walltime to account for fewer parallel workers
-#SBATCH --time=2-00:00:00
+#SBATCH --time=1-00:00:00
 
 ## Notification settings
 #SBATCH --mail-type=BEGIN,END,FAIL
@@ -30,7 +30,7 @@ module load openmpi4/4.1.2
 source ~/envs/MPIpool/bin/activate
 
 ## Export project-specific paths
-export DATA=/scratch/rattie/Data/Ben
+export DATA=/scratch/rattie/Data
 export PYTHONPATH=~/dev/sunflower
 export MAX_CPUS=$SLURM_NTASKS
 

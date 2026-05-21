@@ -22,7 +22,7 @@ inputdir = Path(os.environ['DATA'], 'SteinSDO/')
 datafiles = sorted(list(inputdir.glob('SDO_int*.fits')))
 
 # directory for the balltracking results
-outputdir = Path(os.environ['DATA'], 'sanity_check/stein_series/calibration4')
+outputdir = Path(os.environ['DATA'], 'calibration')
 # Run balltracking (True) or re-use balltracked positions from a previous run?
 run_balltracking = True
 
