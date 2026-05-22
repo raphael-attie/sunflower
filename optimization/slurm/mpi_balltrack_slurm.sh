@@ -38,8 +38,8 @@ export PYTHONPATH=~/dev/sunflower
 export MAX_CPUS=$SLURM_NTASKS
 
 ## Run using the $SLURM_NTASKS parallel workers automatically defined by the --ntasks option
-## Force OpenMPI to use ob1 PML and disable tcp BTL, bypassing UCX driver issues on compute nodes
-mpirun --mca pml ob1 --mca btl ^tcp -np $SLURM_NTASKS python -m mpi4py.futures ~/dev/sunflower/optimization/balltrack_parameter_sweep.py
+## Use ob1 PML with TCP/shared-memory BTLs, excluding lo and docker0 to ensure stable inter-node routing and bypass UCX errors
+mpirun --mca pml ob1 --mca btl self,vader,tcp --mca btl_tcp_if_exclude lo,docker0 -np $SLURM_NTASKS python -m mpi4py.futures ~/dev/sunflower/optimization/balltrack_parameter_sweep.py
 
 # Run aggregation script after balltracking completes
 python ~/dev/sunflower/optimization/parameter_sweep_aggregation.py
