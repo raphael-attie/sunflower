@@ -24,9 +24,12 @@ set echo
 umask 0027
 
 ## Load the relevant modules needed for the job
+## 'module purge' unloads all inherited system-default modules to ensure a completely clean,
+## conflict-free environment before we explicitly load our specific compiler, MPI, and Python versions.
+module purge
 module load gnu10
+module load openmpi/4.1.2-4a
 module load python
-module load openmpi4/4.1.2
 source ~/envs/MPIpool/bin/activate
 
 ## Export project-specific paths
@@ -35,7 +38,8 @@ export PYTHONPATH=~/dev/sunflower
 export MAX_CPUS=$SLURM_NTASKS
 
 ## Run using the $SLURM_NTASKS parallel workers automatically defined by the --ntasks option
-mpirun -np $SLURM_NTASKS python -m mpi4py.futures ~/dev/sunflower/optimization/balltrack_parameter_sweep.py
+## Force OpenMPI to use UCX for network communication and bypass the buggy/firewalled TCP transport layer
+mpirun --mca pml ucx --mca btl ^tcp -np $SLURM_NTASKS python -m mpi4py.futures ~/dev/sunflower/optimization/balltrack_parameter_sweep.py
 
 # Run aggregation script after balltracking completes
 python ~/dev/sunflower/optimization/parameter_sweep_aggregation.py
