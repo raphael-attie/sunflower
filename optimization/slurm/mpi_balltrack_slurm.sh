@@ -23,13 +23,13 @@
 set echo
 umask 0027
 
+set -e
+
 ## Load the relevant modules needed for the job
-## 'module purge' unloads all inherited system-default modules to ensure a completely clean,
-## conflict-free environment before we explicitly load our specific compiler, MPI, and Python versions.
-module purge
+## We rely on the cluster's default module hierarchy to automatically activate UCX.
 module load gnu10
-module load openmpi/4.1.2-4a
 module load python
+module load openmpi4/4.1.2
 source ~/envs/MPIpool/bin/activate
 
 ## Export project-specific paths
