@@ -10,8 +10,8 @@
 ## Task count reduced for better scheduling and node alignment
 #SBATCH --ntasks=256
 
-## Memory per CPU core (4 GB enough with up to 263 x 263 px images)
-#SBATCH --mem-per-cpu=4G
+## Memory per CPU core (8 GB to provide headroom and prevent worker OOM-kills)
+#SBATCH --mem-per-cpu=8G
 
 ## Increased walltime to account for fewer parallel workers
 #SBATCH --time=1-00:00:00
@@ -38,8 +38,8 @@ export PYTHONPATH=~/dev/sunflower
 export MAX_CPUS=$SLURM_NTASKS
 
 ## Run using the $SLURM_NTASKS parallel workers automatically defined by the --ntasks option
-## Use ob1 PML with TCP/shared-memory BTLs, excluding lo and docker0 to ensure stable inter-node routing and bypass UCX errors
-mpirun --mca pml ob1 --mca btl self,vader,tcp --mca btl_tcp_if_exclude lo,docker0 -np $SLURM_NTASKS python -m mpi4py.futures ~/dev/sunflower/optimization/balltrack_parameter_sweep.py
+## Use ob1 PML with TCP/shared-memory BTLs, excluding lo, docker0, and virbr0 to ensure stable inter-node routing and bypass UCX errors
+mpirun --mca pml ob1 --mca btl self,vader,tcp --mca btl_tcp_if_exclude lo,docker0,virbr0 -np $SLURM_NTASKS python -m mpi4py.futures ~/dev/sunflower/optimization/balltrack_parameter_sweep.py
 
 # Run aggregation script after balltracking completes
 python ~/dev/sunflower/optimization/parameter_sweep_aggregation.py

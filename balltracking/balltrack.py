@@ -1276,15 +1276,15 @@ def full_calibration(datafiles, bt_params, cal_args, cal_opt_args, make_drift_im
 
     """
 
-    print('reading images for drift...')
-    if isinstance(datafiles, (str, Path)):
-        # Load as a cube and slice it to the input range of interest
-        data = fits.getdata(datafiles)[cal_args['trange'][0]:cal_args['trange'][1]+1]
-    else:
-        datafiles_selected = datafiles[cal_args['trange'][0]:cal_args['trange'][1]+1]
-        data = [fits.getdata(f) for f in datafiles_selected]
-
     if make_drift_images:
+        print('reading images for drift...')
+        if isinstance(datafiles, (str, Path)):
+            # Load as a cube and slice it to the input range of interest
+            data = fits.getdata(datafiles)[cal_args['trange'][0]:cal_args['trange'][1]+1]
+        else:
+            datafiles_selected = datafiles[cal_args['trange'][0]:cal_args['trange'][1]+1]
+            data = [fits.getdata(f) for f in datafiles_selected]
+
         print('Creating drift images...')
         # Create the drift images for the calibration.
         if cal_args['outputdir_cal'] is not None:
@@ -1323,6 +1323,10 @@ def full_calibration(datafiles, bt_params, cal_args, cal_opt_args, make_drift_im
             ballpos_bottom_list = npzfile['ballpos_bottom_list']
 
     _ = cal.calibration_run_fit(ballpos_top_list, ballpos_bottom_list, verbose=verbose)
+
+    # Force garbage collection to reclaim memory from the worker process immediately
+    import gc
+    gc.collect()
 
     return index
 
