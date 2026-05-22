@@ -8,7 +8,7 @@
 #SBATCH --output=/scratch/%u/%x-%N-%j.out
 #SBATCH --error=/scratch/%u/%x-%N-%j.err
 ## Task count reduced for better scheduling and node alignment
-#SBATCH --ntasks=256
+#SBATCH --ntasks=128
 
 ## Memory per CPU core (8 GB to provide headroom and prevent worker OOM-kills)
 #SBATCH --mem-per-cpu=8G
@@ -20,10 +20,10 @@
 #SBATCH --mail-type=BEGIN,END,FAIL
 #SBATCH --mail-user=rattie@gmu.edu
 
-set echo
 umask 0027
 
 set -e
+set -x
 
 ## Load the relevant modules needed for the job
 ## We rely on the cluster's default module hierarchy to automatically activate UCX.
