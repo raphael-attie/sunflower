@@ -42,10 +42,10 @@ export MAX_CPUS=$SLURM_NTASKS
 mpirun --mca pml ob1 --mca btl self,vader,tcp --mca btl_tcp_if_exclude lo,docker0,virbr0 -np $SLURM_NTASKS python -m mpi4py.futures ~/dev/sunflower/optimization/balltrack_parameter_sweep_ISSI1.py
 
 # Run aggregation script after balltracking completes
-python ~/dev/sunflower/optimization/parameter_sweep_aggregation_ISSI1.py
+# python ~/dev/sunflower/optimization/parameter_sweep_aggregation_ISSI1.py
 
 # Navigate to the output directory defined in inputs.py
-# cd "$DATA/sanity_check/stein_series/calibration4"
+# cd "$DATA/ISSI/Matthias/SSD_25x8Mm_16_pdmp_1_ISSI_Flows/rebinned/"
 # # Create a compressed tar archive of the output subfolders using zstd
 # # -T0 tells zstd to use all available CPU cores
 # tar -cvf - mean_velocity_files param_sweep_files | zstd -T0 > optimization_results.tar.zst

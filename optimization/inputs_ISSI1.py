@@ -63,13 +63,13 @@ maps_params = {
 # If the drift images do not exist yet, create them. True will overwrite if they already exist
 make_drift_images = True
 # Set the vector of offset velocities (drift rates), define them independently the x and y direction
-vx_rates = np.arange(-0.2, 0.21, 0.04)
+vx_rates = np.arange(-0.1, 0.11, 0.02)
 # Set the middle one to zero, for having a non-drifted flow (optional, but encouraged)
 vx_rates[int(len(vx_rates) / 2)] = 0
 # vy_rates typically set to zeros, but calibration can be tested on both axes at the same time
 vy_rates = np.zeros(len(vx_rates))
-# Velocity scale to convert from px/frame interval to m/s
-v_scale = 368000 / 60 
+# Velocity scale to convert from px/frame interval to km/s
+v_scale = 384000 / 10 
 
 # Positional arguments passed to blt.Calibrator()
 cal_args = {
