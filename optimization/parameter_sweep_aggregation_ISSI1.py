@@ -88,8 +88,8 @@ fwhm = inputs.maps_params['fwhm']
 trim = 10 # Same as Benoit
 fov = np.s_[trim:-trim:fwhm, trim:-trim:fwhm]
 # Get the ground truth velocity (simulation)
-svx_files = sorted(Path(inputs.inputdir).glob('vy_out*.fits'))
-svy_files = sorted(Path(inputs.inputdir).glob('vz_out*.fits'))
+svx_files = sorted(Path(inputs.inputdir).glob('vy_out_rebinned_tau_1.0_*.fits'))
+svy_files = sorted(Path(inputs.inputdir).glob('vz_out_rebinned_tau_1.0_*.fits'))
 vx_sim, vy_sim = load_vel_mean((svx_files, svy_files), trange)
 # smooth the simulation velocities
 kernel = inputs.maps_params['kernel']
