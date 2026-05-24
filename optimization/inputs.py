@@ -51,7 +51,6 @@ maps_params = {
     'nsteps': 40,  # Nb of integration steps for the supergranular boundary mapping
     'kernel': 'gaussian',  # Smoothing kernel: 'gaussian', 'boxcar', or 'both'
     'fwhm': 7,   # spatial gaussian smooth of the Euler dense flow maps
-    'hdu_n': 1  # index of the header in the FITS header data unit. Often 0, but 1 for RICE-compressed from JSOC
 }
 
 ##########################
