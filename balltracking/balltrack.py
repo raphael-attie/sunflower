@@ -1600,6 +1600,33 @@ def calibrate_flows(datafiles, calibration_file, balltrack_dir, maps_params):
     arr = np.load(Path(balltrack_dir, 'ballpos.npz'))
     ballpos_top, ballpos_bottom = [arr['ballpos_top'], arr['ballpos_bottom']]
 
+    # Determine image dimensions and correct HDU dynamically from the FITS files
+    if isinstance(datafiles, (str, Path)):
+        sample_file = datafiles
+    elif isinstance(datafiles, list) and len(datafiles) > 0:
+        sample_file = datafiles[0]
+    else:
+        sample_file = None
+
+    if sample_file is not None:
+        with fits.open(sample_file) as hdul:
+            ext = maps_params.get('hdu_n')
+            if ext is None:
+                # Guess HDU: look at the HDU list for one containing NAXIS >= 2
+                ext = 0
+                for idx, hdu in enumerate(hdul):
+                    if hdu.header.get('NAXIS', 0) >= 2:
+                        ext = idx
+                        break
+            header = hdul[ext].header
+            im_dims = [header['NAXIS2'], header['NAXIS1']]
+    else:
+        ext = maps_params.get('hdu_n', 0)
+        im_dims = maps_params.get('im_dims')
+
+    if im_dims is None:
+        sys.exit("Error: Could not determine image dimensions. Either provide FITS 'datafiles' or specify 'im_dims' in maps_params.")
+
     # Number of images used in balltracking
     nimgs = ballpos_top.shape[-1]
     # Create the list of pairs of (start, end) times for defining the timeline of time-averaged flows
@@ -1610,15 +1637,15 @@ def calibrate_flows(datafiles, calibration_file, balltrack_dir, maps_params):
     if maps_params['use_headers']:
         if isinstance(datafiles, (str, Path)): 
             # FITS Cube would only have one header
-            headers = [fits.getheader(datafiles, ext=maps_params['hdu_n'])] * len(tranges)
+            headers = [fits.getheader(datafiles, ext=ext)] * len(tranges)
         else:
-            headers = [fits.getheader(datafiles[tr[0] + maps_params['navg']//2], ext=maps_params['hdu_n']) for tr in tranges]
+            headers = [fits.getheader(datafiles[tr[0] + maps_params['navg']//2], ext=ext) for tr in tranges]
         avg_header = headers[len(headers) // 2]
 
     # Make average the flow field over the entire integration time
     avg_trange = [0, nimgs-1]
     vx_avg, vy_avg, lanes_avg, avg_header = make_euler_velocity(ballpos_top, ballpos_bottom, cal_top, cal_bottom,
-                                                                maps_params['im_dims'], maps_params['fwhm'],
+                                                                im_dims, maps_params['fwhm'],
                                                                 trange = avg_trange,
                                                                 header=avg_header,
                                                                 outputdir=balltrack_dir,
@@ -1634,7 +1661,7 @@ def calibrate_flows(datafiles, calibration_file, balltrack_dir, maps_params):
     # Make average flow fields every time steps of tranges.
     vxs, vys, lanes_list, run_avg_lanes = make_euler_velocity_series(tranges, ballpos_top, ballpos_bottom, cal_top,
                                                                      cal_bottom,
-                                                                     maps_params['im_dims'], maps_params['fwhm'],
+                                                                     im_dims, maps_params['fwhm'],
                                                                      headers=headers,
                                                                      outputdir=balltrack_dir,
                                                                      generate_lanes=maps_params['generate_lanes'],

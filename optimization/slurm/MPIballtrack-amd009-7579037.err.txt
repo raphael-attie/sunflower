@@ -1,0 +1,309 @@
+
+Lmod is automatically replacing "gnu9/9.3.0" with "gnu10/10.3.0-ya".
+
+
+Inactive Modules:
+  1) hwloc/2.1.0     2) libfabric     3) ucx
+
+The following have been reloaded with a version change:
+  1) openmpi4/4.0.4 => openmpi4/4.1.2-4a
+
+
+Activating Modules:
+  1) ucx/1.16.0-xg
+
+
+Lmod is automatically replacing "openmpi4/4.1.2-4a" with "openmpi/4.1.2-4a".
+
+--------------------------------------------------------------------------
+At least one pair of MPI processes are unable to reach each other for
+MPI communications.  This means that no Open MPI device has indicated
+that it can be used to communicate between these processes.  This is
+an error; Open MPI requires that all MPI processes be able to reach
+each other.  This error can sometimes be the result of forgetting to
+specify the "self" BTL.
+
+  Process 1 ([[32427,1],92]) is on host: amd047
+  Process 2 ([[32427,1],88]) is on host: amd046
+  BTLs attempted: self vader
+
+Your MPI job is now going to abort; sorry.
+--------------------------------------------------------------------------
+Error in MPI_Isend(40746012, 1, 0x7f43bd29ad80, 90, -27, 139928913186656) (-12)
+Traceback (most recent call last):
+  File "/opt/sw/spack/apps/linux-rhel8-x86_64_v2/gcc-10.3.0/python-3.10.1-5r/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/opt/sw/spack/apps/linux-rhel8-x86_64_v2/gcc-10.3.0/python-3.10.1-5r/lib/python3.10/runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "/home/rattie/envs/MPIpool/lib/python3.10/site-packages/mpi4py/futures/__main__.py", line 74, in <module>
+    main()
+  File "/home/rattie/envs/MPIpool/lib/python3.10/site-packages/mpi4py/futures/__main__.py", line 59, in main
+    with SharedPoolCtx() as context:
+  File "/home/rattie/envs/MPIpool/lib/python3.10/site-packages/mpi4py/futures/_lib.py", line 386, in __enter__
+Error in MPI_Isend(16997992, 1, 0x7f91b8f05d80, 88, -27, 140263849770848) (-12)
+Error in NBC_Start_round() (-12)
+Error in NBC_Start_round() (-1)
+Error in MPI_Isend(25179420, 1, 0x7fea4c7dad80, 190, -27, 140644282404704) (-12)
+Traceback (most recent call last):
+  File "/opt/sw/spack/apps/linux-rhel8-x86_64_v2/gcc-10.3.0/python-3.10.1-5r/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+Error in MPI_Isend(41882684, 1, 0x7f04e7bc7d80, 46, -27, 139659044511584) (-12)
+Traceback (most recent call last):
+  File "/opt/sw/spack/apps/linux-rhel8-x86_64_v2/gcc-10.3.0/python-3.10.1-5r/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+Error in MPI_Isend(23386936, 1, 0x7fd6fe930d80, 136, -27, 140561370804064) (-12)
+Error in NBC_Start_round() (-12)
+Error in NBC_Start_round() (-1)
+Error in MPI_Isend(21177628, 1, 0x7f3177f2dd80, 158, -27, 139850442555232) (-12)
+Traceback (most recent call last):
+  File "/opt/sw/spack/apps/linux-rhel8-x86_64_v2/gcc-10.3.0/python-3.10.1-5r/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+    self.comm = comm_split(MPI.COMM_WORLD, root=0)
+  File "/home/rattie/envs/MPIpool/lib/python3.10/site-packages/mpi4py/futures/_lib.py", line 683, in comm_split
+    return _run_code(code, main_globals, None,
+  File "/opt/sw/spack/apps/linux-rhel8-x86_64_v2/gcc-10.3.0/python-3.10.1-5r/lib/python3.10/runpy.py", line 86, in _run_code
+Error in MPI_Isend(33703248, 1, 0x7f1e3cacad80, 168, -27, 139767843721056) (-12)
+Error in NBC_Start_round() (-12)
+Error in NBC_Start_round() (-1)
+    return _run_code(code, main_globals, None,
+  File "/opt/sw/spack/apps/linux-rhel8-x86_64_v2/gcc-10.3.0/python-3.10.1-5r/lib/python3.10/runpy.py", line 86, in _run_code
+    return _run_code(code, main_globals, None,
+  File "/opt/sw/spack/apps/linux-rhel8-x86_64_v2/gcc-10.3.0/python-3.10.1-5r/lib/python3.10/runpy.py", line 86, in _run_code
+    intracomm = comm.Create(group)
+  File "mpi4py/MPI/Comm.pyx", line 173, in mpi4py.MPI.Comm.Create
+    exec(code, run_globals)
+  File "/home/rattie/envs/MPIpool/lib/python3.10/site-packages/mpi4py/futures/__main__.py", line 74, in <module>
+    exec(code, run_globals)
+  File "/home/rattie/envs/MPIpool/lib/python3.10/site-packages/mpi4py/futures/__main__.py", line 74, in <module>
+    exec(code, run_globals)
+  File "/home/rattie/envs/MPIpool/lib/python3.10/site-packages/mpi4py/futures/__main__.py", line 74, in <module>
+    main()
+  File "/home/rattie/envs/MPIpool/lib/python3.10/site-packages/mpi4py/futures/__main__.py", line 59, in main
+    main()
+  File "/home/rattie/envs/MPIpool/lib/python3.10/site-packages/mpi4py/futures/__main__.py", line 59, in main
+Error in MPI_Isend(16611148, 1, 0x7fdabb3fed80, 212, -27, 140577421152096) (-12)
+Traceback (most recent call last):
+  File "/opt/sw/spack/apps/linux-rhel8-x86_64_v2/gcc-10.3.0/python-3.10.1-5r/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+    with SharedPoolCtx() as context:
+  File "/home/rattie/envs/MPIpool/lib/python3.10/site-packages/mpi4py/futures/_lib.py", line 386, in __enter__
+    with SharedPoolCtx() as context:
+  File "/home/rattie/envs/MPIpool/lib/python3.10/site-packages/mpi4py/futures/_lib.py", line 386, in __enter__
+Error in MPI_Isend(42593880, 1, 0x7f94e89bdd80, 96, -27, 140277534441312) (-12)
+Error in NBC_Start_round() (-12)
+Error in NBC_Start_round() (-1)
+Error in MPI_Isend(37994224, 1, 0x7f1866b63d80, 212, -27, 139742779187040) (-12)
+Error in NBC_Start_round() (-12)
+Error in NBC_Start_round() (-1)
+Error in MPI_Isend(34135760, 1, 0x7fedf5219d80, 96, -27, 140659996622688) (-12)
+Error in NBC_Start_round() (-12)
+Error in NBC_Start_round() (-1)
+Error in MPI_Isend(37315056, 1, 0x7f0643253d80, 208, -27, 139664873070432) (-12)
+Error in NBC_Start_round() (-12)
+Error in NBC_Start_round() (-1)
+    self.comm = comm_split(MPI.COMM_WORLD, root=0)
+  File "/home/rattie/envs/MPIpool/lib/python3.10/site-packages/mpi4py/futures/_lib.py", line 683, in comm_split
+    self.comm = comm_split(MPI.COMM_WORLD, root=0)
+  File "/home/rattie/envs/MPIpool/lib/python3.10/site-packages/mpi4py/futures/_lib.py", line 683, in comm_split
+Error in MPI_Isend(12639736, 1, 0x7f6108b40d80, 96, -27, 140054734597984) (-12)
+Error in NBC_Start_round() (-12)
+Error in NBC_Start_round() (-1)
+Error in NBC_Start_round() (-1)
+Error in NBC_Start_round() (-1)
+Error in MPI_Isend(14593648, 1, 0x7f968ba34d80, 192, -27, 140284564582240) (-12)
+Error in NBC_Start_round() (-12)
+Error in NBC_Start_round() (-1)
+Error in MPI_Isend(39128544, 1, 0x7fd870ef7d80, 96, -27, 140567584431968) (-12)
+Error in NBC_Start_round() (-12)
+Error in NBC_Start_round() (-1)
+    return _run_code(code, main_globals, None,
+  File "/opt/sw/spack/apps/linux-rhel8-x86_64_v2/gcc-10.3.0/python-3.10.1-5r/lib/python3.10/runpy.py", line 86, in _run_code
+Error in MPI_Isend(23203420, 1, 0x7f6b4df0fd80, 96, -27, 140098845892448) (-12)
+Traceback (most recent call last):
+  File "/opt/sw/spack/apps/linux-rhel8-x86_64_v2/gcc-10.3.0/python-3.10.1-5r/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+    exec(code, run_globals)
+  File "/home/rattie/envs/MPIpool/lib/python3.10/site-packages/mpi4py/futures/__main__.py", line 74, in <module>
+    return _run_code(code, main_globals, None,
+  File "/opt/sw/spack/apps/linux-rhel8-x86_64_v2/gcc-10.3.0/python-3.10.1-5r/lib/python3.10/runpy.py", line 86, in _run_code
+    main()
+  File "/home/rattie/envs/MPIpool/lib/python3.10/site-packages/mpi4py/futures/__main__.py", line 59, in main
+    with SharedPoolCtx() as context:
+  File "/home/rattie/envs/MPIpool/lib/python3.10/site-packages/mpi4py/futures/_lib.py", line 386, in __enter__
+    exec(code, run_globals)
+  File "/home/rattie/envs/MPIpool/lib/python3.10/site-packages/mpi4py/futures/__main__.py", line 74, in <module>
+    main()
+  File "/home/rattie/envs/MPIpool/lib/python3.10/site-packages/mpi4py/futures/__main__.py", line 59, in main
+    with SharedPoolCtx() as context:
+  File "/home/rattie/envs/MPIpool/lib/python3.10/site-packages/mpi4py/futures/_lib.py", line 386, in __enter__
+Error in MPI_Isend(10978728, 1, 0x7f58edfbad80, 200, -27, 140019926568800) (-12)
+Error in NBC_Start_round() (-12)
+Error in NBC_Start_round() (-1)
+mpi4py.MPI.Exception: MPI_ERR_INTERN: internal error
+    intracomm = comm.Create(group)
+  File "mpi4py/MPI/Comm.pyx", line 173, in mpi4py.MPI.Comm.Create
+Error in MPI_Isend(41431192, 1, 0x7fbe6484ad80, 168, -27, 140455706955616) (-12)
+Error in NBC_Start_round() (-12)
+Error in NBC_Start_round() (-1)
+    intracomm = comm.Create(group)
+  File "mpi4py/MPI/Comm.pyx", line 173, in mpi4py.MPI.Comm.Create
+Error in MPI_Isend(41362712, 1, 0x7f39987c2d80, 176, -27, 139885348163424) (-12)
+Error in NBC_Start_round() (-12)
+Error in NBC_Start_round() (-1)
+    self.comm = comm_split(MPI.COMM_WORLD, root=0)
+  File "/home/rattie/envs/MPIpool/lib/python3.10/site-packages/mpi4py/futures/_lib.py", line 683, in comm_split
+    main()
+  File "/home/rattie/envs/MPIpool/lib/python3.10/site-packages/mpi4py/futures/__main__.py", line 59, in main
+Error in MPI_Isend(41803244, 1, 0x7f7599ba9d80, 14, -27, 140143067070304) (-12)
+Traceback (most recent call last):
+  File "/opt/sw/spack/apps/linux-rhel8-x86_64_v2/gcc-10.3.0/python-3.10.1-5r/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+--------------------------------------------------------------------------
+MPI_ABORT was invoked on rank 91 in communicator MPI_COMM_WORLD
+with errorcode 1.
+
+NOTE: invoking MPI_ABORT causes Open MPI to kill all MPI processes.
+You may or may not see output from other processes, depending on
+exactly when Open MPI kills them.
+--------------------------------------------------------------------------
+    self.comm = comm_split(MPI.COMM_WORLD, root=0)
+  File "/home/rattie/envs/MPIpool/lib/python3.10/site-packages/mpi4py/futures/_lib.py", line 683, in comm_split
+Error in MPI_Isend(20263424, 1, 0x7ff11bff1d80, 68, -27, 140673533575008) (-12)
+Error in NBC_Start_round() (-12)
+Error in NBC_Start_round() (-1)
+Error in MPI_Isend(30136512, 1, 0x7fca7c21fd80, 200, -27, 140507642748768) (-12)
+Error in NBC_Start_round() (-12)
+Error in NBC_Start_round() (-1)
+mpi4py.MPI.Exception: MPI_ERR_INTERN: internal error
+mpi4py.MPI.Exception: MPI_ERR_INTERN: internal error
+    intracomm = comm.Create(group)
+  File "mpi4py/MPI/Comm.pyx", line 173, in mpi4py.MPI.Comm.Create
+    with SharedPoolCtx() as context:
+  File "/home/rattie/envs/MPIpool/lib/python3.10/site-packages/mpi4py/futures/_lib.py", line 386, in __enter__
+    return _run_code(code, main_globals, None,
+  File "/opt/sw/spack/apps/linux-rhel8-x86_64_v2/gcc-10.3.0/python-3.10.1-5r/lib/python3.10/runpy.py", line 86, in _run_code
+    intracomm = comm.Create(group)
+  File "mpi4py/MPI/Comm.pyx", line 173, in mpi4py.MPI.Comm.Create
+Error in MPI_Isend(29561672, 1, 0x7fb420881d80, 24, -27, 140411616657248) (-12)
+Error in NBC_Start_round() (-12)
+Error in NBC_Start_round() (-1)
+mpi4py.MPI.Exception: MPI_ERR_INTERN: internal error
+    exec(code, run_globals)
+  File "/home/rattie/envs/MPIpool/lib/python3.10/site-packages/mpi4py/futures/__main__.py", line 74, in <module>
+mpi4py.MPI.Exception: MPI_ERR_INTERN: internal error
+    self.comm = comm_split(MPI.COMM_WORLD, root=0)
+  File "/home/rattie/envs/MPIpool/lib/python3.10/site-packages/mpi4py/futures/_lib.py", line 683, in comm_split
+    main()
+  File "/home/rattie/envs/MPIpool/lib/python3.10/site-packages/mpi4py/futures/__main__.py", line 59, in main
+Error in MPI_Isend(26967052, 1, 0x7f34da7cbd80, 58, -27, 139864980660064) (-12)
+Traceback (most recent call last):
+  File "/opt/sw/spack/apps/linux-rhel8-x86_64_v2/gcc-10.3.0/python-3.10.1-5r/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/opt/sw/spack/apps/linux-rhel8-x86_64_v2/gcc-10.3.0/python-3.10.1-5r/lib/python3.10/runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "/home/rattie/envs/MPIpool/lib/python3.10/site-packages/mpi4py/futures/__main__.py", line 74, in <module>
+    main()
+  File "/home/rattie/envs/MPIpool/lib/python3.10/site-packages/mpi4py/futures/__main__.py", line 59, in main
+    with SharedPoolCtx() as context:
+  File "/home/rattie/envs/MPIpool/lib/python3.10/site-packages/mpi4py/futures/_lib.py", line 386, in __enter__
+    self.comm = comm_split(MPI.COMM_WORLD, root=0)
+  File "/home/rattie/envs/MPIpool/lib/python3.10/site-packages/mpi4py/futures/_lib.py", line 683, in comm_split
+    intracomm = comm.Create(group)
+  File "mpi4py/MPI/Comm.pyx", line 173, in mpi4py.MPI.Comm.Create
+mpi4py.MPI.Exception: MPI_ERR_INTERN: internal error
+Error in MPI_Isend(29232124, 1, 0x7f5c991b0d80, 26, -27, 140035682430816) (-12)
+Traceback (most recent call last):
+  File "/opt/sw/spack/apps/linux-rhel8-x86_64_v2/gcc-10.3.0/python-3.10.1-5r/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+Error in MPI_Isend(33424272, 1, 0x7f2427d48d80, 4, -27, 139793263816544) (-12)
+Error in NBC_Start_round() (-12)
+Error in NBC_Start_round() (-1)
+Error in MPI_Isend(39580044, 1, 0x7f8d70597d80, 78, -27, 140245452054368) (-12)
+Traceback (most recent call last):
+  File "/opt/sw/spack/apps/linux-rhel8-x86_64_v2/gcc-10.3.0/python-3.10.1-5r/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/opt/sw/spack/apps/linux-rhel8-x86_64_v2/gcc-10.3.0/python-3.10.1-5r/lib/python3.10/runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "/home/rattie/envs/MPIpool/lib/python3.10/site-packages/mpi4py/futures/__main__.py", line 74, in <module>
+    main()
+  File "/home/rattie/envs/MPIpool/lib/python3.10/site-packages/mpi4py/futures/__main__.py", line 59, in main
+    with SharedPoolCtx() as context:
+  File "/home/rattie/envs/MPIpool/lib/python3.10/site-packages/mpi4py/futures/_lib.py", line 386, in __enter__
+    self.comm = comm_split(MPI.COMM_WORLD, root=0)
+  File "/home/rattie/envs/MPIpool/lib/python3.10/site-packages/mpi4py/futures/_lib.py", line 683, in comm_split
+    intracomm = comm.Create(group)
+  File "mpi4py/MPI/Comm.pyx", line 173, in mpi4py.MPI.Comm.Create
+mpi4py.MPI.Exception: MPI_ERR_INTERN: internal error
+Error in MPI_Isend(22195228, 1, 0x7f0914c25d80, 68, -27, 139676979740512) (-12)
+Traceback (most recent call last):
+  File "/opt/sw/spack/apps/linux-rhel8-x86_64_v2/gcc-10.3.0/python-3.10.1-5r/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+Error in MPI_Isend(40652744, 1, 0x7f56a2952d80, 56, -27, 140010071625568) (-12)
+Error in NBC_Start_round() (-12)
+Error in NBC_Start_round() (-1)
+    return _run_code(code, main_globals, None,
+  File "/opt/sw/spack/apps/linux-rhel8-x86_64_v2/gcc-10.3.0/python-3.10.1-5r/lib/python3.10/runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "/home/rattie/envs/MPIpool/lib/python3.10/site-packages/mpi4py/futures/__main__.py", line 74, in <module>
+    main()
+  File "/home/rattie/envs/MPIpool/lib/python3.10/site-packages/mpi4py/futures/__main__.py", line 59, in main
+    with SharedPoolCtx() as context:
+  File "/home/rattie/envs/MPIpool/lib/python3.10/site-packages/mpi4py/futures/_lib.py", line 386, in __enter__
+    self.comm = comm_split(MPI.COMM_WORLD, root=0)
+  File "/home/rattie/envs/MPIpool/lib/python3.10/site-packages/mpi4py/futures/_lib.py", line 683, in comm_split
+    intracomm = comm.Create(group)
+  File "mpi4py/MPI/Comm.pyx", line 173, in mpi4py.MPI.Comm.Create
+mpi4py.MPI.Exception: MPI_ERR_INTERN: internal error
+Error in MPI_Isend(16386044, 1, 0x7f56227e6d80, 74, -27, 140007922650976) (-12)
+Traceback (most recent call last):
+  File "/opt/sw/spack/apps/linux-rhel8-x86_64_v2/gcc-10.3.0/python-3.10.1-5r/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+Error in MPI_Isend(41596892, 1, 0x7f0c638fcd80, 54, -27, 139691186728800) (-12)
+Traceback (most recent call last):
+  File "/opt/sw/spack/apps/linux-rhel8-x86_64_v2/gcc-10.3.0/python-3.10.1-5r/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/opt/sw/spack/apps/linux-rhel8-x86_64_v2/gcc-10.3.0/python-3.10.1-5r/lib/python3.10/runpy.py", line 86, in _run_code
+    intracomm = comm.Create(group)
+  File "mpi4py/MPI/Comm.pyx", line 173, in mpi4py.MPI.Comm.Create
+    with SharedPoolCtx() as context:
+  File "/home/rattie/envs/MPIpool/lib/python3.10/site-packages/mpi4py/futures/_lib.py", line 386, in __enter__
+    self.comm = comm_split(MPI.COMM_WORLD, root=0)
+  File "/home/rattie/envs/MPIpool/lib/python3.10/site-packages/mpi4py/futures/_lib.py", line 683, in comm_split
+    return _run_code(code, main_globals, None,
+  File "/opt/sw/spack/apps/linux-rhel8-x86_64_v2/gcc-10.3.0/python-3.10.1-5r/lib/python3.10/runpy.py", line 86, in _run_code
+    return _run_code(code, main_globals, None,
+  File "/opt/sw/spack/apps/linux-rhel8-x86_64_v2/gcc-10.3.0/python-3.10.1-5r/lib/python3.10/runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "/home/rattie/envs/MPIpool/lib/python3.10/site-packages/mpi4py/futures/__main__.py", line 74, in <module>
+mpi4py.MPI.Exception: MPI_ERR_INTERN: internal error
+    intracomm = comm.Create(group)
+  File "mpi4py/MPI/Comm.pyx", line 173, in mpi4py.MPI.Comm.Create
+    exec(code, run_globals)
+  File "/home/rattie/envs/MPIpool/lib/python3.10/site-packages/mpi4py/futures/__main__.py", line 74, in <module>
+    exec(code, run_globals)
+  File "/home/rattie/envs/MPIpool/lib/python3.10/site-packages/mpi4py/futures/__main__.py", line 74, in <module>
+    main()
+  File "/home/rattie/envs/MPIpool/lib/python3.10/site-packages/mpi4py/futures/__main__.py", line 59, in main
+    main()
+  File "/home/rattie/envs/MPIpool/lib/python3.10/site-packages/mpi4py/futures/__main__.py", line 59, in main
+    main()
+  File "/home/rattie/envs/MPIpool/lib/python3.10/site-packages/mpi4py/futures/__main__.py", line 59, in main
+    with SharedPoolCtx() as context:
+  File "/home/rattie/envs/MPIpool/lib/python3.10/site-packages/mpi4py/futures/_lib.py", line 386, in __enter__
+mpi4py.MPI.Exception: MPI_ERR_INTERN: internal error
+    with SharedPoolCtx() as context:
+  File "/home/rattie/envs/MPIpool/lib/python3.10/site-packages/mpi4py/futures/_lib.py", line 386, in __enter__
+    with SharedPoolCtx() as context:
+  File "/home/rattie/envs/MPIpool/lib/python3.10/site-packages/mpi4py/futures/_lib.py", line 386, in __enter__
+    self.comm = comm_split(MPI.COMM_WORLD, root=0)
+  File "/home/rattie/envs/MPIpool/lib/python3.10/site-packages/mpi4py/futures/_lib.py", line 683, in comm_split
+    self.comm = comm_split(MPI.COMM_WORLD, root=0)
+  File "/home/rattie/envs/MPIpool/lib/python3.10/site-packages/mpi4py/futures/_lib.py", line 683, in comm_split
+    self.comm = comm_split(MPI.COMM_WORLD, root=0)
+  File "/home/rattie/envs/MPIpool/lib/python3.10/site-packages/mpi4py/futures/_lib.py", line 683, in comm_split
+    intracomm = comm.Create(group)
+  File "mpi4py/MPI/Comm.pyx", line 173, in mpi4py.MPI.Comm.Create
+    intracomm = comm.Create(group)
+  File "mpi4py/MPI/Comm.pyx", line 173, in mpi4py.MPI.Comm.Create
+    intracomm = comm.Create(group)
+  File "mpi4py/MPI/Comm.pyx", line 173, in mpi4py.MPI.Comm.Create
+mpi4py.MPI.Exception: MPI_ERR_INTERN: internal error
+mpi4py.MPI.Exception: MPI_ERR_INTERN: internal error
+mpi4py.MPI.Exception: MPI_ERR_INTERN: internal error
+[amd009.orc.gmu.edu:2323578] 30 more processes have sent help message help-mca-bml-r2.txt / unreachable proc
+[amd009.orc.gmu.edu:2323578] Set MCA parameter "orte_base_help_aggregate" to 0 to see all help / error messages
+[amd009.orc.gmu.edu:2323578] 12 more processes have sent help message help-mpi-api.txt / mpi-abort
+[amd009.orc.gmu.edu:2323578] PMIX ERROR: NO-PERMISSIONS in file dstore_base.c at line 237
+[amd009.orc.gmu.edu:2323578] PMIX ERROR: NO-PERMISSIONS in file dstore_base.c at line 246
+[amd009.orc.gmu.edu:2323578] PMIX ERROR: NO-PERMISSIONS in file dstore_base.c at line 237

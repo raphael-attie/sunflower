@@ -30,12 +30,12 @@ run_balltracking = True
 # Create the gridded list for the parameter sweep
 bt_params = OrderedDict({
     'rs': 2,    # Ball radius
-    'intsteps': [3, 4, 5, 6],   # Number of integration steps between images
-    'ballspacing': [1, 2],  # Minimum spacing between balls
+    'intsteps': [3, 4, 5],   # Number of integration steps between images
+    'ballspacing': 1,  # Minimum spacing between balls
     'am': [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], # Characteristic acceleration
-    'dp': [0.1, 0.15, 0.2, 0.25, 0.3, 0.35],    # Characteristic depth of floatation
+    'dp': [0.1, 0.15, 0.2, 0.25, 0.3],    # Characteristic depth of floatation
     'sigma_factor': [1.0, 1.25, 1.5, 1.75, 2],  # The target standard deviation of the Z-height of the output data surface
-    'fourier_radius': np.arange(0, 5),  # Width of high-pass Fourier filter (k-space). Adapt to instruments, image resolution, ...
+    'fourier_radius': [0, 1, 2, 3, 4, 5],  # Width of high-pass Fourier filter (k-space). Adapt to instruments, image resolution, ...
     'trange': (0, 60),  # Time range (1st index, last index+1) of the series of images to use for tracking.
     'verbose': True
 })
@@ -46,7 +46,6 @@ bt_params_list = blt.get_bt_params_list(bt_params)
 ################################
 maps_params = {
     'generate_lanes': True,  # Toggle creation of the supergranular maps
-    'im_dims': [256, 256],  # Image dimension [width, height] in pixels
     'navg': 40,  # in nb of frame ~ must translate to ~30 min minimum with HMI @45s cadence
     'dt': 20,  # Time step in number of frames between averaged flow maps. Use dt < navg for having smoother transitions
     'nsteps': 40,  # Nb of integration steps for the supergranular boundary mapping
