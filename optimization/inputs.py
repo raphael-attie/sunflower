@@ -73,6 +73,8 @@ vx_rates = np.arange(-0.2, 0.21, 0.04)
 vx_rates[int(len(vx_rates) / 2)] = 0
 # vy_rates typically set to zeros, but calibration can be tested on both axes at the same time
 vy_rates = np.zeros(len(vx_rates))
+# Velocity scale
+v_scale = 368000 / 60 # m/s
 
 # Positional arguments passed to blt.Calibrator()
 cal_args = {

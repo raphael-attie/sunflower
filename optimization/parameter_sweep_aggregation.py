@@ -80,7 +80,7 @@ df.insert(25, 'MAPE', -1)
 df.insert(26, 'MAPD', -1)
 
 # unit in m/s for sim simulation for 1 px / frame interval
-u = 368000 / 60
+u = inputs.v_scale
 
 
 trange = inputs.bt_params['trange']
