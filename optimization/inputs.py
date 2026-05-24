@@ -45,10 +45,7 @@ bt_params_list = blt.get_bt_params_list(bt_params)
 # Flow maps parameters
 ################################
 maps_params = {
-    'generate_lanes': True,  # Toggle creation of the supergranular maps
-    'navg': 40,  # in nb of frame ~ must translate to ~30 min minimum with HMI @45s cadence
-    'dt': 20,  # Time step in number of frames between averaged flow maps. Use dt < navg for having smoother transitions
-    'nsteps': 40,  # Nb of integration steps for the supergranular boundary mapping
+    'generate_lanes': False,  # Toggle creation of the supergranular maps
     'kernel': 'gaussian',  # Smoothing kernel: 'gaussian', 'boxcar', or 'both'
     'fwhm': 7,   # spatial gaussian smooth of the Euler dense flow maps
 }
