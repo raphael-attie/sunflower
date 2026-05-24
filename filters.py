@@ -72,7 +72,7 @@ def han2d_lpf(n, rc):
 
     xgrid, ygrid = np.meshgrid(np.arange(n), np.arange(n))
     # symetric grid of radial distances
-    f = np.sqrt((xgrid - (n / 2 - 0.5)) ** 2 + (ygrid - (n / 2 - 0.5)) ** 2)
+    f = np.sqrt((xgrid - (n / 2)) ** 2 + (ygrid - (n / 2)) ** 2)
     hwindow = 0.5 + 0.5 * np.cos(np.pi * f / (2 * fc))
     # Cut high frequencies
     mask_f = f > 2 * fc
