@@ -19,7 +19,8 @@ if 'DATA' not in os.environ:
 
 # directory for the input data files
 inputdir = Path(os.environ['DATA'], 'ISSI/Matthias/SSD_25x8Mm_16_pdmp_1_ISSI_Flows/rebinned/')
-datafiles = sorted(list(inputdir.glob('I_out.*.fits')))[20:] # Per Matthias: let settle till # 001000 -> 20th image
+datafiles = sorted(list(inputdir.glob('I_out_rebinned*.fits')))[20:] # Per Matthias: let settle till # 001000 -> 20th image
+print(f'len(datafiles)= {len(datafiles)}')
 
 # directory for the balltracking results
 outputdir = Path(inputdir, 'correlations')
