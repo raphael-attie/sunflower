@@ -1133,10 +1133,11 @@ class Calibrator:
                 return ballpos_top_list, ballpos_bottom_list
 
         if self.ncpus < 2:
+            print(f'Running balltracking synchronously for drift rates {self.drift_rates} for index {self.index}')
             ballpos_top_list, ballpos_bottom_list = zip(*map(self.balltrack_rate, rate_idx_list))
         else:
             with Pool(processes=self.ncpus) as pool:
-                print(f'starting multiprocessing pool with {self.ncpus} workers')
+                print(f'starting multiprocessing pool with {self.ncpus} workers for drift rates {self.drift_rates} for index {self.index}')
                 ballpos_top_list, ballpos_bottom_list = zip(*pool.map(self.balltrack_rate, rate_idx_list))
 
         if self.save_ballpos_list:
@@ -1291,6 +1292,10 @@ def full_calibration(datafiles, bt_params, cal_args, cal_opt_args, make_drift_im
             for i, (drx, dry) in enumerate(zip(cal_args['vx_rates'], cal_args['vy_rates'])):
                 create_drift_series(data, drx, dry,
                                     outputdir=Path(cal_args['outputdir_cal'], f'drift_{i:02d}'))
+        else:
+            sys.exit('Must set outputdir_cal for drift images to be created')
+
+        print(f'Created drift images in {cal_args["outputdir_cal"]}.')
 
 
     # Set the index for having a unique identifier of each run of the parameter sweep
@@ -1367,7 +1372,7 @@ def create_drift_series(data, vx_rate, vy_rate, outputdir=None, filter_function=
             if not outputdir.exists():
                 os.makedirs(outputdir, exist_ok=True)
                 print('created outputdir: ', outputdir)
-            filepath = str(Path(outputdir, f'drifted_{i:02d}.fits'))
+            filepath = str(Path(outputdir, f'drifted_{i:04d}.fits'))
             fitstools.writefits(drifted_image.astype(np.float32), filepath)
 
     return None
