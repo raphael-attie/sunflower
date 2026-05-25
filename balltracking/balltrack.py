@@ -899,13 +899,18 @@ def make_velocity_from_tracks(ballpos, dims, trange, fwhm, kernel='gaussian'):
     bposx[nan_mask] = np.nan
     bposy[nan_mask] = np.nan
 
-    # Watch out: slicing excludes the last index. Adding +1 to trange[1] makes sure we reach index trange[1]
-    vx_lagrange = bposx[:, trange[0]+1:trange[1]+1] - bposx[:, trange[0]:trange[1]]
-    vy_lagrange = bposy[:, trange[0]+1:trange[1]+1] - bposy[:, trange[0]:trange[1]]
+    # If the ballpos array is already pre-sliced to the time range length (nt), offset indices to start at 0
+    nt = trange[1] - trange[0] + 1
+    t0 = 0 if bposx.shape[-1] == nt else trange[0]
+    t1 = (trange[1] - trange[0]) if bposx.shape[-1] == nt else trange[1]
+
+    # Watch out: slicing excludes the last index. Adding +1 to t1 makes sure we reach index t1
+    vx_lagrange = bposx[:, t0+1:t1+1] - bposx[:, t0:t1]
+    vy_lagrange = bposy[:, t0+1:t1+1] - bposy[:, t0:t1]
 
     # px where bposx == -1 will give -1. Same for py
-    px_lagrange = np.round((bposx[:, trange[0]:trange[1]] + bposx[:, trange[0]+1:trange[1]+1])/2)
-    py_lagrange = np.round((bposy[:, trange[0]:trange[1]] + bposy[:, trange[0]+1:trange[1]+1])/2)
+    px_lagrange = np.round((bposx[:, t0:t1] + bposx[:, t0+1:t1+1])/2)
+    py_lagrange = np.round((bposy[:, t0:t1] + bposy[:, t0+1:t1+1])/2)
     # Exclude the -1 and NaN flagged positions using a mask.
     valid_mask = np.isfinite(vx_lagrange)
     # Taking the mask of the 2D arrays convert them to 1D arrays
