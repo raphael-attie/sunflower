@@ -1050,6 +1050,9 @@ class Calibrator:
         # Check if the slice start index is greater than or equal to the end index
         for slc in self.roi_slice:
             if slc.start is not None and slc.stop is not None and slc.start >= slc.stop:
+                print(f"Error: Slice start index ({slc.start}) is greater than or equal to the end index ({slc.stop}).")
+                print(f' roi_slice: {self.roi_slice}')
+                print("Exiting...")
                 sys.exit(f"Error: Slice start index ({slc.start}) is greater than or equal to the end index ({slc.stop}).")
 
         self.sample = self.sample[self.roi_slice]
