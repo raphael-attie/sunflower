@@ -292,21 +292,25 @@ class BT:
             self.pos[:, self.bad_balls_mask] = -1
             self.vel[:, self.bad_balls_mask] = np.nan
 
+            # Calculate the relative frame index for storing time series data
+            n_rel = n - self.trange[0]
+
             # Add the current position array to the time series of position
-            self.ballpos[..., n] = self.pos.copy()
-            self.ballvel[..., n] = self.vel.copy()
+            self.ballpos[..., n_rel] = self.pos.copy()
+            self.ballvel[..., n_rel] = self.vel.copy()
 
             # The bad balls are assigned new positions (relocated to empty cells)
             # This is done in place in bt.pos. For flexibility with debugging, the array
             # of position is given explicitly as input
             _, _ = self.replace_bad_balls(self.surface)
 
-            self.balls_age_t[:, n] = self.balls_age.copy()
+            self.balls_age_t[:, n_rel] = self.balls_age.copy()
 
         if self.direction == 'backward':
             # At the end of the time loop, flip timeline for backward tracking to restore the forward timeline
             self.ballpos = np.flip(self.ballpos, 2)
             self.ballvel = np.flip(self.ballvel, 2)
+            self.balls_age_t = np.flip(self.balls_age_t, 1)
 
     def get_bad_balls(self):
         """
