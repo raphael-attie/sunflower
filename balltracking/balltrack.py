@@ -1038,16 +1038,26 @@ class Calibrator:
             self.image_reader = image_reader
 
         # Get frame dimensions
-        sample_file = sorted(list(self.drift_dirs[0].glob('*.fits')))[self.trange[0]].as_posix()
-        print('sample file: ', sample_file)
+        sample_file = sorted(list(self.drift_dirs[0].glob('*.fits')))[0].as_posix()
         self.sample = fits.getdata(sample_file)
+        print(f'sample file: {sample_file} - shape: {self.sample.shape}')
         # The dimensions must correspond to the size of the roi_slice (if any)
         self.dims = self.sample.shape[-2:]
 
         # Calculate the proper array bounds to track, bypassing edge effects
         self.roi_slice = self._compute_roi_slice(roi)
+        
+        # Check if the slice start index is greater than or equal to the end index
+        for slc in self.roi_slice:
+            if slc.start is not None and slc.stop is not None and slc.start >= slc.stop:
+                sys.exit(f"Error: Slice start index ({slc.start}) is greater than or equal to the end index ({slc.stop}).")
+
         self.sample = self.sample[self.roi_slice]
         print('sample shape: ', self.sample.shape)
+
+        # Check if the maximum of the two axes dimensions is smaller than 12 pixels
+        if max(self.sample.shape[-2:]) < 12:
+            sys.exit(f"Error: The maximum of the two sliced dimensions ({max(self.sample.shape[-2:])} px) is smaller than 12 pixels.")
 
 
         if self.kernel == 'boxcar' or self.kernel == 'gaussian':
@@ -1063,8 +1073,9 @@ class Calibrator:
     def _compute_roi_slice(self, roi):
         """Calculate the amount of cropping necessary to avoid edge effects."""
         if roi is None:
-            trim = int(self.drift_rates.max() * self.nframes + self.fwhm + 2)
-            return np.s_[trim:self.dims[1] - trim, trim:self.dims[0] - trim]
+            trim_x = int(np.abs(self.vx_rates).max() * self.nframes + self.fwhm + 2)
+            trim_y = int(np.abs(self.vy_rates).max() * self.nframes + self.fwhm + 2)
+            return np.s_[trim_y:self.dims[0] - trim_y, trim_x:self.dims[1] - trim_x]
         else:
             # Remove the drift trim after cropping the image
             return np.s_[roi[2]:roi[3], roi[0]:roi[1]]
