@@ -11,7 +11,7 @@
 #SBATCH --ntasks=128
 
 ## Memory per CPU core (Reduced to 2G for Case B to drastically reduce SLURM queue wait times)
-#SBATCH --mem-per-cpu=4G
+#SBATCH --mem-per-cpu=2G
 
 ## Increased walltime to account for fewer parallel workers
 #SBATCH --time=1-00:00:00
