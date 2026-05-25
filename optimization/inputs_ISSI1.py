@@ -19,7 +19,7 @@ if 'DATA' not in os.environ:
 
 # directory for the input data files
 inputdir = Path(os.environ['DATA'], 'ISSI/Matthias/SSD_25x8Mm_16_pdmp_1_ISSI_Flows/rebinned/')
-datafiles = sorted(list(inputdir.glob('I_out_rebinned*.fits')))[20:] # Per Matthias: let settle till # 001000 -> 20th image
+datafiles = sorted(list(inputdir.glob('I_out_rebinned*.fits')))
 print(f'len(datafiles)= {len(datafiles)}')
 
 # directory for the balltracking results
@@ -37,7 +37,7 @@ bt_params = OrderedDict({
     'dp': [0.1, 0.15, 0.2, 0.25, 0.3],    # Characteristic depth of floatation
     'sigma_factor': [1.0, 1.25, 1.5, 1.75, 2],  # The target standard deviation of the Z-height of the output data surface
     'fourier_radius': [0, 1, 2, 3, 4, 5],  # Width of high-pass Fourier filter (k-space). Adapt to instruments, image resolution, ...
-    'trange': (0, 341),  # Time range (1st index, last index+1) of the series of images to use for tracking.
+    'trange': (20, 356),  # Time range (1st index, last index+1). Per Matthias: let settle till # 001000 -> 20th image
     'verbose': True
 })
 bt_params_list = blt.get_bt_params_list(bt_params)

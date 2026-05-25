@@ -119,7 +119,9 @@ class BT:
         idx = trange[0] if direction == 'forward' else trange[-1]
         self.is_cube = isinstance(self.datafiles, (str, Path))
         if self.data is not None:
-            self.sample = self.data[idx, :, :][self.roi_slice].astype(DTYPE)
+            # If the provided data array is already pre-sliced to match self.nt, offset the index
+            data_idx = (idx - trange[0]) if self.data.shape[0] == self.nt else idx
+            self.sample = self.data[data_idx, :, :][self.roi_slice].astype(DTYPE)
         else:
             # (Using your existing reader logic)
             self.sample = self.image_reader(self.datafiles, tslice=idx, cube=self.is_cube)[self.roi_slice].astype(DTYPE)
@@ -250,12 +252,14 @@ class BT:
                 if self.data is None:
                     image = self.image_reader(self.datafiles, tslice=n, cube=self.is_cube).astype(DTYPE)
                 else:
-                    image = self.data[n, :, :]
+                    data_idx = n - self.trange[0] if self.data.shape[0] == self.nt else n
+                    image = self.data[data_idx, :, :]
             else: # going backward
                 if self.data is None:
-                    image = self.image_reader(self.datafiles, tslice=self.trange[1] - n, cube=self.is_cube).astype(DTYPE)
+                    image = self.image_reader(self.datafiles, tslice=self.trange[1] + self.trange[0] - n, cube=self.is_cube).astype(DTYPE)
                 else:
-                    image = self.data[self.trange[1] - n, :, :]
+                    data_idx = (self.nt - 1) - (n - self.trange[0]) if self.data.shape[0] == self.nt else (self.trange[1] + self.trange[0] - n)
+                    image = self.data[data_idx, :, :]
 
             # Here the slicing occurs before the fourier filter. Keep this order in mind when calculating the slice,
             # to avoid unexpected Fourier artefacts.
@@ -1065,8 +1069,9 @@ class Calibrator:
 
         if self.verbose:
             print(self.drift_dirs[rate_idx])
-        # Files supposed to be created or to be read if already exist.
-        filepaths = sorted(list(Path(self.drift_dirs[rate_idx]).glob('*.fits')))[self.trange[0]:self.trange[1]+1]
+        # The drift directories are already pre-sliced/generated for the specific trange, 
+        # so we should load all FITS files present in the directory.
+        filepaths = sorted(list(Path(self.drift_dirs[rate_idx]).glob('*.fits')))
         if not check_file_series(filepaths):
             print("Drift data do not exist. Sources images not provided. Must provide them as input")
             sys.exit(1)
