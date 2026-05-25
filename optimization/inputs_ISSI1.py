@@ -64,7 +64,7 @@ maps_params = {
 # If the drift images do not exist yet, create them. True will overwrite if they already exist
 make_drift_images = True
 # Set the vector of offset velocities (drift rates), define them independently the x and y direction
-vx_rates = np.arange(-0.1, 0.11, 0.02)
+vx_rates = np.arange(-0.05, 0.051, 0.01)
 # Set the middle one to zero, for having a non-drifted flow (optional, but encouraged)
 vx_rates[int(len(vx_rates) / 2)] = 0
 # vy_rates typically set to zeros, but calibration can be tested on both axes at the same time
