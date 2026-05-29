@@ -48,7 +48,7 @@ bt_params_list = blt.get_bt_params_list(bt_params)
 maps_params = {
     'generate_lanes': False,  # Toggle creation of the supergranular maps
     'kernel': 'gaussian',  # Smoothing kernel: 'gaussian', 'boxcar', or 'both'
-    'fwhm': 7,   # spatial gaussian smooth of the Euler dense flow maps
+    'fwhm': 6.25,   # spatial gaussian smooth of the Euler dense flow maps = 6.25 = 2400 km at binning 24
 }
 
 ##########################
@@ -69,8 +69,8 @@ vx_rates = np.arange(-0.05, 0.051, 0.01)
 vx_rates[int(len(vx_rates) / 2)] = 0
 # vy_rates typically set to zeros, but calibration can be tested on both axes at the same time
 vy_rates = np.zeros(len(vx_rates))
-# Velocity scale to convert from px/frame interval to km/s
-v_scale = 384000 / 10 
+# Velocity scale to convert from px/frame interval to m/s
+v_scale = 384 / 10 
 
 # Positional arguments passed to blt.Calibrator()
 cal_args = {

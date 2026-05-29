@@ -6,16 +6,19 @@ import numpy as np
 from astropy.io.fits import getdata
 from scipy.signal import convolve2d
 from scipy.ndimage import gaussian_filter
-from optimization import inputs
+from optimization import inputs_ISSI1 as inputs
 
 
-def load_vel_mean(v_files, trange):
-    """ Load the velocity files and average over a time range """
-    vx_files_subset = v_files[0][trange[0]:trange[1]]
-    vy_files_subset = v_files[1][trange[0]:trange[1]]
+def load_vel_mean(v_files, trange, vunit=1/1e2):
+    """ Load the velocity files and average over a time range 
+    Remember to adjust units of ISSI simulations, which are in cm/s. 
+    We typically work in m/s when tracking granulation flows. So the default is to divide by 100.
+    """
+    vx_files_subset = v_files[0][trange[0]:trange[1]] 
+    vy_files_subset = v_files[1][trange[0]:trange[1]] 
     # Get the mean of the velocity components
-    vx = np.array([getdata(f) for f in vx_files_subset]).mean(axis=0)
-    vy = np.array([getdata(f) for f in vy_files_subset]).mean(axis=0)
+    vx = np.array([getdata(f) for f in vx_files_subset]).mean(axis=0)*vunit
+    vy = np.array([getdata(f) for f in vy_files_subset]).mean(axis=0)*vunit
     return vx, vy
 
 
@@ -79,7 +82,7 @@ df.insert(24, 'MAE_discrep', -1)
 df.insert(25, 'MAPE', -1)
 df.insert(26, 'MAPD', -1)
 
-# unit in m/s for sim simulation for 1 px / frame interval
+# unit for simulation for 1 px / frame interval -> m/s
 u = inputs.v_scale
 
 
@@ -87,9 +90,11 @@ trange = inputs.bt_params['trange']
 fwhm = inputs.maps_params['fwhm']
 trim = 10 # Same as Benoit
 fov = np.s_[trim:-trim:fwhm, trim:-trim:fwhm]
-# Get the ground truth velocity (simulation)
-svx_files = sorted(Path(inputs.inputdir).glob('vy_out_rebinned_tau_1.0_*.fits'))
-svy_files = sorted(Path(inputs.inputdir).glob('vz_out_rebinned_tau_1.0_*.fits'))
+# Get the ground truth velocity (simulation) - beware of the coordinates y <> z
+svx_files = sorted(Path(inputs.inputdir).glob('vz_out_rebinned_tau_1_*.fits'))
+svy_files = sorted(Path(inputs.inputdir).glob('vy_out_rebinned_tau_1_*.fits'))
+print(f'len(svx_files) = {len(svx_files)}')
+print(f'len(svy_files) = {len(svy_files)}')
 vx_sim, vy_sim = load_vel_mean((svx_files, svy_files), trange)
 # smooth the simulation velocities
 kernel = inputs.maps_params['kernel']
