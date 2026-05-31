@@ -93,6 +93,8 @@ if __name__ == '__main__':
         print("Running in DEBUG mode (sequential)")
         calibrate_partial = partial(blt.full_calibration,
                                     inputs.datafiles,
+                                    fwhms = inputs.fwhms,
+                                    tavgs = inputs.tavgs,
                                     cal_args=inputs.cal_args,
                                     cal_opt_args=inputs.cal_opt_args,
                                     make_drift_images=False,

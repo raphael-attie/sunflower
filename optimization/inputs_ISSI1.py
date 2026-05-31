@@ -19,8 +19,9 @@ if 'DATA' not in os.environ:
 
 # directory for the input data files
 inputdir = Path(os.environ['DATA'], 'ISSI/Matthias/SSD_25x8Mm_16_pdmp_1_ISSI_Flows/rebinned/')
+# Input FITS files
 datafiles = sorted(list(inputdir.glob('I_out_rebinned*.fits')))
-print(f'len(datafiles)= {len(datafiles)}')
+print(f'len(datafiles)= {len(datafiles)}')# Per Matthias: should let settle till # 001000 -> 20th image
 
 # directory for the balltracking results
 outputdir = Path(inputdir, 'correlations')
@@ -33,23 +34,15 @@ bt_params = OrderedDict({
     'rs': 2,    # Ball radius
     'intsteps': [3, 4, 5],   # Number of integration steps between images
     'ballspacing': 1,  # Minimum spacing between balls
-    'am': [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], # Characteristic acceleration
+    'am': [0.3, 0.4, 0.5], # Characteristic acceleration
     'dp': [0.1, 0.15, 0.2, 0.25, 0.3],    # Characteristic depth of floatation
     'sigma_factor': [1.0, 1.25, 1.5, 1.75, 2],  # The target standard deviation of the Z-height of the output data surface
     'fourier_radius': [0, 1, 2, 3, 4, 5],  # Width of high-pass Fourier filter (k-space). Adapt to instruments, image resolution, ...
-    'trange': (20, 360),  # Time range (1st index, last index inclusive). Per Matthias: let settle till # 001000 -> 20th image
+    'trange': (0, 360),  # Time range (1st index, last index inclusive). 
     'verbose': True
 })
 bt_params_list = blt.get_bt_params_list(bt_params)
 
-################################
-# Flow maps parameters
-################################
-maps_params = {
-    'generate_lanes': False,  # Toggle creation of the supergranular maps
-    'kernel': 'gaussian',  # Smoothing kernel: 'gaussian', 'boxcar', or 'both'
-    'fwhm': 6.25,   # spatial gaussian smooth of the Euler dense flow maps = 6.25 = 2400 km at binning 24
-}
 
 ##########################
 # Calibration parameters
@@ -72,20 +65,22 @@ vy_rates = np.zeros(len(vx_rates))
 # Velocity scale to convert from px/frame interval to m/s
 v_scale = 384 / 10 
 
+### Flow maps parameters ###  
 # Positional arguments passed to blt.Calibrator()
 cal_args = {
-    'trange': bt_params['trange'],  # [first, last[ Indices of images to drift and track in the time series
+    'fwhms': [3.125, 6.25], # for the spatial gaussian smooth of the flow maps
+    'tavg': [[0, 170], [0, 340]], # indices of files (both inclusives) over which the flows will be time-averaged
     'vx_rates': vx_rates,  # Drift rates x-axis
     'vy_rates': vy_rates,  # Drift rates y-axis
-    'fwhm': maps_params['fwhm'],   # for the spatial gaussian smooth during the calibration
     'images': None,  # in-memory series of images. If None, read directly from disk (more ram-friendly)
     'outputdir_cal': outputdir  # can be different from the balltracking output dir.
 }
 
+
 # Optional arguments passed to blt.Calibrator()
 cal_opt_args = {
     'component': 'x',  # Velocity component(s) where the drift is applied. Can be 'x', 'y' or 'xy' for both.
-    'kernel': maps_params['kernel'],  # Smoothing kernel: 'gaussian', 'boxcar', or 'both'
+    'kernel': 'gaussian',  # Smoothing kernel: 'gaussian', 'boxcar', or 'both'
     'save_ballpos_list': True,  # Save the arrays of ball positions to disk?
     'verbose': True,
     'ncpus': 1  # number of cpus to use for parallelization over the drift rates, <= len(vx_rates).

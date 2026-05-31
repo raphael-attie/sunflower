@@ -905,8 +905,8 @@ def make_velocity_from_tracks(ballpos, dims, trange, fwhm, kernel='gaussian'):
 
     # If the ballpos array is already pre-sliced to the time range length (nt), offset indices to start at 0
     nt = trange[1] - trange[0] + 1
-    t0 = 0 if bposx.shape[-1] == nt else trange[0]
-    t1 = (trange[1] - trange[0]) if bposx.shape[-1] == nt else trange[1]
+    t0 = trange[0]
+    t1 = trange[1]
 
     # Watch out: slicing excludes the last index. Adding +1 to t1 makes sure we reach index t1
     vx_lagrange = bposx[:, t0+1:t1+1] - bposx[:, t0:t1]
@@ -987,7 +987,7 @@ def mesh_ball(rs, npts=20):
 
 class Calibrator:
 
-    def __init__(self, bt_params, vx_rates, vy_rates, trange, fwhm, images, outputdir_cal,
+    def __init__(self, bt_params, vx_rates, vy_rates, tranges, fwhms, images, outputdir_cal,
                  component='x', kernel='gaussian', roi=None, image_reader=None,
                  save_ballpos_list=True, reprocess_existing=True, verbose=False, return_ballpos=False,
                  ncpus=1):
@@ -1017,7 +1017,7 @@ class Calibrator:
         self.drift_rates = np.stack((vx_rates, vy_rates), axis=1)
         self.trange = trange
         self.fwhm = fwhm
-        self.nframes = trange[1] - trange[0]
+        self.nframes = trange[1] - trange[0] + 1 # (last range index is inclusive, hence +1)
         self.images = images
         self.outputdir_cal = outputdir_cal
         # drift data subdirectories (one for each drift rate)
@@ -1077,11 +1077,11 @@ class Calibrator:
         os.makedirs(self.outputdir_cal, exist_ok=True)
 
 
-    def _compute_roi_slice(self, roi):
+    def _compute_roi_slice(self, roi, nframes, fwhm):
         """Calculate the amount of cropping necessary to avoid edge effects."""
         if roi is None:
-            trim_x = int(np.abs(self.vx_rates).max() * self.nframes + self.fwhm + 2)
-            trim_y = int(np.abs(self.vy_rates).max() * self.nframes + self.fwhm + 2)
+            trim_x = int(np.abs(self.vx_rates).max() * nframes + fwhm/2)
+            trim_y = int(np.abs(self.vy_rates).max() * nframes + fwhm/2)
             return np.s_[trim_y:self.dims[0] - trim_y, trim_x:self.dims[1] - trim_x]
         else:
             # Remove the drift trim after cropping the image
@@ -1189,7 +1189,7 @@ class Calibrator:
         rmse = np.sqrt(r[0] / vel_means.size)
         return p, rmse, vel_means
 
-    def fit_calibration(self, ballpos_list, kernel=None):
+    def fit_calibration(self, ballpos_list, fwhm, trange, kernel=None):
 
         """
         Fit a linear profile by calculating the mean velocity for each drift rate.
@@ -1197,6 +1197,8 @@ class Calibrator:
 
         Args:
             ballpos_list (np.ndarray): List of ball positions at each drift rate.
+            fwhm (float): FWHM of the spatiall smoothing kernel
+            trange (list): list of int of start & last index of time series to average over
             kernel (str): 2d smoothing kernel of the velocity field. Either 'gaussian', 'boxcar'
 
         Returns:
@@ -1211,7 +1213,7 @@ class Calibrator:
             kernel = self.kernel
         # Convert to Euler averaged flow fields
         vxs, vys, wplanes = (
-            zip(*[make_velocity_from_tracks(ballpos, self.dims, self.trange, self.fwhm, kernel=kernel)
+            zip(*[make_velocity_from_tracks(ballpos, self.dims, trange, fwhm, kernel=kernel)
                   for ballpos in ballpos_list])
         )
 
@@ -1242,41 +1244,48 @@ class Calibrator:
 
         dicts = []
 
-        for ker in self.kernels:
-            if verbose:
-                print('calibration top')
-            p_top, _, vxmeans_top, vxs_top, vys_top = self.fit_calibration(ballpos_top_list, kernel=ker)
-            if verbose:
-                print('calibration bottom')
-            p_bot, _, vxmeans_bot, vxs_bot, vys_bot = self.fit_calibration(ballpos_bottom_list, kernel=ker)
+        for fwhm in self.fwhms:
+            for trange in self.tavgs:
+                nframes = trange[1] - trange[0] + 1
+                for ker in self.kernels:
+                    if verbose:
+                        print('calibration top')
+                    p_top, _, vxmeans_top, vxs_top, vys_top = self.fit_calibration(ballpos_top_list, fwhm, trange, kernel=ker)
+                    if verbose:
+                        print('calibration bottom')
+                    p_bot, _, vxmeans_bot, vxs_bot, vys_bot = self.fit_calibration(ballpos_bottom_list, fwhm, trange, kernel=ker)
 
-            npzf = Path(self.outputdir_cal, f'mean_velocity_{ker}_{self.index:05d}.npz')
-            # Index where x- and y- rates = 0, for saving the undrifted flow fields (sanity check)
-            idx0 = int(len(self.drift_rates) / 2)
-            np.savez_compressed(npzf,
-                                vx_top=vxs_top[idx0],
-                                vy_top=vys_top[idx0],
-                                vx_bot=vxs_bot[idx0],
-                                vy_bot=vys_bot[idx0],
-                                vxmeans_top=vxmeans_top,
-                                vxmeans_bot=vxmeans_bot,
-                                drift_rates=self.drift_rates,
-                                p_top=p_top,
-                                p_bot=p_bot,
-                                index=self.index)
+                    npzf = Path(self.outputdir_cal, 
+                    f'mean_velocity_{ker}_fwhm{fwhm}_tavg{nframes}_{self.index:05d}.npz')
+                    # Index where x- and y- rates = 0, for saving the undrifted flow fields (sanity check)
+                    idx0 = int(len(self.drift_rates) / 2)
+                    np.savez_compressed(npzf,
+                                        vx_top=vxs_top[idx0],
+                                        vy_top=vys_top[idx0],
+                                        vx_bot=vxs_bot[idx0],
+                                        vy_bot=vys_bot[idx0],
+                                        vxmeans_top=vxmeans_top,
+                                        vxmeans_bot=vxmeans_bot,
+                                        drift_rates=self.drift_rates,
+                                        p_top=p_top,
+                                        p_bot=p_bot,
+                                        fwhm = fwhm,
+                                        tavg = nframes,
+                                        index=self.index)
 
-            # Concatenate above results in one single list and create a dictionnary with the concatenated keys
-            dict_vxmeans = OrderedDict(zip(vx_headers, vxmeans_top.tolist() + vxmeans_bot.tolist()))
+                    # Concatenate above results in one single list and create a dictionnary with the concatenated keys
+                    dict_vxmeans = OrderedDict(zip(vx_headers, vxmeans_top.tolist() + vxmeans_bot.tolist()))
 
-            dict_results = self.bt_params.copy()
-            dict_results['kernel'] = ker
-            dict_results['fwhm'] = self.fwhm
-            dict_results['p_top_0'] = p_top[0]
-            dict_results['p_top_1'] = p_top[1]
-            dict_results['p_bot_0'] = p_bot[0]
-            dict_results['p_bot_1'] = p_bot[1]
-            dict_results.update(dict_vxmeans)
-            dicts.append(dict_results)
+                    dict_results = self.bt_params.copy()
+                    dict_results['kernel'] = ker
+                    dict_results['fwhm'] = fwhm
+                    dict_results['tavg'] = nframes
+                    dict_results['p_top_0'] = p_top[0]
+                    dict_results['p_top_1'] = p_top[1]
+                    dict_results['p_bot_0'] = p_bot[0]
+                    dict_results['p_bot_1'] = p_bot[1]
+                    dict_results.update(dict_vxmeans)
+                    dicts.append(dict_results)                          
 
         df_fit = pd.DataFrame(dicts)
         df_fit.to_csv(Path(self.outputdir_cal, f'param_sweep_{self.index:05d}.csv'))
@@ -1284,7 +1293,7 @@ class Calibrator:
         return df_fit
 
 
-def full_calibration(datafiles, bt_params, cal_args, cal_opt_args, make_drift_images=True,
+def full_calibration(datafiles, bt_params, fwhms, tavgs, cal_args, cal_opt_args, make_drift_images=True,
                      reprocess_bt=True, verbose=False):
     """
     Main calibration function. It considers top-side and bottom-side to be the same, but output their results
@@ -1296,6 +1305,8 @@ def full_calibration(datafiles, bt_params, cal_args, cal_opt_args, make_drift_im
     Args:
         datafiles (list or str): list of FITS files, or path to FITS cube
         bt_params (dict): balltrack parameters: rs, intsteps, ballspacing, am, dp, sigma_factor, fourier_radius
+        fwhms (list): list of int of the fhwm of the smoothing kernel
+        tavgs (list): list of list of file indices that the time averages will cover
         cal_args (dict): positional arguments passed to the Calibrator class instance.
         reprocess_bt (bool): whether to reprocess balltracking over the drifted data or load existing results.
         cal_opt_args(dict): optional arguments for the Calibrator class instance
@@ -1338,6 +1349,7 @@ def full_calibration(datafiles, bt_params, cal_args, cal_opt_args, make_drift_im
     # must work on its own copy, and set calibration-specific trange in `bt_params` sent to the BT class instance
     bt_params_cal = bt_params.copy()
     bt_params_cal['trange'] = cal_args['trange']
+
     # top-side and bottom-side parameters are considered the same.
     cal = Calibrator(bt_params_cal, **cal_args, **cal_opt_args)
 

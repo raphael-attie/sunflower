@@ -57,7 +57,7 @@ filelist_csv = sorted(Path(inputs.outputdir, 'param_sweep_files').glob('param_sw
 # Concatenate all csv file content into one dataframe
 df = pd.concat([pd.read_csv(f) for f in filelist_csv], axis=0, ignore_index=True)
 df.drop(df.columns[0], axis=1, inplace=True)
-df.set_index(['index', 'kernel'], inplace=True)
+df.set_index(['index', 'kernel', 'fwhm', 'tavg'], inplace=True)
 df.sort_index(inplace=True)
 # Create new columns in the dataframes
 df.insert(8, 'corr_uncal', -1)
@@ -86,37 +86,51 @@ df.insert(26, 'MAPD', -1)
 u = inputs.v_scale
 
 
-trange = inputs.bt_params['trange']
-fwhm = inputs.maps_params['fwhm']
 trim = 10 # Same as Benoit
-fov = np.s_[trim:-trim:fwhm, trim:-trim:fwhm]
+
 # Get the ground truth velocity (simulation) - beware of the coordinates y <> z
 svx_files = sorted(Path(inputs.inputdir).glob('vz_out_rebinned_tau_1_*.fits'))
 svy_files = sorted(Path(inputs.inputdir).glob('vy_out_rebinned_tau_1_*.fits'))
 print(f'len(svx_files) = {len(svx_files)}')
 print(f'len(svy_files) = {len(svy_files)}')
-vx_sim, vy_sim = load_vel_mean((svx_files, svy_files), trange)
-# smooth the simulation velocities
-kernel = inputs.maps_params['kernel']
-vx_sim_sm, vy_sim_sm = smooth_vel(vx_sim, vy_sim, fwhm, kernel=kernel)
-# magnitude
-v_sim = np.sqrt(vx_sim_sm ** 2 + vy_sim_sm ** 2)
+
+sim_cache = {}
+for trange in inputs.cal_args['tavg']:
+    vx_sim, vy_sim = load_vel_mean((svx_files, svy_files), trange)
+    nframes = trange[1] - trange[0] + 1
+    for fwhm_val in inputs.cal_args['fwhms']:
+        fov = np.s_[trim:-trim:int(np.round(fwhm_val)), trim:-trim:int(np.round(fwhm_val))]
+        for ker in ['gaussian', 'boxcar']:
+            vx_sim_sm, vy_sim_sm = smooth_vel(vx_sim, vy_sim, fwhm_val, kernel=ker)
+            v_sim = np.sqrt(vx_sim_sm ** 2 + vy_sim_sm ** 2)
+            sim_cache[(nframes, fwhm_val, ker)] = (vx_sim_sm, vy_sim_sm, v_sim, fov)
 
 # List of balltracked velocity flows
-filelist_npz = sorted(glob.glob(os.path.join(inputs.outputdir, 'mean_velocity_files', f'mean_velocity_{kernel}*.npz')))
+filelist_npz = sorted(glob.glob(os.path.join(inputs.outputdir, 'mean_velocity_files', 'mean_velocity_*.npz')))
 print(f'len(filelist_npz) = {len(filelist_npz)}')
 
 for f in filelist_npz:
     with np.load(f) as vel:
             idx = int(vel['index'])
-            print(f'file: {f} - idx = {idx}')
-            # Query string to get the dataframe rows at the right kernel
-            ker = f'kernel=="{kernel}"'
+            fwhm_val = float(vel['fwhm'])
+            nframes_val = int(vel['tavg'])
+            kernel = os.path.basename(f).split('_')[2]
+            print(f'file: {f} - idx = {idx}, kernel = {kernel}, fwhm = {fwhm_val}, tavg = {nframes_val}')
+            
+            idx_tuple = (idx, kernel, fwhm_val, nframes_val)
+            if idx_tuple not in df.index:
+                print(f"Skipping {idx_tuple} as it is not in the dataframe")
+                continue
 
-            vx_top_cal = vel['vx_top'] * df.query(ker).loc[idx, 'p_top_0'].values[0] * u
-            vy_top_cal = vel['vy_top'] * df.query(ker).loc[idx, 'p_top_0'].values[0] * u
-            vx_bot_cal = vel['vx_bot'] * df.query(ker).loc[idx, 'p_bot_0'].values[0] * u
-            vy_bot_cal = vel['vy_bot'] * df.query(ker).loc[idx, 'p_bot_0'].values[0] * u
+            p_top_0 = df.loc[idx_tuple, 'p_top_0']
+            p_bot_0 = df.loc[idx_tuple, 'p_bot_0']
+
+            vx_sim_sm, vy_sim_sm, v_sim, fov = sim_cache[(nframes_val, fwhm_val, kernel)]
+
+            vx_top_cal = vel['vx_top'] * p_top_0 * u
+            vy_top_cal = vel['vy_top'] * p_top_0 * u
+            vx_bot_cal = vel['vx_bot'] * p_bot_0 * u
+            vy_bot_cal = vel['vy_bot'] * p_bot_0 * u
             # Calibrate velocity
             vx_ball_cal = 0.5 * (vx_top_cal + vx_bot_cal)
             vy_ball_cal = 0.5 * (vy_top_cal + vy_bot_cal)
@@ -129,40 +143,40 @@ for f in filelist_npz:
 
             error_vx_cal_top = (vx_sim_sm[fov].ravel() - vx_top_cal[fov].ravel())
             error_vx_cal_bot = (vx_sim_sm[fov].ravel() - vx_bot_cal[fov].ravel())
-            df.loc[(idx, kernel), 'MAE_cal_vx_top'] = np.mean(np.abs(error_vx_cal_top))
-            df.loc[(idx, kernel), 'MAE_cal_vx_bot'] = np.mean(np.abs(error_vx_cal_bot))
-            df.loc[(idx, kernel), 'RMSE_cal_vx_top'] = np.sqrt(np.mean(error_vx_cal_top ** 2))
-            df.loc[(idx, kernel), 'RMSE_cal_vx_bot'] = np.sqrt(np.mean(error_vx_cal_bot ** 2))
+            df.loc[idx_tuple, 'MAE_cal_vx_top'] = np.mean(np.abs(error_vx_cal_top))
+            df.loc[idx_tuple, 'MAE_cal_vx_bot'] = np.mean(np.abs(error_vx_cal_bot))
+            df.loc[idx_tuple, 'RMSE_cal_vx_top'] = np.sqrt(np.mean(error_vx_cal_top ** 2))
+            df.loc[idx_tuple, 'RMSE_cal_vx_bot'] = np.sqrt(np.mean(error_vx_cal_bot ** 2))
 
             error_uncal_vx = (vx_sim_sm[fov].ravel() - vx_ball_uncal[fov].ravel())
-            df.loc[(idx, kernel), 'RMSE_uncal_vx'] = np.sqrt(np.mean(error_uncal_vx ** 2))
-            df.loc[(idx, kernel), 'MAE_uncal_vx'] = np.mean(np.abs(error_uncal_vx))
+            df.loc[idx_tuple, 'RMSE_uncal_vx'] = np.sqrt(np.mean(error_uncal_vx ** 2))
+            df.loc[idx_tuple, 'MAE_uncal_vx'] = np.mean(np.abs(error_uncal_vx))
 
             error_uncal_vy = (vy_sim_sm[fov].ravel() - vy_ball_uncal[fov].ravel())
-            df.loc[(idx, kernel), 'RMSE_uncal_vy'] = np.sqrt(np.mean(error_uncal_vy ** 2))
-            df.loc[(idx, kernel), 'MAE_uncal_vy'] = np.mean(np.abs(error_uncal_vy))
+            df.loc[idx_tuple, 'RMSE_uncal_vy'] = np.sqrt(np.mean(error_uncal_vy ** 2))
+            df.loc[idx_tuple, 'MAE_uncal_vy'] = np.mean(np.abs(error_uncal_vy))
 
             error_cal_vx = (vx_sim_sm[fov].ravel() - vx_ball_cal[fov].ravel())
-            df.loc[(idx, kernel), 'RMSE_cal_vx'] = np.sqrt(np.mean(error_cal_vx ** 2))
-            df.loc[(idx, kernel), 'MAE_cal_vx'] = np.mean(np.abs(error_cal_vx))
+            df.loc[idx_tuple, 'RMSE_cal_vx'] = np.sqrt(np.mean(error_cal_vx ** 2))
+            df.loc[idx_tuple, 'MAE_cal_vx'] = np.mean(np.abs(error_cal_vx))
 
             error_cal_vy = (vy_sim_sm[fov].ravel() - vy_ball_cal[fov].ravel())
-            df.loc[(idx, kernel), 'RMSE_cal_vy'] = np.sqrt(np.mean(error_cal_vy ** 2))
-            df.loc[(idx, kernel), 'MAE_cal_vy'] = np.mean(np.abs(error_cal_vy))
+            df.loc[idx_tuple, 'RMSE_cal_vy'] = np.sqrt(np.mean(error_cal_vy ** 2))
+            df.loc[idx_tuple, 'MAE_cal_vy'] = np.mean(np.abs(error_cal_vy))
 
             # Calculate correlation with sim simulation
-            df.loc[(idx, kernel), 'corr_uncal'] = calc_c_pearson(vx_sim_sm, vx_ball_uncal, vy_sim_sm, vy_ball_uncal, fov=fov)
-            df.loc[(idx, kernel), 'corr'] = calc_c_pearson(vx_sim_sm, vx_ball_cal, vy_sim_sm, vy_ball_cal, fov=fov)
-            df.loc[(idx, kernel), 'corr_top'] = calc_c_pearson(vx_sim_sm, vx_top_cal, vy_sim_sm, vy_top_cal, fov=fov)
-            df.loc[(idx, kernel), 'corr_bot'] = calc_c_pearson(vx_sim_sm, vx_bot_cal, vy_sim_sm, vy_bot_cal, fov=fov)
+            df.loc[idx_tuple, 'corr_uncal'] = calc_c_pearson(vx_sim_sm, vx_ball_uncal, vy_sim_sm, vy_ball_uncal, fov=fov)
+            df.loc[idx_tuple, 'corr'] = calc_c_pearson(vx_sim_sm, vx_ball_cal, vy_sim_sm, vy_ball_cal, fov=fov)
+            df.loc[idx_tuple, 'corr_top'] = calc_c_pearson(vx_sim_sm, vx_top_cal, vy_sim_sm, vy_top_cal, fov=fov)
+            df.loc[idx_tuple, 'corr_bot'] = calc_c_pearson(vx_sim_sm, vx_bot_cal, vy_sim_sm, vy_bot_cal, fov=fov)
 
-            df.loc[(idx, kernel), 'MAPE'] = np.median(np.abs((v_sim - v_ball_cal)[fov] / v_sim[fov]).ravel()) * 100
+            df.loc[idx_tuple, 'MAPE'] = np.median(np.abs((v_sim - v_ball_cal)[fov] / v_sim[fov]).ravel()) * 100
 
             # Top/bottom discrepancy
             v_ball_discrep = np.abs(v_ball_top_cal - v_ball_bot_cal)
-            df.loc[(idx, kernel), 'MAE_discrep'] = v_ball_discrep[fov].mean() / np.sqrt(2)
-            df.loc[(idx, kernel), 'MAPD'] = np.median((v_ball_discrep[fov] / v_ball_cal[fov]).ravel()) / np.sqrt(2) * 100
+            df.loc[idx_tuple, 'MAE_discrep'] = v_ball_discrep[fov].mean() / np.sqrt(2)
+            df.loc[idx_tuple, 'MAPD'] = np.median((v_ball_discrep[fov] / v_ball_cal[fov]).ravel()) / np.sqrt(2) * 100
 
 
 # Don't ignore the index, it is a multi-level index that needs to be preserved.
-df.to_csv(Path(inputs.outputdir, f'correlation_dataframe_{kernel}.csv'))
+df.to_csv(Path(inputs.outputdir, 'correlation_dataframe_all.csv'))
