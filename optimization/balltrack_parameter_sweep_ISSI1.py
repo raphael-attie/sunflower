@@ -116,7 +116,7 @@ if __name__ == '__main__':
         # For cluster execution, multiple nodes, with MPI
         from mpi4py.futures import MPIPoolExecutor as PoolExec
         with PoolExec() as executor:  # Let mpi4py.futures automatically manage the pre-spawned worker pool
-            results = list(executor.map(run_worker_calibration, inputs.bt_params_list))
+            results = executor.map(run_worker_calibration, inputs.bt_params_list)
 
     end = time()
     etime = (end - start)/60
