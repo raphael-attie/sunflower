@@ -987,7 +987,7 @@ def mesh_ball(rs, npts=20):
 
 class Calibrator:
 
-    def __init__(self, bt_params, vx_rates, vy_rates, tranges, fwhms, images, outputdir_cal,
+    def __init__(self, bt_params, vx_rates, vy_rates, tavgs, fwhms, images, outputdir_cal,
                  component='x', kernel='gaussian', roi=None, image_reader=None,
                  save_ballpos_list=True, reprocess_existing=True, verbose=False, return_ballpos=False,
                  ncpus=1):
@@ -1000,8 +1000,8 @@ class Calibrator:
             bt_params (dict): inputs of top tracking: rs, ballspacing, am, dp, sigma_factor, fourier_radius, intsteps
             vx_rates: x-direction rate at which the images are shifted (px/frame)
             vy_rates: y-direction rate at which the images are shifted (px/frame)
-            trange: list of 2 indices in the list of images for the start and end frame used to calibrate.
-            fwhm: FWHM of the gaussian smoothing on the flow fields
+            tavgs: list of lists containing pairs of [start, end] indices defining the temporal sub-ranges over which to average flow fields.
+            fwhms: list of FWHMs for the spatial smoothing applied to the flow fields.
             outputdir_cal: directory for output calibration data
             component (str): velocity vector component over which to fit, either 'x', 'y', or 'xy' for both
             kernel: either 'gaussian' or 'boxcar' for smoothing the velocity vector field
@@ -1015,9 +1015,11 @@ class Calibrator:
         self.vx_rates = vx_rates
         self.vy_rates = vy_rates
         self.drift_rates = np.stack((vx_rates, vy_rates), axis=1)
-        self.trange = trange
-        self.fwhm = fwhm
-        self.nframes = trange[1] - trange[0] + 1 # (last range index is inclusive, hence +1)
+        self.tavgs = tavgs
+        self.fwhms = fwhms
+        
+        max_nframes = max([tr[1] - tr[0] + 1 for tr in self.tavgs])
+        max_fwhm = max(self.fwhms)
         self.images = images
         self.outputdir_cal = outputdir_cal
         # drift data subdirectories (one for each drift rate)
@@ -1049,7 +1051,7 @@ class Calibrator:
         self.dims = self.sample.shape[-2:]
 
         # Calculate the proper array bounds to track, bypassing edge effects
-        self.roi_slice = self._compute_roi_slice(roi)
+        self.roi_slice = self._compute_roi_slice(roi, max_nframes, max_fwhm)
         
         # Check if the slice start index is greater than or equal to the end index
         for slc in self.roi_slice:
@@ -1293,7 +1295,7 @@ class Calibrator:
         return df_fit
 
 
-def full_calibration(datafiles, bt_params, fwhms, tavgs, cal_args, cal_opt_args, make_drift_images=True,
+def full_calibration(datafiles, bt_params, cal_args, cal_opt_args, make_drift_images=True,
                      reprocess_bt=True, verbose=False):
     """
     Main calibration function. It considers top-side and bottom-side to be the same, but output their results
@@ -1305,9 +1307,7 @@ def full_calibration(datafiles, bt_params, fwhms, tavgs, cal_args, cal_opt_args,
     Args:
         datafiles (list or str): list of FITS files, or path to FITS cube
         bt_params (dict): balltrack parameters: rs, intsteps, ballspacing, am, dp, sigma_factor, fourier_radius
-        fwhms (list): list of int of the fhwm of the smoothing kernel
-        tavgs (list): list of list of file indices that the time averages will cover
-        cal_args (dict): positional arguments passed to the Calibrator class instance.
+        cal_args (dict): positional arguments passed to the Calibrator class instance (including `fwhms` and `tavgs`).
         reprocess_bt (bool): whether to reprocess balltracking over the drifted data or load existing results.
         cal_opt_args(dict): optional arguments for the Calibrator class instance
         verbose (bool): True or False for enabling / disabling verbosity
@@ -1318,11 +1318,12 @@ def full_calibration(datafiles, bt_params, fwhms, tavgs, cal_args, cal_opt_args,
 
     if make_drift_images:
         print('reading images for drift...')
+        tr = bt_params['trange']
         if isinstance(datafiles, (str, Path)):
             # Load as a cube and slice it to the input range of interest
-            data = fits.getdata(datafiles)[cal_args['trange'][0]:cal_args['trange'][1]+1]
+            data = fits.getdata(datafiles)[tr[0]:tr[1]+1]
         else:
-            datafiles_selected = datafiles[cal_args['trange'][0]:cal_args['trange'][1]+1]
+            datafiles_selected = datafiles[tr[0]:tr[1]+1]
             data = [fits.getdata(f) for f in datafiles_selected]
 
         print('Creating drift images...')
@@ -1348,7 +1349,7 @@ def full_calibration(datafiles, bt_params, fwhms, tavgs, cal_args, cal_opt_args,
     # trange in calibration is set independently of the main balltracking run. The calibration
     # must work on its own copy, and set calibration-specific trange in `bt_params` sent to the BT class instance
     bt_params_cal = bt_params.copy()
-    bt_params_cal['trange'] = cal_args['trange']
+    bt_params_cal['trange'] = bt_params['trange']
 
     # top-side and bottom-side parameters are considered the same.
     cal = Calibrator(bt_params_cal, **cal_args, **cal_opt_args)
