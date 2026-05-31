@@ -69,7 +69,7 @@ v_scale = 384 / 10
 # Positional arguments passed to blt.Calibrator()
 cal_args = {
     'fwhms': [3.125, 6.25], # for the spatial gaussian smooth of the flow maps
-    'tavg': [[0, 170], [0, 340]], # indices of files (both inclusives) over which the flows will be time-averaged
+    'tavg': [[0, 180], [0, 360]], # indices of files (both inclusives) over which the flows will be time-averaged
     'vx_rates': vx_rates,  # Drift rates x-axis
     'vy_rates': vy_rates,  # Drift rates y-axis
     'images': None,  # in-memory series of images. If None, read directly from disk (more ram-friendly)
