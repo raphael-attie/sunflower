@@ -71,7 +71,7 @@ if __name__ == '__main__':
         print('Pre-generating drift images synchronously to avoid race conditions...')
         from astropy.io import fits
         dfiles = inputs.datafiles
-        tr = inputs.cal_args['trange']
+        tr = inputs.bt_params['trange']
         if isinstance(dfiles, str) or isinstance(dfiles, Path):
             data = fits.getdata(dfiles)[tr[0]:tr[1]+1]
         else:
