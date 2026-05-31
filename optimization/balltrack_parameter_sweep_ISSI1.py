@@ -111,12 +111,12 @@ if __name__ == '__main__':
         # For local execution on one node, tested with up to 32 cpus.
         from concurrent.futures import ProcessPoolExecutor as PoolExec
         with PoolExec(max_workers=inputs.ncpus) as executor:
-            results = executor.map(run_worker_calibration, inputs.bt_params_list)
+            results = list(executor.map(run_worker_calibration, inputs.bt_params_list))
     else:
         # For cluster execution, multiple nodes, with MPI
         from mpi4py.futures import MPIPoolExecutor as PoolExec
         with PoolExec() as executor:  # Let mpi4py.futures automatically manage the pre-spawned worker pool
-            results = executor.map(run_worker_calibration, inputs.bt_params_list)
+            results = list(executor.map(run_worker_calibration, inputs.bt_params_list))
 
     end = time()
     etime = (end - start)/60

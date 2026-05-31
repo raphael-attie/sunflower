@@ -31,7 +31,8 @@ def smooth_vel(vxs, vys, fwhm, kernel='boxcar'):
     """
 
     if kernel == 'boxcar':
-        box = np.ones([fwhm, fwhm]) / fwhm**2
+        fwhm_int = int(np.round(fwhm))
+        box = np.ones([fwhm_int, fwhm_int]) / fwhm_int**2
         vxs2 = convolve2d(vxs, box, mode='same')
         vys2 = convolve2d(vys, box, mode='same')
     elif kernel == 'gaussian':
@@ -60,27 +61,27 @@ df.drop(df.columns[0], axis=1, inplace=True)
 df.set_index(['index', 'kernel', 'fwhm', 'tavg'], inplace=True)
 df.sort_index(inplace=True)
 # Create new columns in the dataframes
-df.insert(8, 'corr_uncal', -1)
-df.insert(9, 'corr', -1)
-df.insert(10, 'corr_top', -1)
-df.insert(11, 'corr_bot', -1)
+df.insert(8, 'corr_uncal', -1.0)
+df.insert(9, 'corr', -1.0)
+df.insert(10, 'corr_top', -1.0)
+df.insert(11, 'corr_bot', -1.0)
 
-df.insert(12, 'MAE_uncal_vx', -1)
-df.insert(13, 'MAE_uncal_vy', -1)
-df.insert(14, 'MAE_cal_vx', -1)
-df.insert(15, 'MAE_cal_vy', -1)
-df.insert(16, 'MAE_cal_vx_top', -1)
-df.insert(17, 'MAE_cal_vx_bot', -1)
+df.insert(12, 'MAE_uncal_vx', -1.0)
+df.insert(13, 'MAE_uncal_vy', -1.0)
+df.insert(14, 'MAE_cal_vx', -1.0)
+df.insert(15, 'MAE_cal_vy', -1.0)
+df.insert(16, 'MAE_cal_vx_top', -1.0)
+df.insert(17, 'MAE_cal_vx_bot', -1.0)
 
-df.insert(18, 'RMSE_uncal_vx', -1)
-df.insert(19, 'RMSE_uncal_vy', -1)
-df.insert(20, 'RMSE_cal_vx', -1)
-df.insert(21, 'RMSE_cal_vy', -1)
-df.insert(22, 'RMSE_cal_vx_top', -1)
-df.insert(23, 'RMSE_cal_vx_bot', -1)
-df.insert(24, 'MAE_discrep', -1)
-df.insert(25, 'MAPE', -1)
-df.insert(26, 'MAPD', -1)
+df.insert(18, 'RMSE_uncal_vx', -1.0)
+df.insert(19, 'RMSE_uncal_vy', -1.0)
+df.insert(20, 'RMSE_cal_vx', -1.0)
+df.insert(21, 'RMSE_cal_vy', -1.0)
+df.insert(22, 'RMSE_cal_vx_top', -1.0)
+df.insert(23, 'RMSE_cal_vx_bot', -1.0)
+df.insert(24, 'MAE_discrep', -1.0)
+df.insert(25, 'MAPE', -1.0)
+df.insert(26, 'MAPD', -1.0)
 
 # unit for simulation for 1 px / frame interval -> m/s
 u = inputs.v_scale
@@ -95,7 +96,7 @@ print(f'len(svx_files) = {len(svx_files)}')
 print(f'len(svy_files) = {len(svy_files)}')
 
 sim_cache = {}
-for trange in inputs.cal_args['tavg']:
+for trange in inputs.cal_args['tavgs']:
     vx_sim, vy_sim = load_vel_mean((svx_files, svy_files), trange)
     nframes = trange[1] - trange[0] + 1
     for fwhm_val in inputs.cal_args['fwhms']:
@@ -122,8 +123,8 @@ for f in filelist_npz:
                 print(f"Skipping {idx_tuple} as it is not in the dataframe")
                 continue
 
-            p_top_0 = df.loc[idx_tuple, 'p_top_0']
-            p_bot_0 = df.loc[idx_tuple, 'p_bot_0']
+            p_top_0 = np.asarray(df.loc[idx_tuple, 'p_top_0']).ravel()[0]
+            p_bot_0 = np.asarray(df.loc[idx_tuple, 'p_bot_0']).ravel()[0]
 
             vx_sim_sm, vy_sim_sm, v_sim, fov = sim_cache[(nframes_val, fwhm_val, kernel)]
 

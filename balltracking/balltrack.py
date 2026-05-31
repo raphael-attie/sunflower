@@ -958,7 +958,8 @@ def make_velocity_from_tracks(ballpos, dims, trange, fwhm, kernel='gaussian'):
         vy_euler = gaussian_filter(vy_euler, sigma=sigma, order=0)
         wplane   = gaussian_filter(wplane, sigma=sigma, order=0)
     elif kernel == 'boxcar':
-        box = np.ones([fwhm, fwhm]) / fwhm**2
+        fwhm_int = int(np.round(fwhm))
+        box = np.ones([fwhm_int, fwhm_int]) / fwhm_int**2
         vx_euler = convolve2d(vx_euler, box, mode='same')
         vy_euler = convolve2d(vy_euler, box, mode='same')
         wplane = convolve2d(wplane, box, mode='same')
