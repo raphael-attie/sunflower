@@ -1188,7 +1188,7 @@ class Calibrator:
         else:
             vel_means = np.array([vel.mean() for vel in velocities])
             
-        p, r, _, _, _ = np.polyfit(vel_means, rates, 1, full=True)
+        p, r, _, _, _ = np.polyfit(rates, vel_means, 1, full=True)
         rmse = np.sqrt(r[0] / vel_means.size)
         return p, rmse, vel_means
 

@@ -108,10 +108,13 @@ for f in filelist_npz:
             # Query string to get the dataframe rows at the right kernel
             ker = f'kernel=="{kernel}"'
 
-            vx_top_cal = vel['vx_top'] * df.query(ker).loc[idx, 'p_top_0'].values[0] * u
-            vy_top_cal = vel['vy_top'] * df.query(ker).loc[idx, 'p_top_0'].values[0] * u
-            vx_bot_cal = vel['vx_bot'] * df.query(ker).loc[idx, 'p_bot_0'].values[0] * u
-            vy_bot_cal = vel['vy_bot'] * df.query(ker).loc[idx, 'p_bot_0'].values[0] * u
+            p_top_0 = df.query(ker).loc[idx, 'p_top_0']
+            p_bot_0 = df.query(ker).loc[idx, 'p_bot_0']
+
+            vx_top_cal = vel['vx_top'] / p_top_0 * u
+            vy_top_cal = vel['vy_top'] / p_top_0 * u
+            vx_bot_cal = vel['vx_bot'] / p_bot_0 * u
+            vy_bot_cal = vel['vy_bot'] / p_bot_0 * u
             # Calibrate velocity
             vx_ball_cal = 0.5 * (vx_top_cal + vx_bot_cal)
             vy_ball_cal = 0.5 * (vy_top_cal + vy_bot_cal)
