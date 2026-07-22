@@ -1180,17 +1180,43 @@ class Calibrator:
 
         return ballpos_top_list, ballpos_bottom_list
 
-
-
     def fit_mean_velocities(self, velocities, rates):
-        if self.roi_slice is not None: 
+        if self.roi_slice is not None:
             vel_means = np.array([vel[self.roi_slice].mean() for vel in velocities])
         else:
             vel_means = np.array([vel.mean() for vel in velocities])
-            
-        p, r, _, _, _ = np.polyfit(rates, vel_means, 1, full=True)
-        rmse = np.sqrt(r[0] / vel_means.size)
+
+        # Enforce zero-intercept by subtracting the measured velocity at the zero-drift rate.
+        # There must be exactly one rate value equal to (or within 1e-6 of) zero.
+        rates_arr = np.asarray(rates)
+        near_zero_mask = np.abs(rates_arr) < 1e-6
+        near_zero_count = int(np.count_nonzero(near_zero_mask))
+        if near_zero_count != 1:
+            sys.exit(
+                "Error in fit_mean_velocities: expected exactly one drift rate equal to (or within 1e-6 of) zero, "
+                f"but found {near_zero_count}. rates: {rates_arr}"
+            )
+        zero_idx = int(np.flatnonzero(near_zero_mask)[0])
+        vel_zero = vel_means[zero_idx]
+        # Offset the measured velocities so the zero-drift point sits at the origin
+        vel_means = vel_means - vel_zero
+
+        # Zero-intercept least-squares fit: vel_means = p0 * rates
+        # np.linalg.lstsq expects a 2D design matrix of shape (n_samples, n_features)
+        X = rates_arr[:, np.newaxis]
+        p0, residuals, _, _ = np.linalg.lstsq(X, vel_means, rcond=None)
+        # Keep the [slope, intercept] layout expected by downstream code, with intercept forced to 0
+        # And invert the model so that the corrected measurement y* = p[0]*y
+        p = np.array([1/p0[0], 0.0])
+        # lstsq returns residuals only when the system is over-determined;
+        # fall back to an explicit computation to stay robust for any input size.
+        if residuals.size > 0:
+            sse = residuals[0]
+        else:
+            sse = np.sum((vel_means - p0[0] * rates_arr) ** 2)
+        rmse = np.sqrt(sse / vel_means.size)
         return p, rmse, vel_means
+
 
     def fit_calibration(self, ballpos_list, fwhm, trange, kernel=None):
 

@@ -128,10 +128,10 @@ for f in filelist_npz:
 
             vx_sim_sm, vy_sim_sm, v_sim, fov = sim_cache[(nframes_val, fwhm_val, kernel)]
 
-            vx_top_cal = vel['vx_top'] / p_top_0 * u
-            vy_top_cal = vel['vy_top'] / p_top_0 * u
-            vx_bot_cal = vel['vx_bot'] / p_bot_0 * u
-            vy_bot_cal = vel['vy_bot'] / p_bot_0 * u
+            vx_top_cal = vel['vx_top'] * p_top_0 * u
+            vy_top_cal = vel['vy_top'] * p_top_0 * u
+            vx_bot_cal = vel['vx_bot'] * p_bot_0 * u
+            vy_bot_cal = vel['vy_bot'] * p_bot_0 * u
             # Calibrate velocity
             vx_ball_cal = 0.5 * (vx_top_cal + vx_bot_cal)
             vy_ball_cal = 0.5 * (vy_top_cal + vy_bot_cal)

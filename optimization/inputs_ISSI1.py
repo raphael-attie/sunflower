@@ -63,7 +63,7 @@ vx_rates[int(len(vx_rates) / 2)] = 0
 # vy_rates typically set to zeros, but calibration can be tested on both axes at the same time
 vy_rates = np.zeros(len(vx_rates))
 # Velocity scale to convert from px/frame interval to m/s
-v_scale = 384 / 10 
+v_scale = 384000 / 10 
 
 ### Flow maps parameters ###  
 # Positional arguments passed to blt.Calibrator()

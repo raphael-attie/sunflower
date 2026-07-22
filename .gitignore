@@ -11,3 +11,5 @@ __pycache__
 cython_modules/interp.c
 **/__pycache__/
 *.so
+*.fits
+
