@@ -14,7 +14,7 @@ run_calibration = True
 # names as 'glob' does not do it by default. (print them out to make sure you have the in the right oder).
 datafiles = sorted(list(Path(os.environ['DATA'], 'HMI/Mashael/hmi.Ic_45s_20170901_000000_to_020000').glob('hmi*.fits')))#Path('/Users/rattie/data/Mashael/intensity_30frames.fits')
 # Output directory for the Balltracking algorithm
-outputdir = Path('/Users/rattie/data/Mashael/balltracking')
+outputdir = Path('/Users/rattie/data/Mashael/balltracking2')
 
 ##########################
 # Balltracking parameters
@@ -38,12 +38,11 @@ bt_params = {
 maps_params = {
     'generate_lanes': True,  # Toggle creation of the supergranular maps
     'im_dims': [512, 512],  # Image dimension [width, height] in pixels
-    'navg': 80,  # in nb of frame ~ must translate to ~30 min minimum with HMI @45s cadence
+    'navg': 40,  # in nb of frame ~ must translate to ~30 min minimum with HMI @45s cadence
     'dt': 40,  # Time step in number of frames between averaged flow maps. Use dt < navg for having smoother transitions
     'nsteps': 40,  # Nb of integration steps for the supergranular boundary mapping
     'kernel': 'gaussian',  # Smoothing kernel: 'gaussian', 'boxcar', or 'both'
     'fwhm': 7,   # spatial gaussian smooth of the Euler dense flow maps
-    'hdu_n': 0,  # index of the header in the FITS header data unit. Often 0, but 1 for RICE-compressed from JSOC
     'use_headers': True,
 }
 
@@ -69,20 +68,19 @@ vy_rates = np.zeros(len(vx_rates))
 cal_args = {
     'vx_rates': vx_rates,  # Drift rates x-axis
     'vy_rates': vy_rates,  # Drift rates y-axis
-    'trange': [0, 79],  # Indices of images to drift
-    'fwhm': maps_params['fwhm'],   # for the spatial gaussian smooth during the calibration
+    'tavgs': [[0, 79]],  # indices of images (inclusive) over which flow maps are time-averaged for the fit
+    'fwhms': [maps_params['fwhm']],  # FWHMs (plural) for the spatial gaussian smooth during the calibration
     'images': None,  # in-memory series of images. If None, read directly from disk (more ram-friendly)
     'outputdir_cal': Path(outputdir, 'hmi_drifted')  # can be different from the balltracking output dir.
 }
 
 # Calibration optional arguments
 cal_opt_args = {
-    'roi' : [0, 255, 0, 255], # region of interest
+    'roi': None, # the Calibrator auto-trim for edge effects due to the circular rotation of drift;
     'component': 'x',  # Velocity component(s) where the drift is applied. Can be 'x', 'y' or 'xy' for both.
     'kernel': maps_params['kernel'],  # Smoothing kernel: 'gaussian', 'boxcar', or 'both'
-    'read_drift_images': True,  # Set whether we read images from disk (True) or use `images` in-memory
     'save_ballpos_list': True,  # Save the arrays of ball positions to disk?
     'verbose': True,
-    'ncpus': 11  # # number of cpus to use for parallelization over the drift rates, <= len(vx_rates).
+    'ncpus': min(11, len(vx_rates))  # number of cpus for parallelization over drift rates, must be <= len(vx_rates)
 }
 

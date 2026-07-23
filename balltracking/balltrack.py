@@ -206,7 +206,8 @@ class BT:
         self.pos[0, :] = self.xstart.flatten()
         self.pos[1, :] = self.ystart.flatten()
         self.zstart = put_balls_on_surface(self.surface, self.xstart.ravel(), self.ystart.ravel(), self.rs, self.dp)
-        print(self.pos.shape, self.zstart.shape)
+        if self.verbose:
+            print(self.pos.shape, self.zstart.shape)
         self.pos[2, :] = self.zstart.copy()
         # Set the coarse grid: populate edges to avoid "leaks" of balls ~ balls falling off.
         # Although can't remember if that was actually ever used in the Matlab implementation
@@ -966,6 +967,9 @@ def make_velocity_from_tracks(ballpos, dims, trange, fwhm, kernel='gaussian'):
 
     vx_euler /= wplane
     vy_euler /= wplane
+    # Avoid NaNs/Inf in regions no ball ever visited (e.g. edges) -- should require a more rigourous treatment
+    # vx_euler = np.where(wplane > 0, vx_euler, 0)
+    # vy_euler = np.where(wplane > 0, vy_euler, 0)
 
     return vx_euler, vy_euler, wplane
 
@@ -1673,7 +1677,10 @@ def calibrate_flows(datafiles, calibration_file, balltrack_dir, maps_params):
     arr = np.load(Path(balltrack_dir, 'ballpos.npz'))
     ballpos_top, ballpos_bottom = [arr['ballpos_top'], arr['ballpos_bottom']]
 
-    # Determine image dimensions and correct HDU dynamically from the FITS files
+    # Determine image dimensions and the HDU extension carrying the image data.
+    # We get im_dims directly from the shape of the image data, which is robust
+    # to FITS files whose primary HDU does not carry NAXIS1/NAXIS2 keywords
+    # (e.g. JSOC RICE-compressed HMI files where the image lives in a later HDU).
     if isinstance(datafiles, (str, Path)):
         sample_file = datafiles
     elif isinstance(datafiles, list) and len(datafiles) > 0:
@@ -1681,24 +1688,26 @@ def calibrate_flows(datafiles, calibration_file, balltrack_dir, maps_params):
     else:
         sample_file = None
 
+    ext = maps_params.get('hdu_n')
+    im_dims = None
+
     if sample_file is not None:
         with fits.open(sample_file) as hdul:
-            ext = maps_params.get('hdu_n')
             if ext is None:
-                # Guess HDU: look at the HDU list for one containing NAXIS >= 2
+                # Auto-pick the first HDU that actually holds image data (NAXIS >= 2)
                 ext = 0
                 for idx, hdu in enumerate(hdul):
-                    if hdu.header.get('NAXIS', 0) >= 2:
+                    if hdu.is_image and hdu.data is not None and hdu.data.ndim >= 2:
                         ext = idx
                         break
-            header = hdul[ext].header
-            im_dims = [header['NAXIS2'], header['NAXIS1']]
+            # im_dims is [ny, nx] to match the convention used downstream
+            im_dims = list(hdul[ext].data.shape[-2:])
     else:
-        ext = maps_params.get('hdu_n', 0)
         im_dims = maps_params.get('im_dims')
 
     if im_dims is None:
-        sys.exit("Error: Could not determine image dimensions. Either provide FITS 'datafiles' or specify 'im_dims' in maps_params.")
+        sys.exit(
+            "Error: Could not determine image dimensions. Either provide FITS 'datafiles' or specify 'im_dims' in maps_params.")
 
     # Number of images used in balltracking
     nimgs = ballpos_top.shape[-1]
