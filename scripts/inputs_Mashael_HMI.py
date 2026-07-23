@@ -14,7 +14,7 @@ run_calibration = True
 # names as 'glob' does not do it by default. (print them out to make sure you have the in the right oder).
 datafiles = sorted(list(Path(os.environ['DATA'], 'HMI/Mashael/hmi.Ic_45s_20170901_000000_to_020000').glob('hmi*.fits')))#Path('/Users/rattie/data/Mashael/intensity_30frames.fits')
 # Output directory for the Balltracking algorithm
-outputdir = Path('/Users/rattie/data/Mashael/balltracking2')
+outputdir = Path('/Users/rattie/data/HMI/Mashael/balltracking2')
 
 ##########################
 # Balltracking parameters
@@ -68,7 +68,7 @@ vy_rates = np.zeros(len(vx_rates))
 cal_args = {
     'vx_rates': vx_rates,  # Drift rates x-axis
     'vy_rates': vy_rates,  # Drift rates y-axis
-    'tavgs': [[0, 79]],  # indices of images (inclusive) over which flow maps are time-averaged for the fit
+    'trange': (0, 79),  # calibration-only tracking subset range (inclusive), as we don't need to process the full set of images
     'fwhms': [maps_params['fwhm']],  # FWHMs (plural) for the spatial gaussian smooth during the calibration
     'images': None,  # in-memory series of images. If None, read directly from disk (more ram-friendly)
     'outputdir_cal': Path(outputdir, 'hmi_drifted')  # can be different from the balltracking output dir.
@@ -76,7 +76,7 @@ cal_args = {
 
 # Calibration optional arguments
 cal_opt_args = {
-    'roi': None, # the Calibrator auto-trim for edge effects due to the circular rotation of drift;
+    'roi': [100, 356, 100, 356], # the Calibrator auto-trim for edge effects due to the circular rotation of drift;
     'component': 'x',  # Velocity component(s) where the drift is applied. Can be 'x', 'y' or 'xy' for both.
     'kernel': maps_params['kernel'],  # Smoothing kernel: 'gaussian', 'boxcar', or 'both'
     'save_ballpos_list': True,  # Save the arrays of ball positions to disk?

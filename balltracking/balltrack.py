@@ -992,7 +992,7 @@ def mesh_ball(rs, npts=20):
 
 class Calibrator:
 
-    def __init__(self, bt_params, vx_rates, vy_rates, tavgs, fwhms, images, outputdir_cal,
+    def __init__(self, bt_params, vx_rates, vy_rates, fwhms, images, outputdir_cal,
                  component='x', kernel='gaussian', roi=None, image_reader=None,
                  save_ballpos_list=True, reprocess_existing=True, verbose=False, return_ballpos=False,
                  ncpus=1):
@@ -1005,7 +1005,6 @@ class Calibrator:
             bt_params (dict): inputs of top tracking: rs, ballspacing, am, dp, sigma_factor, fourier_radius, intsteps
             vx_rates: x-direction rate at which the images are shifted (px/frame)
             vy_rates: y-direction rate at which the images are shifted (px/frame)
-            tavgs: list of lists containing pairs of [start, end] indices defining the temporal sub-ranges over which to average flow fields.
             fwhms: list of FWHMs for the spatial smoothing applied to the flow fields.
             outputdir_cal: directory for output calibration data
             component (str): velocity vector component over which to fit, either 'x', 'y', or 'xy' for both
@@ -1020,10 +1019,10 @@ class Calibrator:
         self.vx_rates = vx_rates
         self.vy_rates = vy_rates
         self.drift_rates = np.stack((vx_rates, vy_rates), axis=1)
-        self.tavgs = tavgs
+        self.trange = bt_params['trange']
         self.fwhms = fwhms
         
-        max_nframes = max([tr[1] - tr[0] + 1 for tr in self.tavgs])
+        max_nframes = self.trange[1] - self.trange[0] + 1
         max_fwhm = max(self.fwhms)
         self.images = images
         self.outputdir_cal = outputdir_cal
@@ -1054,6 +1053,12 @@ class Calibrator:
         print(f'sample file: {sample_file} - shape: {self.sample.shape}')
         # The dimensions must correspond to the size of the roi_slice (if any)
         self.dims = self.sample.shape[-2:]
+
+        # Preserve the raw user-supplied roi so it can be forwarded to balltrack_all()
+        # which will crop the images inside BT before tracking (speed-up on large frames).
+        # When roi is None, the Calibrator still auto-trims the drifted edges for the fit,
+        # but the tracking itself runs on the full frame.
+        self.roi = roi
 
         # Calculate the proper array bounds to track, bypassing edge effects
         self.roi_slice = self._compute_roi_slice(roi, max_nframes, max_fwhm)
@@ -1134,7 +1139,7 @@ class Calibrator:
         # ballpos arrays will be written after all rates are processed, thus disabling saving them in each run
         # Do not input the ROI that crops on the circularly-drifted edges, as these are cropped during the fitting
         ballpos_top, ballpos_bottom = balltrack_all(self.bt_params, self.bt_params, self.drift_dirs[rate_idx],
-                                                    data=drift_images, roi=None, write_ballpos=False)
+                                                    data=drift_images, roi=self.roi, write_ballpos=False)
 
         return ballpos_top, ballpos_bottom
 
@@ -1185,7 +1190,17 @@ class Calibrator:
         return ballpos_top_list, ballpos_bottom_list
 
     def fit_mean_velocities(self, velocities, rates):
-        if self.roi_slice is not None:
+        # When a user roi was forwarded to balltrack_all, the velocity arrays are already
+        # cropped to the roi size by BT, so we average over the full array.
+        # The roi_slice (auto-trim of the drifted edges) is only applied when tracking
+        # ran on the full frame (roi is None).
+        if self.roi is None and self.roi_slice is not None:
+            # Guardrail: NumPy silently clips out-of-range slices, which can hide
+            # geometry mismatches between roi_slice and the actual velocity array.
+            # Validate explicitly so any inconsistency exits loudly.
+            for vel in velocities:
+                self._validate_slice_against_shape(self.roi_slice, vel.shape,
+                                                   context='fit_mean_velocities')
             vel_means = np.array([vel[self.roi_slice].mean() for vel in velocities])
         else:
             vel_means = np.array([vel.mean() for vel in velocities])
@@ -1244,9 +1259,15 @@ class Calibrator:
 
         if kernel is None:
             kernel = self.kernel
+
+        if self.roi is not None:
+            dims = (self.roi[3] - self.roi[2], self.roi[1] - self.roi[0])
+        else:
+            dims = self.dims
+
         # Convert to Euler averaged flow fields
         vxs, vys, wplanes = (
-            zip(*[make_velocity_from_tracks(ballpos, self.dims, trange, fwhm, kernel=kernel)
+            zip(*[make_velocity_from_tracks(ballpos, dims, trange, fwhm, kernel=kernel)
                   for ballpos in ballpos_list])
         )
 
@@ -1277,53 +1298,84 @@ class Calibrator:
 
         dicts = []
 
+        trange = self.trange
+        nframes = trange[1] - trange[0] + 1
         for fwhm in self.fwhms:
-            for trange in self.tavgs:
-                nframes = trange[1] - trange[0] + 1
-                for ker in self.kernels:
-                    if verbose:
-                        print('calibration top')
-                    p_top, _, vxmeans_top, vxs_top, vys_top = self.fit_calibration(ballpos_top_list, fwhm, trange, kernel=ker)
-                    if verbose:
-                        print('calibration bottom')
-                    p_bot, _, vxmeans_bot, vxs_bot, vys_bot = self.fit_calibration(ballpos_bottom_list, fwhm, trange, kernel=ker)
+            for ker in self.kernels:
+                if verbose:
+                    print('calibration top')
+                p_top, _, vxmeans_top, vxs_top, vys_top = self.fit_calibration(ballpos_top_list, fwhm, trange, kernel=ker)
+                if verbose:
+                    print('calibration bottom')
+                p_bot, _, vxmeans_bot, vxs_bot, vys_bot = self.fit_calibration(ballpos_bottom_list, fwhm, trange, kernel=ker)
 
-                    npzf = Path(self.outputdir_cal, 
-                    f'mean_velocity_{ker}_fwhm{fwhm}_tavg{nframes}_{self.index:05d}.npz')
-                    # Index where x- and y- rates = 0, for saving the undrifted flow fields (sanity check)
-                    idx0 = int(len(self.drift_rates) / 2)
-                    np.savez_compressed(npzf,
-                                        vx_top=vxs_top[idx0],
-                                        vy_top=vys_top[idx0],
-                                        vx_bot=vxs_bot[idx0],
-                                        vy_bot=vys_bot[idx0],
-                                        vxmeans_top=vxmeans_top,
-                                        vxmeans_bot=vxmeans_bot,
-                                        drift_rates=self.drift_rates,
-                                        p_top=p_top,
-                                        p_bot=p_bot,
-                                        fwhm = fwhm,
-                                        tavg = nframes,
-                                        index=self.index)
+                npzf = Path(self.outputdir_cal,
+                f'mean_velocity_{ker}_fwhm{fwhm}_tavg{nframes}_{self.index:05d}.npz')
+                # Index where x- and y- rates = 0, for saving the undrifted flow fields (sanity check)
+                idx0 = int(len(self.drift_rates) / 2)
+                np.savez_compressed(npzf,
+                                    vx_top=vxs_top[idx0],
+                                    vy_top=vys_top[idx0],
+                                    vx_bot=vxs_bot[idx0],
+                                    vy_bot=vys_bot[idx0],
+                                    vxmeans_top=vxmeans_top,
+                                    vxmeans_bot=vxmeans_bot,
+                                    drift_rates=self.drift_rates,
+                                    p_top=p_top,
+                                    p_bot=p_bot,
+                                    fwhm = fwhm,
+                                    tavg = nframes,
+                                    trange=trange,
+                                    index=self.index)
 
-                    # Concatenate above results in one single list and create a dictionnary with the concatenated keys
-                    dict_vxmeans = OrderedDict(zip(vx_headers, vxmeans_top.tolist() + vxmeans_bot.tolist()))
+                # Concatenate above results in one single list and create a dictionnary with the concatenated keys
+                dict_vxmeans = OrderedDict(zip(vx_headers, vxmeans_top.tolist() + vxmeans_bot.tolist()))
 
-                    dict_results = self.bt_params.copy()
-                    dict_results['kernel'] = ker
-                    dict_results['fwhm'] = fwhm
-                    dict_results['tavg'] = nframes
-                    dict_results['p_top_0'] = p_top[0]
-                    dict_results['p_top_1'] = p_top[1]
-                    dict_results['p_bot_0'] = p_bot[0]
-                    dict_results['p_bot_1'] = p_bot[1]
-                    dict_results.update(dict_vxmeans)
-                    dicts.append(dict_results)                          
+                dict_results = self.bt_params.copy()
+                dict_results['kernel'] = ker
+                dict_results['fwhm'] = fwhm
+                dict_results['tavg'] = nframes
+                dict_results['p_top_0'] = p_top[0]
+                dict_results['p_top_1'] = p_top[1]
+                dict_results['p_bot_0'] = p_bot[0]
+                dict_results['p_bot_1'] = p_bot[1]
+                dict_results.update(dict_vxmeans)
+                dicts.append(dict_results)
 
         df_fit = pd.DataFrame(dicts)
         df_fit.to_csv(Path(self.outputdir_cal, f'param_sweep_{self.index:05d}.csv'))
 
         return df_fit
+
+
+def _validate_slice_against_shape(slc, shape, context=''):
+    """Validate that a 2D slice (np.s_[y0:y1, x0:x1]) fits within `shape`.
+
+            NumPy silently clips out-of-range slice indices, which can mask geometry
+            mismatches (e.g. an roi_slice built for a full-frame array applied to an
+            already-ROI-cropped array). This helper raises a loud error instead.
+            """
+    if not isinstance(slc, tuple) or len(slc) != 2:
+        sys.exit(
+            f"Error in {context}: roi_slice must be a tuple of 2 slices, got {slc!r}.")
+    for axis, (s, dim) in enumerate(zip(slc, shape)):
+        start = s.start if s.start is not None else 0
+        stop = s.stop if s.stop is not None else dim
+        if start < 0 or stop < 0:
+            sys.exit(
+                f"Error in {context}: negative slice bound on axis {axis} "
+                f"(start={start}, stop={stop}) is not supported. roi_slice={slc!r}.")
+        if start > dim or stop > dim:
+            sys.exit(
+                f"Error in {context}: slice bound on axis {axis} exceeds array size "
+                f"(start={start}, stop={stop}, dim={dim}). roi_slice={slc!r}. "
+                f"This usually means the roi_slice was built for a larger array "
+                f"than the one being sliced (e.g. a full-frame roi_slice applied to "
+                f"an already-ROI-cropped velocity array).")
+        if start >= stop:
+            sys.exit(
+                f"Error in {context}: slice on axis {axis} is empty or reversed "
+                f"(start={start}, stop={stop}). roi_slice={slc!r}.")
 
 
 def full_calibration(datafiles, bt_params, cal_args, cal_opt_args, make_drift_images=True,
@@ -1349,12 +1401,11 @@ def full_calibration(datafiles, bt_params, cal_args, cal_opt_args, make_drift_im
 
     if make_drift_images:
         print('reading images for drift...')
-        tr = bt_params['trange']
+        cal_trange = cal_args.get('trange', bt_params['trange'])
         if isinstance(datafiles, (str, Path)):
-            # Load as a cube and slice it to the input range of interest
-            data = fits.getdata(datafiles)[tr[0]:tr[1]+1]
+            data = fits.getdata(datafiles)[cal_trange[0]:cal_trange[1] + 1]
         else:
-            datafiles_selected = datafiles[tr[0]:tr[1]+1]
+            datafiles_selected = datafiles[cal_trange[0]:cal_trange[1] + 1]
             data = [fits.getdata(f) for f in datafiles_selected]
 
         print('Creating drift images...')
@@ -1380,10 +1431,15 @@ def full_calibration(datafiles, bt_params, cal_args, cal_opt_args, make_drift_im
     # trange in calibration is set independently of the main balltracking run. The calibration
     # must work on its own copy, and set calibration-specific trange in `bt_params` sent to the BT class instance
     bt_params_cal = bt_params.copy()
-    bt_params_cal['trange'] = bt_params['trange']
+    cal_trange = cal_args.get('trange', bt_params['trange'])
+    bt_params_cal['trange'] = cal_trange
+
+    # `trange` is consumed above by the Calibrator (via bt_params_cal['trange']) and must not be forwarded
+    # as a Calibrator keyword, since the Calibrator reads it from bt_params.
+    cal_args_cal = {k: v for k, v in cal_args.items() if k != 'trange'}
 
     # top-side and bottom-side parameters are considered the same.
-    cal = Calibrator(bt_params_cal, **cal_args, **cal_opt_args)
+    cal = Calibrator(bt_params_cal, **cal_args_cal, **cal_opt_args)
 
     if reprocess_bt:
         if verbose:
@@ -1786,3 +1842,5 @@ def get_bt_params_list(param_dict):
         bt_params_list.append(bt_params)
         
     return bt_params_list
+
+
