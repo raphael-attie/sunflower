@@ -52,7 +52,7 @@ class BT:
 
     def __init__(self, rs, dp, am, ballspacing, intsteps, sigma_factor, fourier_radius, trange,
                  side='top', direction='forward', datafiles=None, data=None, outputdir_prep=None, verbose=False,
-                 image_reader=None, roi=None):
+                 image_reader=None, roi=None, store_diagnostics=False):
 
         """ This is the class hosting all the parameters and intermediate results of balltracking.
 
@@ -177,11 +177,18 @@ class BT:
         self.pos = np.zeros([3, self.nballs], dtype=DTYPE)
         self.vel = np.zeros([3, self.nballs], dtype=DTYPE)
         self.force = np.zeros([3, self.nballs], dtype=DTYPE)
-        self.balls_age_t = np.zeros([self.nballs, self.nt], dtype=np.uint32)
         # Storage arrays of the above, for all time steps
         self.ballpos = np.zeros([3, self.nballs, self.nt], dtype=DTYPE)
         # Check for ballvel dimension: may only be self.nt-1 for the time length.
-        self.ballvel = np.zeros([3, self.nballs, self.nt], dtype=DTYPE)
+        # Diagnostics: not consumed by any downstream code. At 1668px/1000 frames
+        # these cost 7.75 GB + 2.58 GB per instance, so they are opt-in.
+        self.store_diagnostics = store_diagnostics
+        if self.store_diagnostics:
+            self.ballvel = np.zeros([3, self.nballs, self.nt], dtype=DTYPE)
+            self.balls_age_t = np.zeros([self.nballs, self.nt], dtype=np.uint32)
+        else:
+            self.ballvel = None
+            self.balls_age_t = None
 
         # Ball grid and mesh. Add +1 at the np.arange stop for including right-hand side boundary
         self.ballgrid = np.arange(-self.rs, self.rs + 1, dtype=DTYPE)
@@ -297,21 +304,23 @@ class BT:
             n_rel = n - self.trange[0]
 
             # Add the current position array to the time series of position
-            self.ballpos[..., n_rel] = self.pos.copy()
-            self.ballvel[..., n_rel] = self.vel.copy()
+            self.ballpos[..., n_rel] = self.pos
+            if self.store_diagnostics:
+                self.ballvel[..., n_rel] = self.vel
 
             # The bad balls are assigned new positions (relocated to empty cells)
             # This is done in place in bt.pos. For flexibility with debugging, the array
             # of position is given explicitly as input
             _, _ = self.replace_bad_balls(self.surface)
 
-            self.balls_age_t[:, n_rel] = self.balls_age.copy()
+            if self.store_diagnostics:
+                self.balls_age_t[:, n_rel] = self.balls_age
 
         if self.direction == 'backward':
-            # At the end of the time loop, flip timeline for backward tracking to restore the forward timeline
             self.ballpos = np.flip(self.ballpos, 2)
-            self.ballvel = np.flip(self.ballvel, 2)
-            self.balls_age_t = np.flip(self.balls_age_t, 1)
+            if self.store_diagnostics:
+                self.ballvel = np.flip(self.ballvel, 2)
+                self.balls_age_t = np.flip(self.balls_age_t, 1)
 
     def get_bad_balls(self):
         """
@@ -547,13 +556,30 @@ def balltrack_all(bt_params_top, bt_params_bottom, outputdir,
     partial_track = partial(track_instance, bt_params_sides, datafiles=datafiles, data=data, **kwargs)
     # Only use 1 to 4 workers. 1 means no parallelization.
     if ncores == 1:
-        ballpos_top_f, ballpos_top_b, ballpos_bot_f, ballpos_bot_b = list(map(partial_track, side_direction_list))
+        # ballpos_top_f, ballpos_top_b, ballpos_bot_f, ballpos_bot_b = list(map(partial_track, side_direction_list))
+        result_iter = ((sd, partial_track(sd)) for sd in side_direction_list)
+
     else:
         with Pool(processes=max(min(ncores, 4), 1)) as pool:
-            ballpos_top_f, ballpos_top_b, ballpos_bot_f, ballpos_bot_b = pool.map(partial_track, side_direction_list)
+            # ballpos_top_f, ballpos_top_b, ballpos_bot_f, ballpos_bot_b = pool.map(partial_track, side_direction_list)
+            result_iter = list(zip(side_direction_list, pool.map(partial_track, side_direction_list)))
 
-    ballpos_top = np.concatenate((ballpos_top_f, ballpos_top_b), axis=1)
-    ballpos_bottom = np.concatenate((ballpos_bot_f, ballpos_bot_b), axis=1)
+    ## Concetenate to merge the forward and backward tracking (backward was already time-flipped to make it forward)
+    # ballpos_top = np.concatenate((ballpos_top_f, ballpos_top_b), axis=1)
+    # ballpos_bottom = np.concatenate((ballpos_bot_f, ballpos_bot_b), axis=1)
+    ## Memory-optimized version of the concatenation above.
+    ballpos_top, ballpos_bottom = None, None
+    for (side, direction), bp in result_iter:
+        if ballpos_top is None:
+            n3, nballs, nt_ = bp.shape
+            shape = (n3, 2 * nballs, nt_)
+            ballpos_top = np.empty(shape, dtype=bp.dtype)
+            ballpos_bottom = np.empty(shape, dtype=bp.dtype)
+        dest = ballpos_top if side == 'top' else ballpos_bottom
+        col = 0 if direction == 'forward' else nballs
+        dest[:, col:col+nballs, :] = bp
+        del bp
+
 
     if write_ballpos:
         # Create outputdir if it does not exist
@@ -873,7 +899,7 @@ def get_off_edges_mask(rs, nx, ny, x, y):
     return off_edges_mask
 
 
-def make_velocity_from_tracks(ballpos, dims, trange, fwhm, kernel='gaussian'):
+def make_velocity_from_tracks(ballpos, dims, trange, fwhm, kernel='gaussian', ball_chunk=100_000):
     """
     Calculate the velocity field
 
@@ -894,59 +920,37 @@ def make_velocity_from_tracks(ballpos, dims, trange, fwhm, kernel='gaussian'):
     """
 
     ny, nx = dims
+    t0, t1 = trange[0], trange[1]
+    npix = ny * nx
 
-    # Differentiate positions. Must take care of the flagged values? Yes. -1 - (-1) = 0, not NaN.
-    # 1) Get the coordinate of the velocity vector
-    bposx = ballpos[0, :, :].copy()
-    bposy = ballpos[1, :, :].copy()
+    wplane = np.zeros([npix])
+    vx_euler = np.zeros([npix])
+    vy_euler = np.zeros([npix])
 
-    nan_mask = bposx == -1
-    bposx[nan_mask] = np.nan
-    bposy[nan_mask] = np.nan
+    nballs= ballpos.shape[1]
 
-    # If the ballpos array is already pre-sliced to the time range length (nt), offset indices to start at 0
-    nt = trange[1] - trange[0] + 1
-    t0 = trange[0]
-    t1 = trange[1]
+    for i0 in range(0, nballs, ball_chunk):
+        i1 = min(i0 + ball_chunk, nballs)
+        # Contiguous slab of this ball block over the requested time window
+        bx = np.ascontiguousarray(ballpos[0, i0:i1, t0:t1 + 1])
+        by = np.ascontiguousarray(ballpos[1, i0:i1, t0:t1 + 1])
+        bx0, bx1 = bx[:, :-1], bx[:, 1:]
+        by0, by1 = by[:, :-1], by[:, 1:]
 
-    # Watch out: slicing excludes the last index. Adding +1 to t1 makes sure we reach index t1
-    vx_lagrange = bposx[:, t0+1:t1+1] - bposx[:, t0:t1]
-    vy_lagrange = bposy[:, t0+1:t1+1] - bposy[:, t0:t1]
+        # A ball is valid for this step only if flagged at neither endpoint.
+        # Equivalent to the old NaN-substitution + np.isfinite, without the copies.
+        valid = (bx0 != -1) & (bx1 != -1)
+        if not valid.any():
+            continue
 
-    # px where bposx == -1 will give -1. Same for py
-    px_lagrange = np.round((bposx[:, t0:t1] + bposx[:, t0+1:t1+1])/2)
-    py_lagrange = np.round((bposy[:, t0:t1] + bposy[:, t0+1:t1+1])/2)
-    # Exclude the -1 and NaN flagged positions using a mask.
-    valid_mask = np.isfinite(vx_lagrange)
-    # Taking the mask of the 2D arrays convert them to 1D arrays
-    px_lagrange = px_lagrange[valid_mask]
-    py_lagrange = py_lagrange[valid_mask]
-    vx_lagrange = vx_lagrange[valid_mask]
-    vy_lagrange = vy_lagrange[valid_mask]
-    # Convert 2D coordinates of position into 1D indices. These are the 1D position of each v*_lagrange data point
-    p1d = (px_lagrange + py_lagrange*nx).astype(np.uint32)
-    # Weight plane. Add 1 for each position
-    wplane = np.zeros([ny*nx])
-    np.add.at(wplane, p1d, 1)
-    # Build the Euler velocity map
-    # vxplane = np.zeros([ny, nx])
-    # vyplane = np.zeros([ny, nx])
-    vx_euler = np.zeros([nx*ny])
-    vy_euler = np.zeros([nx*ny])
-    # Implement Matlab version below
-    # % Matlab version
-    # for jj=1:numel(vpos1D)
-    #     vxplane(vpos1D(jj)) = vxplane(vpos1D(jj)) + vxii(jj);
-    #     vyplane(vpos1D(jj)) = vyplane(vpos1D(jj)) + vyii(jj);
-    # end
+        vx_lagrange = (bx1 - bx0)[valid]
+        vy_lagrange = (by1 - by0)[valid]
+        p1d = (np.round((bx0 + bx1) / 2)[valid] + np.round((by0 + by1) / 2)[valid] * nx).astype(np.uint32)
+        np.add.at(wplane, p1d, 1)
+        np.add.at(vx_euler, p1d, vx_lagrange)
+        np.add.at(vy_euler, p1d, vy_lagrange)
+        del bx, by, valid, vx_lagrange, vy_lagrange, p1d
 
-    for j in range(p1d.size):
-        vx_euler[p1d[j]] += vx_lagrange[j]
-        vy_euler[p1d[j]] += vy_lagrange[j]
-
-    # as:
-    # np.add.at(vx_euler, p1d, vx_lagrange)
-    # np.add.at(vy_euler, p1d, vy_lagrange)
     # Reshape to 2D
     vx_euler = vx_euler.reshape([ny, nx])
     vy_euler = vy_euler.reshape([ny, nx])
@@ -1501,7 +1505,7 @@ def create_drift_series(data, vx_rate, vy_rate, outputdir=None, filter_function=
                 os.makedirs(outputdir, exist_ok=True)
                 print('created outputdir: ', outputdir)
             filepath = str(Path(outputdir, f'drifted_{i:04d}.fits'))
-            fitstools.writefits(drifted_image.astype(np.float32), filepath)
+            fitstools.writefits(drifted_image.astype(np.float32), filepath, compressed=True)
 
     return None
 
@@ -1530,7 +1534,8 @@ def check_file_series(filepaths):
 
 
 def make_euler_velocity(ballpos_top, ballpos_bottom, cal_top, cal_bottom, dims, fwhm,
-                        trange=None, kernel='gaussian', header=None, outputdir=None, generate_lanes=False, **kwargs):
+                        trange=None, kernel='gaussian', header=None, outputdir=None,
+                        prefix='', generate_lanes=False, output_format='fits', **kwargs):
     """
     Create the dense flow fields, on a regular, cartesian grid, from the ball positions.
 
@@ -1545,7 +1550,10 @@ def make_euler_velocity(ballpos_top, ballpos_bottom, cal_top, cal_bottom, dims, 
         kernel (str): Spatial smoothing kernel, either 'gaussian' or 'boxcar'
         header (dict): header information, usually from the fits file of the middle of the series
         outputdir (Path or str): where to save the output npz files of the vx and vy flow fields
+        prefix (str): prefix to append the filename before the trange parameters
         generate_lanes (bool): whether to generate the map of the supergranular boundaries ("lanes" for short)
+        output_format (str): output file format, either 'fits' (default) or 'npz'.
+            When 'fits', vx, vy and lanes are written in separate HDUs of a single FITS file.
         **kwargs: Additional keyword arguments to be passed to make_lanes()
 
     Returns:
@@ -1577,13 +1585,26 @@ def make_euler_velocity(ballpos_top, ballpos_bottom, cal_top, cal_bottom, dims, 
             header['BZERO'] = 0
             header['BITPIX'] = -32
 
-        np.savez_compressed(Path(outputdir, f'vxy_{kernel}_fwhm{fwhm}_t{trange[0]}_{trange[1]}.npz'),
-                            vx=vx.astype(np.float32), vy=vy.astype(np.float32), header=header, lanes=lanes)
+        filename_stem = f'vxy_{kernel}_fwhm{fwhm}_{prefix}_t{trange[0]}_{trange[1]}'
+
+        if output_format == 'fits':
+            # Write vx, vy and lanes (if any) as separate ImageHDUs in a single FITS file.
+            # All arrays share the same 2D dimensions.
+            primary_hdu = fits.PrimaryHDU(header=fits.Header(header) if header is not None else None)
+            hdus = [primary_hdu,
+                    fits.ImageHDU(vx.astype(np.float32), name='VX'),
+                    fits.ImageHDU(vy.astype(np.float32), name='VY')]
+            if lanes is not None:
+                hdus.append(fits.ImageHDU(lanes.astype(np.float32), name='LANES'))
+            fits.HDUList(hdus).writeto(Path(outputdir, f'{filename_stem}.fits'), overwrite=True)
+        else:
+            np.savez_compressed(Path(outputdir, f'{filename_stem}.npz'),
+                                vx=vx.astype(np.float32), vy=vy.astype(np.float32), header=header, lanes=lanes)
 
     return vx, vy, lanes, header
 
 
-def make_euler_velocity_series(tranges, *args, headers=None, **kwargs):
+def make_euler_velocity_series(tranges, *args, headers=None, output_format='fits', **kwargs):
 
     """
     Create a series of dense flow fields and supergranular maps over a timeline given by 'tranges'. The pairs of time range can overlap for smoother
@@ -1593,6 +1614,8 @@ def make_euler_velocity_series(tranges, *args, headers=None, **kwargs):
         tranges(list or tuple): list of 2-element tuple as defined by "trange" in make_euler_velocity()
         *args: positional arguments to be passed to make_euler_velocity()
         headers (list): list of headers (dict) from the fits files
+        output_format (str): output file format, either 'fits' (default) or 'npz'.
+            When 'fits', vx, vy and lanes are written in separate HDUs of a single FITS file.
         **kwargs: Additional keyword arguments to be passed to make_lanes()
 
     Returns:
@@ -1608,11 +1631,13 @@ def make_euler_velocity_series(tranges, *args, headers=None, **kwargs):
         # Generate the flow fields
         if headers is not None:
             header = headers[i]
-        vx, vy, lanes, header = make_euler_velocity(*args, trange=trange, header=header, **kwargs)
+        print(f'calibrate_flows at i={i}, trange={trange}: calling make_euler_velocity')
+        vx, vy, lanes, header = make_euler_velocity(*args, trange=trange, header=header, output_format=output_format, **kwargs)
+        print('calibrate_flows: full average done, shape =', vx.shape)
 
-        vxl.append(vx)
-        vyl.append(vy)
-        lanes_list.append(lanes)
+        vxl.append(vx.astype(np.float32))
+        vyl.append(vy.astype(np.float32))
+        lanes_list.append(lanes.astype(np.float32))
 
     # Make a running average of the series of supergranular maps
     generate_lanes = kwargs.get('generate_lanes', False)
@@ -1627,8 +1652,18 @@ def make_euler_velocity_series(tranges, *args, headers=None, **kwargs):
         if headers is not None:
             run_avg_header = headers[len(headers) // 2]
 
-        np.savez_compressed(Path(outputdir, f"vxy_{kwargs.get('kernel', 'gaussian')}_fwhm{args[5]}_run_avg.npz"),
-                            run_avg_lanes=run_avg_lanes, header=run_avg_header)
+        filename_stem = f"vxy_{kwargs.get('kernel', 'gaussian')}_fwhm{args[5]}_run_avg"
+
+        if output_format == 'fits':
+            # Write the running-average lanes (and header) as a FITS file with separate HDUs
+            primary_hdu = fits.PrimaryHDU(header=fits.Header(run_avg_header) if run_avg_header is not None else None)
+            hdus = [primary_hdu]
+            if run_avg_lanes is not None:
+                hdus.append(fits.ImageHDU(run_avg_lanes.astype(np.float32), name='RUN_AVG_LANES'))
+            fits.HDUList(hdus).writeto(Path(outputdir, f'{filename_stem}.fits'), overwrite=True)
+        else:
+            np.savez_compressed(Path(outputdir, f"{filename_stem}.npz"),
+                                run_avg_lanes=run_avg_lanes, header=run_avg_header)
 
     return vxl, vyl, lanes_list, run_avg_lanes
 
@@ -1652,7 +1687,17 @@ def make_lanes(vx, vy, nsteps=40, maxstep=1):
 
     # Gamma scale the data
     vmag = np.sqrt(vx**2 + vy**2)
+    # Defensive: replace non-finite values before any division/max.
+    # NaNs propagate into the streamline integration and the Cython
+    # bilinear interp (which has bounds checking disabled) reads
+    # out-of-bounds memory and segfaults.
+    if not np.all(np.isfinite(vmag)):
+        vx = np.where(np.isfinite(vx), vx, 0)
+        vy = np.where(np.isfinite(vy), vy, 0)
+        vmag = np.sqrt(vx ** 2 + vy ** 2)
     vmax = vmag.max()
+    if vmax == 0:
+        return np.zeros(dims, dtype=DTYPE)
     vn = vmag/vmax
     gamma = 0.5
     g = vn**(gamma-1)
@@ -1676,19 +1721,35 @@ def make_lanes(vx, vy, nsteps=40, maxstep=1):
 
     maxv = np.sqrt(vx2.max() ** 2 + vy2.max() ** 2)
 
+    # Valid index range for cbilin_interp1 on vx2/vy2 (which access
+    # im[y0, x0], im[y0, x0+1], im[y0+1, x0], im[y0+1, x0+1]).
+    # The C interpolator is compiled with @cython.boundscheck(False),
+    # so any coordinate outside [0, shape-2] reads out of bounds and
+    # crashes with SIGSEGV. We must therefore clip BEFORE each call.
+    xmax = vx2.shape[1] - 2
+    ymax = vx2.shape[0] - 2
+
     for n in range(nsteps):
 
         dx1 = maxstep * cinterp.cbilin_interp1(vx2, xold, yold)/maxv
         dy1 = maxstep * cinterp.cbilin_interp1(vy2, xold, yold)/maxv
 
-        dx2 = maxstep * cinterp.cbilin_interp1(vx2, xold+dx1, yold+dy1) / maxv
-        dy2 = maxstep * cinterp.cbilin_interp1(vy2, xold+dx1, yold+dy1) / maxv
+        # Clip the RK2 midpoint BEFORE the second interpolation.
+        # Reusing xold/yold as the in-place target is intentional: the
+        # next cbilin_interp1 call reads from these same arrays.
+        xold = np.clip(xold + dx1, 1, xmax, dtype=DTYPE)
+        yold = np.clip(yold + dy1, 1, ymax, dtype=DTYPE)
+
+        dx2 = maxstep * cinterp.cbilin_interp1(vx2, xold, yold) / maxv
+        dy2 = maxstep * cinterp.cbilin_interp1(vy2, xold, yold) / maxv
 
         x = xold + (dx1 + dx2)/2
         y = yold + (dy1 + dy2)/2
 
-        xold = x
-        yold = y
+        # Also clip the end-of-step position before the next iteration
+        # uses it as the start of the following step.
+        xold = np.clip(x, 1, xmax, dtype=DTYPE)
+        yold = np.clip(y, 1, ymax, dtype=DTYPE)
 
     xforwards = xold.reshape(dims)
     yforwards = yold.reshape(dims)
@@ -1786,8 +1847,11 @@ def calibrate_flows(datafiles, calibration_file, balltrack_dir, maps_params):
                                                                 im_dims, maps_params['fwhm'],
                                                                 trange = avg_trange,
                                                                 header=avg_header,
+                                                                prefix='true_avg',
                                                                 outputdir=balltrack_dir,
                                                                 generate_lanes=maps_params['generate_lanes'],
+                                                                output_format=maps_params.get('output_format',
+                                                                                              'fits'),
                                                                 nsteps=maps_params['nsteps'])
     v_avg_dict = {
         'vx_avg': vx_avg,
@@ -1797,13 +1861,18 @@ def calibrate_flows(datafiles, calibration_file, balltrack_dir, maps_params):
     }
 
     # Make average flow fields every time steps of tranges.
+    print(f'calibrate_flows: calling make_euler_velocity_series on {len(tranges)} windows')
     vxs, vys, lanes_list, run_avg_lanes = make_euler_velocity_series(tranges, ballpos_top, ballpos_bottom, cal_top,
                                                                      cal_bottom,
                                                                      im_dims, maps_params['fwhm'],
                                                                      headers=headers,
                                                                      outputdir=balltrack_dir,
                                                                      generate_lanes=maps_params['generate_lanes'],
+                                                                     output_format=maps_params.get('output_format',
+                                                                                                   'fits'),
                                                                      nsteps=maps_params['nsteps'])
+
+    print('calibrate_flows: series done')
 
     v_series_dict = {
         'vxs': vxs,
